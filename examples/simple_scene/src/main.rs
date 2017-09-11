@@ -1,13 +1,13 @@
 extern crate vulkano;
-extern crate ori_engine;
+extern crate jakar_engine;
 extern crate cgmath;
 
 use cgmath::*;
 
-use ori_engine::*;
-use ori_engine::core::simple_scene_system::node;
-use ori_engine::core::resources::camera::Camera;
-use ori_engine::core::resources::light;
+use jakar_engine::*;
+use jakar_engine::core::simple_scene_system::node;
+use jakar_engine::core::resources::camera::Camera;
+use jakar_engine::core::resources::light;
 use std::sync::{Arc, Mutex};
 use std::time::{Instant, Duration};
 
@@ -23,7 +23,7 @@ fn main() {
     //Settings
     let settings = Arc::new(Mutex::new(core::engine_settings::EngineSettings::new()
     .with_dimensions(1600, 900)
-    .with_name("Ori Instance")
+    .with_name("jakar Instance")
     .set_vulkan_silent()
     .with_fullscreen_mode(false)
     .with_cursor_state(winit::CursorState::Grab)
