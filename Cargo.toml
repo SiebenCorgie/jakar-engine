@@ -1,0 +1,23 @@
+[package]
+name = "ori-engine"
+version = "0.1.0"
+authors = ["Siebencorgie <siebencorgie@googlemail.com>"]
+
+[dependencies]
+winit = "0.7.6"
+vulkano = "0.6.1"
+vulkano-shader-derive = "0.6.1"
+vulkano-win = "0.6.1"
+
+image = "0.15.0"
+cgmath = "0.15.0"
+collision = "0.11.0"
+gltf-importer = "0.9.1"
+gltf-utils = "0.9.1"
+gltf = "0.9.1"
+assimp = "0.2.1"
+time = "0.1.37"
+
+[[example]]
+name = "simple"
+path = "examples/simple_scene/src/main.rs"
