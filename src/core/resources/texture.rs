@@ -17,7 +17,7 @@ use image::DynamicImage::*;
 
 use core::engine_settings;
 
-pub struct TextureBuilder<'a> {
+pub struct TextureBuilder {
     //sampler
     //Sampling information if the image is larger or smaller than the original
     mag_filter: Filter,
@@ -58,8 +58,8 @@ pub struct TextureBuilder<'a> {
 
     //Create info (this won't be included in the final texture)
     image_path: String,
-    //This is some if the image should be create from data
-    image_data: Option<&'a [u8]>,
+    //This is Some(data) if the image should be create from data
+    image_data: Option<Vec<u8>>,
     device: Arc<Device>,
     queue: Arc<Queue>,
     engine_settings: Arc<Mutex<engine_settings::EngineSettings>>,
@@ -72,7 +72,7 @@ struct ImageInfo {
     pub data: Vec<u8>,
 }
 
-impl<'a> TextureBuilder<'a> {
+impl TextureBuilder {
     ///Creates a new builder struct with default parameters from an image at `image_path`
     pub fn from_image(
         image_path: &str,
@@ -130,8 +130,8 @@ impl<'a> TextureBuilder<'a> {
     }
 
     ///Creates an image from provided data
-    pub fn from_data(
-        data: &'a [u8],
+    pub fn from_data<'a>(
+        data: Vec<u8>,
         device: Arc<Device>,
         queue: Arc<Queue>,
         engine_settings: Arc<Mutex<engine_settings::EngineSettings>>

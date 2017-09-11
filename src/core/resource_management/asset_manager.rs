@@ -390,11 +390,10 @@ impl AssetManager {
     }
 
     ///Returns a texture builder for the specified image at `path`
-    pub fn create_texture(&self, path: &str) -> texture::TextureBuilder{
+    pub fn create_texture(&mut self, path: &str) -> texture::TextureBuilder{
 
         //lock the renderer
-        let render_inst = self.renderer.clone();
-        let  render_lck = render_inst.lock().expect("failed to hold renderer");
+        let  render_lck = self.renderer.lock().expect("failed to hold renderer");
 
         //Create a second material
         //create new texture
@@ -414,7 +413,6 @@ impl AssetManager {
         &mut self, texture_builder: texture::TextureBuilder, tex_name: &str
     ) -> Result<(), &'static str>
     {
-
         let final_texture = texture_builder.build_with_name(tex_name);
         self.get_texture_manager().add_texture(final_texture)
     }

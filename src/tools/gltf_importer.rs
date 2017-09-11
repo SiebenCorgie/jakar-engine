@@ -47,7 +47,7 @@ pub fn load_gltf_texture(
                 let data = buffers.view(&view).expect("failed to load image data from gltf buffer");
                 //we got the data, lets provide it to a TextureBuilder
                 texture::TextureBuilder::from_data(
-                    data,
+                    data.to_vec(),
                     (*texture_manager_lck).get_device(),
                     (*texture_manager_lck).get_queue(),
                     (*texture_manager_lck).get_settings(),
