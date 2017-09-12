@@ -2,6 +2,7 @@ use std::sync::{Mutex,Arc};
 use std::collections::BTreeMap;
 use core::resources::material;
 use render;
+use render::renderer;
 use render::pipeline;
 use render::pipeline_manager;
 use core::resources::texture::Texture;
@@ -10,7 +11,7 @@ use vulkano;
 pub struct MaterialManager {
     //TODO comapare if a Vec<material> + search algorith would be faster
     material_vault: BTreeMap<String, Arc<Mutex<material::Material>>>,
-    renderer_inst: Arc<Mutex<render::renderer::Renderer>>,
+    //renderer_inst: Arc<Mutex<renderer::Renderer>>,
 }
 
 impl MaterialManager {
@@ -83,7 +84,7 @@ impl MaterialManager {
 
         MaterialManager{
             material_vault: tmp_map,
-            renderer_inst: render.clone(),
+            //renderer_inst: render.clone(),
         }
     }
 
@@ -128,14 +129,21 @@ impl MaterialManager {
         }
     }
 
-    ///Adds a material to this manager, returns an error if the material already exists
-    pub fn add_material(&mut self, material: material::Material) -> Result<(), &'static str>{
+    ///Adds a material to this manager, returns an error with the name the mateiral was actually added
+    //if the material already exists or an Ok with the name
+    pub fn add_material(&mut self, material: material::Material) -> Result<String, String>{
         //check for the key TODO might be faster with a vector containing all keys
-        if self.material_vault.contains_key(&material.get_name()){
-            return Err("error, the material is already present in the material manager");
+        let material_name = material.get_name();
+
+
+        if self.material_vault.contains_key(&material_name){
+            println!("error, the material is already present in the material manager");
+            println!("Adding it as: {}", material_name.clone() + "_1");
+            self.material_vault.insert(material_name.clone() + "_1", Arc::new(Mutex::new(material)));
+            return Err(material_name + "_1");
         }else{
             self.material_vault.insert(material.get_name(), Arc::new(Mutex::new(material)));
-            return Ok({});
+            return Ok(material_name);
         }
 
 
@@ -144,11 +152,17 @@ impl MaterialManager {
     pub fn is_available(&self, name: &str) -> bool{
         self.material_vault.contains_key(&String::from(name))
     }
-
+    /*
+    ///Small helper function to get the renderer
+    pub fn get_renderer(&mut self) -> Arc<Mutex<renderer::Renderer>>{
+        self.renderer_inst.clone()
+    }
+    */
     ///A debuging fuction to see all materials
     pub fn print_all_materials(&mut self){
+        println!("All Materials:", );
         for (k,i) in self.material_vault.iter(){
-            println!("Material: {}", k.clone());
+            println!("\t{}", k.clone());
         }
     }
 

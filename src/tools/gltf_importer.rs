@@ -2,6 +2,8 @@ use core::resources::{texture, material, mesh, light, camera};
 use core::resources::camera::Camera;
 use core::simple_scene_system::node;
 use core::resource_management::{material_manager, mesh_manager, scene_manager, texture_manager};
+use core;
+
 
 use vulkano;
 
@@ -29,21 +31,25 @@ pub fn load_gltf_texture(
     name: String,
     buffers: &gltf_importer::Buffers,
     base: &Path,
-    material_manager: &Arc<Mutex<material_manager::MaterialManager>>,
-    texture_manager: &Arc<Mutex<texture_manager::TextureManager>>,
+    managers: &Arc<Mutex<core::resource_management::ManagerAndRenderInfo>>,
 ) -> Arc<texture::Texture>
 {
     //The texture can be a buffer or an external file, depending on the case we load the texture
     //wrap it into an Arc<Texture>, then add it to the manager once and return the other one
-
     //first create a texture builder and configure it with the right sampler from the provided texture
     let mut texture_builder = {
+        let texture_manager = {
+            let managers_lck = managers.lock().expect("failed to lock managers struct");
+            (*managers_lck).texture_manager.clone()
+        };
         //lock the texture manager once to get some data
         let texture_manager_lck = texture_manager.lock().expect("failed to lock texture manager");
         //No create the textuer builder based on the type of data
         match texture.source().data(){
+
             gltf::image::Data::View{view, mime_type} => {
                 //found a data buffer for the image
+                println!("Image is Data", );
                 let data = buffers.view(&view).expect("failed to load image data from gltf buffer");
                 //we got the data, lets provide it to a TextureBuilder
                 texture::TextureBuilder::from_data(
@@ -54,6 +60,7 @@ pub fn load_gltf_texture(
                 )
             },
             gltf::image::Data::Uri{uri, mime_type} =>{
+                println!("Image is file at: {}", uri);
                 //prepare the path
                 let path = base.join(uri);
                 texture::TextureBuilder::from_image(
@@ -108,7 +115,6 @@ pub fn load_gltf_texture(
             };
             //Setup sampling
             texture_builder = texture_builder.with_sampling_filter(mag_filter, min_filter);
-
             //Setup wraping
             let wrap_u = {
                 use gltf::texture::WrappingMode;
@@ -131,11 +137,14 @@ pub fn load_gltf_texture(
         },
         None => {}, //this texture has no sampler => using the default one
     }
-
     //finally build the texture
     let new_texture = texture_builder.build_with_name(&name);
     //now add a copy to the manager and return the other one
     {
+        let texture_manager = {
+            let managers_lck = managers.lock().expect("failed to lock managers struct");
+            (*managers_lck).texture_manager.clone()
+        };
         let mut texture_manager_lck = texture_manager.lock().expect("failed to lock texture manager");
         let tex_error = (*texture_manager_lck).add_texture(new_texture.clone());
         match tex_error{
@@ -153,9 +162,9 @@ pub fn load_gltf_material(
     material_name: String,
     buffers: &gltf_importer::Buffers,
     base: &Path,
-    material_manager: &Arc<Mutex<material_manager::MaterialManager>>,
-    texture_manager: &Arc<Mutex<texture_manager::TextureManager>>,
+    managers: &Arc<Mutex<core::resource_management::ManagerAndRenderInfo>>,
 ) -> String{
+    println!("Loading material with name: {}", material_name.clone());
     //first load the pbr info
     let pbr = mat.pbr_metallic_roughness();
     //now load all textures if there is none it returns none which will be respected at build time of the material
@@ -164,7 +173,7 @@ pub fn load_gltf_material(
             Some(t) => {
                 Some(
                     load_gltf_texture(
-                    &t.texture(), material_name.clone() + "_albedo", buffers, base, material_manager, texture_manager
+                    &t.texture(), material_name.clone() + "_albedo", buffers, base, managers
                     )
                 )
             },
@@ -177,7 +186,7 @@ pub fn load_gltf_material(
             Some(t) => {
                 Some(
                     load_gltf_texture(
-                    &t.texture(), material_name.clone() + "_normal", buffers, base, material_manager, texture_manager
+                    &t.texture(), material_name.clone() + "_normal", buffers, base, managers
                     )
                 )
             },
@@ -190,7 +199,7 @@ pub fn load_gltf_material(
             Some(t) => {
                 Some(
                     load_gltf_texture(
-                    &t.texture(), material_name.clone() + "_met_rough", buffers, base, material_manager, texture_manager
+                    &t.texture(), material_name.clone() + "_met_rough", buffers, base, managers
                     )
                 )
             },
@@ -203,7 +212,7 @@ pub fn load_gltf_material(
             Some(t) => {
                 Some(
                     load_gltf_texture(
-                    &t.texture(), material_name.clone() + "_occlu", buffers, base, material_manager, texture_manager
+                    &t.texture(), material_name.clone() + "_occlu", buffers, base, managers
                     )
                 )
             },
@@ -216,7 +225,7 @@ pub fn load_gltf_material(
             Some(t) => {
                 Some(
                     load_gltf_texture(
-                    &t.texture(), material_name.clone() + "_emissive", buffers, base, material_manager, texture_manager
+                    &t.texture(), material_name.clone() + "_emissive", buffers, base, managers
                     )
                 )
             },
@@ -235,12 +244,16 @@ pub fn load_gltf_material(
         .with_factor_emissive(mat.emissive_factor())
     };
 
+    //get the manager
+    let texture_manager = {
+        let managers_lck = managers.lock().expect("failed to lock managers struct");
+        (*managers_lck).texture_manager.clone()
+    };
 
     let fallback_texture = {
         let man_lck = texture_manager.lock().expect("failed to lock material manager");
         (*man_lck).get_none()
     };
-
     //Create a material builder from the info
     let mut material_builder = material::MaterialBuilder::new(
         albedo,
@@ -254,28 +267,56 @@ pub fn load_gltf_material(
     .with_factors(texture_factors);
 
 
-    //TODO now, for every textuer do:
-    // - load texture and its sampler info
-    // - setup factors
-    // - create material from textures
-    // - add it to the texture manager
-    // - return the name of it as reference for the mesh
-    String::from("Teddy")
+
+    //Get the incredienses for building a material
+    let (pipeline, uniform_manager, device) = {
+        //get the manager
+        let pipeline_manager = {
+            let managers_lck = managers.lock().expect("failed to lock managers struct");
+            (*managers_lck).pipeline_manager.clone()
+        };
+
+        let mut pipeline_manager_lck = pipeline_manager.lock().expect("failed to lock pipe manager");
+        let pipeline = (*pipeline_manager_lck).get_default_pipeline();
+
+        let uniform_manager = {
+            let managers_lck = managers.lock().expect("failed to lock managers struct");
+            (*managers_lck).uniform_manager.clone()
+        };
+
+        let device = {
+            let managers_lck = managers.lock().expect("failed to lock managers struct");
+            (*managers_lck).device.clone()
+        };
+
+        (pipeline, uniform_manager, device)
+    };
+
+    //build the final material
+    let final_material = material_builder.build(&material_name, pipeline, uniform_manager, device);
+    let material_manager = {
+        let managers_lck = managers.lock().expect("failed to lock managers struct");
+        (*managers_lck).material_manager.clone()
+    };
+
+    //now add a copy to the manager and return the name
+    let mut material_manager_lck = material_manager.lock().expect("failed to lock material manager");
+    //Add it and return its
+    println!("Finished loading material with name: {}", material_name);
+    match (*material_manager_lck).add_material(final_material){
+        Ok(k) => k,
+        Err(e) => e,
+    }
 }
 
 
 ///Loads gltf primitves in an Vec<mesh::Mesh> and adds them to the managers as well as their textures
 pub fn load_gltf_mesh(
-    name: &String,
-    scene_name: &str,
+    scene_name: String,
     mesh: &gltf::Mesh,
     buffers: &gltf_importer::Buffers,
     base: &Path,
-    mesh_manager: &Arc<Mutex<mesh_manager::MeshManager>>,
-    material_manager: &Arc<Mutex<material_manager::MaterialManager>>,
-    texture_manager: &Arc<Mutex<texture_manager::TextureManager>>,
-    device: &Arc<vulkano::device::Device>,
-    queue: &Arc<vulkano::device::Queue>
+    managers: &Arc<Mutex<core::resource_management::ManagerAndRenderInfo>>,
 ) -> Vec<Arc<Mutex<mesh::Mesh>>>{
 
     //this vec will be used to add new mesh nodes to the parent gltf node
@@ -301,35 +342,77 @@ pub fn load_gltf_mesh(
             .map(|x| x.into())
             .collect();
         //normal
-        let normals: Vec<[f32; 3]> = if let Some(iter) = primitive.normals(buffers) {
+        let mut normals: Vec<[f32; 3]> = if let Some(iter) = primitive.normals(buffers) {
             iter.map(|x| x.into()).collect()
         } else {
             Vec::new()
         };
         //tangents
-        let tangents: Vec<[f32; 4]> = if let Some(iter) = primitive.tangents(buffers) {
+        let mut tangents: Vec<[f32; 4]> = if let Some(iter) = primitive.tangents(buffers) {
             iter.map(|x| x.into()).collect()
         } else {
             Vec::new()
         };
         //tex_coors
-        let tex_coords: Vec<[f32; 2]> = if let Some(iter) = primitive.tex_coords_f32(0, buffers) {
+        let mut tex_coords: Vec<[f32; 2]> = if let Some(iter) = primitive.tex_coords_f32(0, buffers) {
             iter.map(|x| x.into()).collect()
         } else {
             Vec::new()
         };
         //verte color
-        let vertex_colors: Vec<[f32; 4]> = if let Some(iter) = primitive.colors_rgba_f32(0, 1.0, buffers) {
+        let mut vertex_colors: Vec<[f32; 4]> = if let Some(iter) = primitive.colors_rgba_f32(0, 1.0, buffers) {
             iter.map(|x| x.into()).collect()
         } else {
             Vec::new()
         };
 
         //TODO create mesh, as Arc, store it in the mesh manager, look for materials, if
-        let mesh_name = name.clone() + "_mesh_" + &primitive_index.to_string();
+        let mesh_name = scene_name.clone() + "_mesh_" + &primitive_index.to_string();
+
+        let (device, queue) = {
+            let device = {
+                let managers_lck = managers.lock().expect("failed to lock managers struct");
+                (*managers_lck).device.clone()
+            };
+            let queue = {
+                let managers_lck = managers.lock().expect("failed to lock managers struct");
+                (*managers_lck).queue.clone()
+            };
+
+            (device, queue)
+        };
         let mut add_mesh = mesh::Mesh::new(&mesh_name, device.clone(), queue.clone());
         //create a dummy and fill it
         let mut vertices = Vec::new();
+
+        println!("Vec lengthes: ", );
+        println!("\t pos: {}", positions.len());
+        println!("\t tex: {}", tex_coords.len());
+        println!("\t normal: {}", normals.len());
+        println!("\t tang: {}", tangents.len());
+        println!("\t col: {}", vertex_colors.len());
+
+        //Have to update vectors to be as long as the positions
+        if positions.len() != tex_coords.len(){
+            tex_coords = vec![[0.0, 0.0]; positions.len()];
+        }
+        if positions.len() != normals.len(){
+            normals = vec![[0.0, 0.0, 0.0]; positions.len()];
+        }
+        if positions.len() != tangents.len(){
+            tangents = vec![[0.0, 0.0, 0.0, 0.0]; positions.len()];
+        }
+        if positions.len() != vertex_colors.len(){
+            vertex_colors = vec![[0.0, 0.0, 0.0, 1.0]; positions.len()];
+        }
+
+        println!("Vec lengthes now: ", );
+        println!("\t pos: {}", positions.len());
+        println!("\t tex: {}", tex_coords.len());
+        println!("\t normal: {}", normals.len());
+        println!("\t tang: {}", tangents.len());
+        println!("\t col: {}", vertex_colors.len());
+
         for i in 0..positions.len(){
             let vertex = mesh::Vertex::new(
                 positions[i],
@@ -342,46 +425,63 @@ pub fn load_gltf_mesh(
         }
         //write new vertices as well as indices to mesh
         add_mesh.set_vertices_and_indices(vertices, indices, device.clone(), queue.clone());
+        //TODO SETUP BOUNDS
         //look for materials
         let mesh_material = primitive.material();
         //test if its the default material if not, test if this material si alread in the scene
+        println!("SORTING MATERIAL: ", );
         match mesh_material.index(){
             None => {
                 //is the default material, we can leave the mesh material like it is
+                println!("\tIs using default material ... ", );
             },
             Some(material_index) =>{
-
                 //create a String for the material name, then check for it, if it isn't in there
                 //create a material from this name
-                let material_name = String::from(scene_name) + &material_index.to_string();
-
+                let material_name = String::from(scene_name.clone()) + "_material_" + &material_index.to_string();
+                println!("\tIs non default with name: {}", material_name.clone());
                 let has_material ={
+                    let material_manager = {
+                        let managers_lck = managers.lock().expect("failed to lock managers struct");
+                        (*managers_lck).material_manager.clone()
+                    };
+
                     //It has a material, check if its alread in the material manager by name
                     let material_manager_lck = material_manager
                     .lock()
                     .expect("could not look material manager");
                     (*material_manager_lck).is_available(&material_name)
                 };
-                //if the material is already there we can change the mesh mateiral to this name
+                //if the material is already there we can change the mesh material to this name
                 //iof not we have to create it first and change then
                 if has_material{
+                    println!("\tThe materal is available", );
                     add_mesh.set_material(&material_name);
                 }else{
+                    println!("\tThe material is not available", );
+                    //load the material and save its final name
+                    let material_name_new = load_gltf_material(
+                            &mesh_material,
+                            material_name,
+                            &buffers,
+                            &base,
+                            managers,
+                        );
                     //Damn has no such material will create one
-                    add_mesh.set_material(&load_gltf_material(
-                        &mesh_material,
-                        material_name,
-                        &buffers,
-                        &base,
-                        &material_manager,
-                        &texture_manager)
-                    );
+                    println!("Added material with name: {}", material_name_new);
+                    add_mesh.set_material(&material_name_new);
+                    println!("Set material", );
                 }
             }
         }
         //We finished the mesh, time to put it in an Arc<Mutex<mesh::Mesh>>
         let arc_mesh = Arc::new(Mutex::new(add_mesh));
         //Now copy it to the manager and push the other one to the return vector
+        let mesh_manager = {
+            let managers_lck = managers.lock().expect("failed to lock managers struct");
+            (*managers_lck).mesh_manager.clone()
+        };
+
         let mut mesh_manager_lck = mesh_manager.lock().expect("failed to lock mesh manager in gltf loader");
         (*mesh_manager_lck).add_arc_mesh(arc_mesh.clone());
         //pushing to the return vector, continueing with the other meshes
@@ -390,29 +490,22 @@ pub fn load_gltf_mesh(
         primitive_index += 1;
     }
 
-
     return_vec
 }
 
 ///Loads a gltf node into the right node::GenericNode
 pub fn load_gltf_node(
     node: &gltf::Node,
-    parent: &mut node::GenericNode,
-    parent_name: String,
-    scene_name: &str,
+    scene_name: String,
     buffers: &gltf_importer::Buffers,
     base: &Path,
-    mesh_manager: &Arc<Mutex<mesh_manager::MeshManager>>,
-    material_manager: &Arc<Mutex<material_manager::MaterialManager>>,
-    texture_manager: &Arc<Mutex<texture_manager::TextureManager>>,
-    device: &Arc<vulkano::device::Device>,
-    queue: &Arc<vulkano::device::Queue>
-)
+    managers: &Arc<Mutex<core::resource_management::ManagerAndRenderInfo>>,
+) -> node::GenericNode
 {
     //creates the new name, based on the indice
-    let new_name = parent_name + "_node_" + &node.index().to_string();
-    let mut node_object: Option<node::ContentType> = None;
-
+    let new_name = scene_name.clone() + "_node_" + &node.index().to_string();
+    let mut this_node = node::GenericNode::new_empty(&new_name);
+    println!("Created node: {}", new_name.clone());
     //get the transform of this node
     let node_transform = {
         let mut new_transform: Decomposed<Vector3<f32>, Quaternion<f32>> = Decomposed::one();
@@ -438,28 +531,29 @@ pub fn load_gltf_node(
         new_transform.rot = rotation;
         new_transform
     };
+    //Setup the nodes transform
+    //TODO might join with parents transform
+    this_node.set_transform_single(node_transform);
 
     //check for a mesh in the node
     match node.mesh(){
         Some(mesh) =>{
+            println!("Found mesh in node: {}", new_name.clone());
             //load the primitves as an Vec<mesh::Mesh>
             let primitives = load_gltf_mesh(
-                &new_name,
-                scene_name,
+                scene_name.clone(),
                 &mesh,
                 &buffers,
                 base,
-                &mesh_manager,
-                &material_manager,
-                &texture_manager,
-                &device,
-                &queue
+                managers,
             );
-            //create a node from every mesh and add it to the own Node
+            println!("Finished loading mesh from gltf, adding to node...", );
+            //TODO set transform
             //TODO
+            //create a node from every mesh and add it to the own Node
             for mesh in primitives{
                 let mesh_node = node::ContentType::Renderable(node::RenderableContent::Mesh(mesh));
-                parent.add_child(mesh_node);
+                this_node.add_child(mesh_node);
             }
         }
         None => {}, //no mesh found for this node
@@ -470,17 +564,30 @@ pub fn load_gltf_node(
     //cycle to children based on own root node as parent
     //TODO
 
-    //Done!
+    //after adding everything to the current node, have a look for children, if there are any,
+    //iterate through them, always create a node, load it and add it to the current parent
+    if node.children().len() > 0{
+        for child in node.children(){
+            let new_child = load_gltf_node(
+                &child,
+                scene_name.clone(),
+                buffers,
+                base,
+                managers,
+            );
+            //and add the new child to the current node
+            this_node.add_node(new_child);
+        }
+    }
+    //After adding all childs and their sub childs, return
+    //return this node
+    this_node
 }
 
 ///Imports a scene from the file at `path`
 pub fn import_gltf(
     path: &str, name: &str,
-    mesh_manager: &Arc<Mutex<mesh_manager::MeshManager>>,
-    material_manager: &Arc<Mutex<material_manager::MaterialManager>>,
-    texture_manager: &Arc<Mutex<texture_manager::TextureManager>>,
-    device: &Arc<vulkano::device::Device>,
-    queue: &Arc<vulkano::device::Queue>
+    managers: Arc<Mutex<core::resource_management::ManagerAndRenderInfo>>
 ){
     //load the gltf model into a gltf object
     let path = Path::new(path);
@@ -501,23 +608,26 @@ pub fn import_gltf(
         let mut scene_node = node::GenericNode::new_empty(&scene_name.to_string());
         //now cycle through its nodes and add the correct meshes, lights whatever to it
         for node in scene.nodes(){
-            //loading ech node in this scene
-            load_gltf_node(
+            //lock managers
+            //let manager_lck = managers.lock().expect("failed to lock managers");
+            //loading each node in this scene
+            let new_node = load_gltf_node(
                 &node,
-                &mut scene_node,
-                scene_name.clone(), //The node name is now the scene name because a gltf file can have many
-                            //scene which are in the node::GenericNode view also nodes
-                name,       //This is the name of this gltf file used to reference global gltf file specific data like textures and materials
+                String::from(name),       //This is the name of this gltf file used to reference global gltf file specific data like textures and materials
                 &buffers,
                 base,
-                mesh_manager,
-                material_manager,
-                texture_manager,
-                &device,
-                &queue
+                &managers,
             );
+            scene_node.add_node(new_node);
         }
         //now add the new scene node to the root empty
         scene_tree.add_node(scene_node);
     }
+
+    //Donw with loading gltf
+    let manager_lck = managers.lock().expect("failed to lock managers");
+    let scene_manager = (*manager_lck).scene_manager.clone();
+    let mut scene_manager_inst = scene_manager.lock().expect("failed to lock scene manager");
+
+    (*scene_manager_inst).add_scene(scene_tree);
 }

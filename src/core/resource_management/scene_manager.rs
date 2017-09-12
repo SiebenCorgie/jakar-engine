@@ -1,6 +1,6 @@
 use core::simple_scene_system::node;
 
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::collections::BTreeMap;
 
 ///has a list of all available scenes
@@ -31,15 +31,22 @@ impl SceneManager {
         }
     }
 
-    ///Returns Some(scene) by name from the `scenes` Vector
-    pub fn get_scene(&mut self, name: &str) -> Option<Arc<Mutex<node::GenericNode>>>{
+    ///Returns Some(scene) by name from the `scenes` Vector as a Mutex guard
+    pub fn get_scene(&mut self, name: &str) -> Option<MutexGuard<node::GenericNode>>{
+        let has = self.scenes.get(&String::from(name));
+        match has{
+            None => None,
+            Some(scene) => Some(scene.lock().expect("failed to load scene")),
+        }
+    }
 
+    ///Returns Some(scene) by name from the `scenes` Vector as an Arc<Mutex<T>>
+    pub fn get_scene_arc(&mut self, name: &str) -> Option<Arc<Mutex<node::GenericNode>>>{
         let has = self.scenes.get(&String::from(name));
         match has{
             None => None,
             Some(scene) => Some(scene.clone()),
         }
-
     }
 
     ///Returns the scenes vector as a copy
@@ -55,5 +62,13 @@ impl SceneManager {
     pub fn has_scene(&self, name: &str) -> bool{
 
         self.scenes.contains_key(&String::from(name))
+    }
+
+    ///prints a list of all stored scenes
+    pub fn print_all_scenes(&self){
+        println!("Alls stored scenes: ", );
+        for (k,i) in self.scenes.iter(){
+            println!("\t {}", k);
+        }
     }
 }

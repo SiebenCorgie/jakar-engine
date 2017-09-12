@@ -456,7 +456,8 @@ impl Renderer {
             //println!("Trying to get meshes in frustum", );
             //Draw
                 //get all meshes, later in view frustum based on camera
-            let meshes_in_frustum = asset_manager.get_meshes_in_frustum();
+            //let meshes_in_frustum = asset_manager.get_meshes_in_frustum();
+            let meshes_in_frustum = asset_manager.get_all_meshes();
             println!("Rendering {} meshes", meshes_in_frustum.len());
 
             for mesh_transform in meshes_in_frustum.iter(){

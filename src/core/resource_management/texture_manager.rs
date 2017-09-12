@@ -35,7 +35,7 @@ impl TextureManager{
 
         //The default texture
         let none_texture = texture::TextureBuilder::from_image(
-            "/home/siebencorgie/Scripts/Rust/engine/ori-engine/data/nothing.png",
+            "/home/siebencorgie/Scripts/Rust/engine/jakar-engine/data/nothing.png",
             device.clone(),
             queue.clone(),
             engine_settings.clone()
@@ -44,7 +44,7 @@ impl TextureManager{
 
         //The fallback textures
         let fallback_albedo = texture::TextureBuilder::from_image(
-            "/home/siebencorgie/Scripts/Rust/engine/ori-engine/data/fallback_alb.png",
+            "/home/siebencorgie/Scripts/Rust/engine/jakar-engine/data/fallback_alb.png",
             device.clone(),
             queue.clone(),
             engine_settings.clone()
@@ -52,7 +52,7 @@ impl TextureManager{
         .build_with_name("fallback_albedo");
 
         let fallback_normal = texture::TextureBuilder::from_image(
-            "/home/siebencorgie/Scripts/Rust/engine/ori-engine/data/fallback_nrm.png",
+            "/home/siebencorgie/Scripts/Rust/engine/jakar-engine/data/fallback_nrm.png",
             device.clone(),
             queue.clone(),
             engine_settings.clone()
@@ -60,7 +60,7 @@ impl TextureManager{
         .build_with_name("fallback_normal");
 
         let fallback_physical = texture::TextureBuilder::from_image(
-            "/home/siebencorgie/Scripts/Rust/engine/ori-engine/data/fallback_physical.png",
+            "/home/siebencorgie/Scripts/Rust/engine/jakar-engine/data/fallback_physical.png",
             device.clone(),
             queue.clone(),
             engine_settings.clone()

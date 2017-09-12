@@ -49,9 +49,12 @@ fn main() {
         input_handler.key_map.clone()
     );
 
+    asset_manager.import_gltf("PickleRick", "pickle_rick/scene.gltf");
+
+
     //Start the input thread
     input_handler.start();
-
+    /*
     //Import the ball_01
     asset_manager.import_scene("ball_01", "Ball_01.obj");
     asset_manager.import_scene("ball_02", "Ball_02.obj");
@@ -59,6 +62,7 @@ fn main() {
     //asset_manager.import_scene("ball_01_02", "ball_01s.fbx");
     //asset_manager.import_scene("ball_01_03", "ball_01s.fbx");
     {
+        println!("metal", );
         //Albedo
         let mut tex_builder_01 = asset_manager.create_texture("/share/3DFiles/TextureLibary/Metal/RustSteal/lowRes/rustediron2_basecolor.png");
         tex_builder_01 = tex_builder_01.with_flipped_v();
@@ -92,6 +96,7 @@ fn main() {
 
             asset_manager.add_material_to_manager(new_material, "new_material").expect("failed to add new_material");
         }
+        println!("Metal end", );
     }
 
     //Black Material
@@ -125,6 +130,8 @@ fn main() {
         asset_manager.add_material_to_manager(new_material, "metalBlack").expect("failed to add new_material");
 
     }
+
+    */
 
     //SUN========================================================================
     let mut sun = light::LightDirectional::new("Sun");
@@ -197,6 +204,9 @@ fn main() {
     asset_manager.get_active_scene().add_child(point_node_04);
     //POINT 04 ==================================================================
 */
+
+
+
     asset_manager.get_active_scene().print_member(0);
 
     let mut adding_status_plane = false;
@@ -215,7 +225,7 @@ fn main() {
             println!("Adding ball_01", );
             let mut ball_01_scene ={
                 //let scene_manager = asset_manager.get_scene_manager();
-                asset_manager.get_scene_manager().get_scene("ball_01").expect("no ball_01s :(")
+                asset_manager.get_scene_manager().get_scene_arc("ball_01").expect("no ball_01s :(")
             };
 
             for i in (*ball_01_scene).lock().unwrap().get_all_meshes().iter(){
@@ -237,7 +247,7 @@ fn main() {
         if !adding_status_plane && asset_manager.has_scene("plane"){
             println!("Adding plane", );
 
-            let plane_scene = asset_manager.get_scene_manager().get_scene("plane").expect("no plane :(");
+            let plane_scene = asset_manager.get_scene_manager().get_scene_arc("plane").expect("no plane :(");
 
             println!("Set plane lock", );
             for i in (*plane_scene).lock().unwrap().get_all_meshes().iter(){
@@ -254,6 +264,19 @@ fn main() {
             adding_status_plane = true;
             println!("Finished plane", );
         }
+
+        if !adding_status_plane && asset_manager.has_scene("PickleRick"){
+
+            {
+                //let mut man = asset_manager.get_scene_manager();
+                //let mut boom_scene = man.get_scene("BoomBox");
+                //boom_scene.unwrap().scale(2.0);
+            }
+
+            asset_manager.add_scene_to_main_scene("PickleRick");
+            println!("Adding PickleRick", );
+        }
+
         //println!("STATUS: GAME: Starting loop in game", );
         //Update the content of the render_manager
 /*
@@ -268,7 +291,7 @@ fn main() {
 */
 
         asset_manager.update();
-        println!("STATUS: GAME: Updated all assets", );
+        //println!("STATUS: GAME: Updated all assets", );
         (*render).lock().expect("Failed to lock renderer for rendeball_02").render(&mut asset_manager);
         //Check if loop should close
         if input_handler.get_key_map_copy().closed{
@@ -325,17 +348,18 @@ fn main() {
             tree_scene.translate(Vector3::new(0.0, 1.0, 0.0));
         }
 
-
+        asset_manager.get_material_manager().print_all_materials();
+        asset_manager.get_scene_manager().print_all_scenes();
         //Prints all materials and the scene tree
         //asset_manager.get_material_manager().print_all_materials();
-        asset_manager.get_active_scene().print_member(0);
+        //asset_manager.get_active_scene().print_member(0);
 
         let fps_time = start_time.elapsed().subsec_nanos();
 
         let fps = 1.0/ (fps_time as f32 / 1_000_000_000.0);
         avg_fps = (avg_fps + fps) / 2.0;
-        println!("STATUS: RENDER: AVG FPS IN GAME: {}", avg_fps);
-        println!("This Frame: {}", fps);
+        //println!("STATUS: RENDER: AVG FPS IN GAME: {}", avg_fps);
+        //println!("This Frame: {}", fps);
 
         if fps < min_fps{
             min_fps = fps;

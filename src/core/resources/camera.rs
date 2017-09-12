@@ -173,7 +173,7 @@ impl Camera for DefaultCamera{
         //println!("Delta_Seconds: {}", delta_time.clone() );
 
         //Corrected Camera Speed
-        let camera_speed = 25.0 * delta_time;
+        let camera_speed = 2.0 * delta_time;
 
         //copy us a easy key map
         let key_map_inst = {

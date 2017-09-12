@@ -342,6 +342,16 @@ impl GenericNode{
 
     }
 
+    ///Scales this node by `ammount`
+    pub fn scale(&mut self, ammount: f32){
+        self.transform.scale *= ammount;
+
+        for (_, child) in self.children.iter_mut(){
+            child.scale(ammount);
+        }
+
+    }
+
     ///Returns a mesh from childs with this name
     pub fn get_mesh(&mut self, name: &str)-> Option<Arc<Mutex<core::resources::mesh::Mesh>>>{
         let mut result_value: Option<Arc<Mutex<core::resources::mesh::Mesh>>> = None;

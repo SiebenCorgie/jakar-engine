@@ -272,7 +272,7 @@ impl AssetManager {
     pub fn get_scene_manager<'a>(&'a mut self) -> MutexGuard<'a, scene_manager::SceneManager>{
         //lock own manager to return borrow
         //let scene_inst = self.scene_manager.clone();
-        let mut scene_lock = self.scene_manager.lock().expect("failed to hold lock for scene manager");
+        let scene_lock = self.scene_manager.lock().expect("failed to hold lock for scene manager");
         scene_lock
     }
 
@@ -320,27 +320,70 @@ impl AssetManager {
 
     ///Returns all meshes in the view frustum of the currently active camera
     pub fn get_meshes_in_frustum(&mut self) -> Vec<(Arc<Mutex<mesh::Mesh>>, Matrix4<f32>)>{
-        println!("Sending request to node tree", );
         self.active_main_scene.get_meshes_in_frustum(&self.camera)
     }
 
     ///Imports a new gltf scene file to a new scene with `name` as name from `path`
     pub fn import_gltf(&mut self, name: &str, path: &str){
+        //Lock in scope to prevent dead lock while importing
 
+        let device_inst = {
+            self.renderer.lock().expect("failed to hold renderer lock").get_device().clone()
+        };
+        let queue_inst = {
+            self.renderer.lock().expect("failed to hold renderer lock").get_queue().clone()
+        };
+        let uniform_manager_inst = {
+            self.renderer.lock().expect("failed to hold renderer lock").get_uniform_manager().clone()
+        };
+        let pipeline_manager_inst = {
+            self.renderer.lock().expect("failed to hold renderer lock").get_pipeline_manager().clone()
+        };
+
+
+        use core;
+        let managers = Arc::new(Mutex::new(core::resource_management::ManagerAndRenderInfo{
+            ///The current pipeline manager
+            pipeline_manager: pipeline_manager_inst,
+            ///The current uniform manager
+            uniform_manager: uniform_manager_inst,
+            ///The current device used for rendering
+            device: device_inst,
+            ///The currently used queues
+            queue: queue_inst,
+            ///The current texture manager
+            texture_manager: self.texture_manager.clone(),
+            ///The current material manager
+            material_manager: self.material_manager.clone(),
+            ///The current mesh manager
+            mesh_manager: self.mesh_manager.clone(),
+            ///The current scene manager
+            scene_manager: self.scene_manager.clone(),
+        }));
+
+        let path_inst = path.to_owned();
+        let name_inst = name.to_owned();
+        //now spawn a thread to load the gltf model
+        let _ = thread::spawn(move || {
+            gltf_importer::import_gltf(
+                &path_inst,
+                &name_inst,
+                managers,
+            );
+
+        });
     }
 
     ///Imports a new scene from a file at `path` and saves the scene as `name`
     ///The meshes are stored as Arc<Mutex<T>>'s in the mesh manager the scene Is stored in the scene manager
     pub fn import_scene(&mut self, name: &str, path: &str){
-
-        let render_inst = self.renderer.clone();
         //Lock in scope to prevent dead lock while importing
 
         let device_inst = {
-            (*render_inst).lock().expect("failed to hold renderer lock").get_device().clone()
+            self.renderer.lock().expect("failed to hold renderer lock").get_device().clone()
         };
         let queue_inst = {
-            (*render_inst).lock().expect("failed to hold renderer lock").get_queue().clone()
+            self.renderer.lock().expect("failed to hold renderer lock").get_queue().clone()
         };
 
         //Create the topy scene via an empty which will be used to add all the meshe-nodes
@@ -348,7 +391,7 @@ impl AssetManager {
         //Add the new scene to the manager
         self.get_scene_manager().add_scene(new_scene);
         //Now get the scene in the manager (as Arc<T>) and pass it for adding new meshes
-        let scene_in_manager = self.get_scene_manager().get_scene(
+        let scene_in_manager = self.get_scene_manager().get_scene_arc(
             name.clone()
         ).expect("could not find the just added scene, this should not happen");
 
@@ -366,7 +409,7 @@ impl AssetManager {
 
         //Get the scene
         let scene ={
-            self.get_scene_manager().get_scene(name).clone()
+            self.get_scene_manager().get_scene_arc(name).clone()
         };
 
         match scene{
@@ -420,7 +463,7 @@ impl AssetManager {
     ///Takes an `material::MaterialBuilder` as well as the `name` for the new material
     ///and adds it to the internam manager
     pub fn add_material_to_manager(&mut self, material: material::MaterialBuilder, name: &str)
-    -> Result<(), &'static str>
+    -> Result<String, String>
     {
         //lock the renderer
         let render_inst = self.renderer.clone();
