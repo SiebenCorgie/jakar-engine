@@ -12,8 +12,9 @@ const float kPi = 3.14159265;
 //Vertex Shader Input
 layout(location = 0) in vec3 v_normal;
 layout(location = 1) in vec3 FragmentPosition;
-layout(location = 2) in vec2 tex_coordinates;
-layout(location = 3) in mat3 TBN;
+layout(location = 2) in vec2 v_TexCoord;
+layout(location = 3) in vec3 v_position;
+//layout(location = 4) in mat3 TBN;
 
 
 //Global uniforms
@@ -113,12 +114,12 @@ const float PI = 3.14159265359;
 // technique somewhere later in the normal mapping tutorial.
 vec3 getNormalFromMap()
 {
-    vec3 tangentNormal = texture(t_Normal, tex_coordinates).xyz * 2.0 - 1.0;
+    vec3 tangentNormal = texture(t_Normal, v_TexCoord).xyz * 2.0 - 1.0;
 
     vec3 Q1  = dFdx(FragmentPosition);
     vec3 Q2  = dFdy(FragmentPosition);
-    vec2 st1 = dFdx(tex_coordinates);
-    vec2 st2 = dFdy(tex_coordinates);
+    vec2 st1 = dFdx(v_TexCoord);
+    vec2 st2 = dFdy(v_TexCoord);
 
     vec3 N   = normalize(v_normal);
     vec3 T  = normalize(Q1*st2.t - Q2*st1.t);
@@ -297,7 +298,7 @@ void main()
   if (u_tex_usage_info.b_albedo != 1) {
     albedo = u_tex_fac.albedo_factor.xyz;
   }else{
-    albedo = pow(texture(t_Albedo, tex_coordinates).rgb, vec3(2.2)) * u_tex_fac.albedo_factor.xyz;
+    albedo = pow(texture(t_Albedo, v_TexCoord).rgb, vec3(2.2)) * u_tex_fac.albedo_factor.xyz;
   }
 
   //Set metallic color
@@ -305,7 +306,7 @@ void main()
   if (u_tex_usage_info.b_metal != 1) {
     metallic = u_tex_fac.metal_factor;
   }else{
-    metallic = texture(t_Metall_Rough, tex_coordinates).g * u_tex_fac.metal_factor;
+    metallic = texture(t_Metall_Rough, v_TexCoord).g * u_tex_fac.metal_factor;
   }
 
   //Set roughness color
@@ -313,7 +314,7 @@ void main()
   if (u_tex_usage_info.b_roughness != 1) {
     roughness = u_tex_fac.roughness_factor;
   }else{
-    roughness = texture(t_Metall_Rough, tex_coordinates).b * u_tex_fac.roughness_factor;
+    roughness = texture(t_Metall_Rough, v_TexCoord).b * u_tex_fac.roughness_factor;
   }
 
   //Set ao color
@@ -321,26 +322,28 @@ void main()
   if (u_tex_usage_info.b_occlusion != 1) {
     ao = u_tex_fac.occlusion_factor;
   }else{
-    ao = texture(t_Metall_Rough, tex_coordinates).r * u_tex_fac.occlusion_factor;
+    ao = texture(t_Metall_Rough, v_TexCoord).r * u_tex_fac.occlusion_factor;
   }
 
   //TODO implemetn emmessive
-
-  vec3 N = vec3(0.0);
+  /*
   if (u_tex_usage_info.b_normal != 1){
-    N = vec3(u_tex_fac.normal_factor);
+    //N = vec3(u_tex_fac.normal_factor);
+    //from three-rs
+    vec3 N = TBN[2].xyz;
   }else {
-    N = texture(t_Normal, tex_coordinates).rgb;
+    vec3 N = texture(t_Normal, v_TexCoord).rgb;
+    N = normalize(TBN * ((2.0 * N - 1.0) * vec3(u_tex_fac.normal_factor, u_tex_fac.normal_factor, 1.0)));
   }
-
-  N = normalize(TBN * ((2.0 * N - 1.0) * u_tex_fac.normal_factor));
+  */
+  //N = normalize(TBN * ((2.0 * N - 1.0) * u_tex_fac.normal_factor));
 
   //N = normalize(N * 2.0 - 1.0);
   //N = normalize(TBN * N);
 
-  //vec3 N = normalize(v_normal);
+  vec3 N = normalize(v_normal);
   //vec3 N = getNormalFromMap();
-  vec3 V = normalize(u_main.camera_position - FragmentPosition);
+  vec3 V = normalize(u_main.camera_position - v_position);
 
   // calculate reflectance at normal incidence; if dia-electric (like plastic) use F0
   // of 0.04 and if sit's a metal, use the albedo color as F0 (metallic workflow)

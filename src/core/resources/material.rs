@@ -22,8 +22,6 @@ pub struct TextureUsageFlags {
     pub roughness: i32,
     pub occlusion: i32,
     pub emissive: i32
-    //TODO Implement additional textures:
-    // -
 }
 
 impl TextureUsageFlags{

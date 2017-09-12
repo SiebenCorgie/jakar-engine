@@ -270,8 +270,7 @@ impl GenericNode{
 
     ///Returns the transform matrix
     pub fn get_transform_matrix(&self) -> Matrix4<f32>{
-    Matrix4::from(self.transform)
-
+        Matrix4::from(self.transform)
     }
 
     ///Sets the transform of this node without changing its children

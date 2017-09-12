@@ -31,6 +31,7 @@ impl SceneManager {
         }
     }
 
+
     ///Returns Some(scene) by name from the `scenes` Vector as a Mutex guard
     pub fn get_scene(&mut self, name: &str) -> Option<MutexGuard<node::GenericNode>>{
         let has = self.scenes.get(&String::from(name));
@@ -67,7 +68,7 @@ impl SceneManager {
     ///prints a list of all stored scenes
     pub fn print_all_scenes(&self){
         println!("Alls stored scenes: ", );
-        for (k,i) in self.scenes.iter(){
+        for (k,_) in self.scenes.iter(){
             println!("\t {}", k);
         }
     }

@@ -185,7 +185,6 @@ impl Camera for DefaultCamera{
             return_key_map
         };
 
-
         //Input processing
         //some are flipped because in vulkan the upper_left corener is -1/-1 not -1/1 like in opengl
         {

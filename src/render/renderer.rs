@@ -493,7 +493,6 @@ impl Renderer {
                     (*unlocked_material).get_set_01(mesh_transform.1)
                 };
 
-
                 let set_02 = {
                     (*unlocked_material).get_set_02()
                 };

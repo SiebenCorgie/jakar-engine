@@ -8,8 +8,9 @@ layout(location = 4) in vec4 color;
 
 layout(location = 0) out vec3 v_normal;
 layout(location = 1) out vec3 FragmentPosition;
-layout(location = 2) out vec2 tex_coordinates;
-layout(location = 3) out mat3 TBN;
+layout(location = 2) out vec2 v_TexCoord;
+layout(location = 3) out vec3 v_position;
+//layout(location = 4) out mat3 TBN;
 
 
 
@@ -26,22 +27,13 @@ void main() {
 
   //new
   v_normal = mat3(transpose(inverse(u_main.model))) * normal;
-
   //v_normal = mat3(u_main.model) * normal;
-  tex_coordinates = tex_coord;
-
-  //Create TBN
-  vec3 T = normalize(vec3(u_main.model * tangent));
-  vec3 N = normalize(vec3(u_main.model * vec4(normal, 0.0)));
-  // re-orthogonalize T with respect to N
-  //T = normalize(T - dot(T, N) * N);
-  // then retrieve perpendicular vector B with the cross product of T and N
-  vec3 B = cross(N, T);
-
-  TBN = mat3(T, B, N);
+  v_TexCoord = tex_coord;
 
   //todo test if thats right
-  FragmentPosition = vec3(u_main.model * vec4(position, 1.0));
+  vec4 pos = u_main.model * vec4(position, 1.0);
+  FragmentPosition = vec3(pos);
+  v_position = pos.xyz / pos.w;
 
   gl_Position = u_main.proj * u_main.view * u_main.model * vec4(position, 1.0);
 }
