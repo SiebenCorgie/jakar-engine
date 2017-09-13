@@ -9,6 +9,8 @@ use input::KeyMap;
 
 use std::time::{Instant};
 
+
+
 ///Camera trait, use this to implement any type of camera
 pub trait Camera {
     ///Creates a default camera
@@ -42,6 +44,8 @@ pub trait Camera {
     fn set_frustum_planes(&mut self, near: f32, far: f32);
     ///Returns the perspective matrix based on the window settings
     fn get_perspective(&self) -> Matrix4<f32>;
+    ///Returns an view projection matrix which is corrected for vulkans view space
+    fn get_view_projection_matrix(&self) -> Matrix4<f32>;
     ///Returns the bound of the view frustum
     fn get_frustum_bound(&self) -> collision::Frustum<f32>;
 }
@@ -72,7 +76,11 @@ pub struct DefaultCamera {
     last_time: Instant,
 }
 
-
+///The Camera can use the opengl math beacuse be do
+///```
+///gl_Position.y = -gl_Position.y;
+///```
+///in every shader.
 impl Camera for DefaultCamera{
     fn new(
         settings: Arc<Mutex<engine_settings::EngineSettings>>,
@@ -81,8 +89,7 @@ impl Camera for DefaultCamera{
         //camera General
         let position = Vector3::new(0.0, 0.0, 0.0);
         let front = Vector3::new(0.0, 0.0, -1.0);
-        let up = Vector3::new(0.0, -1.0, 0.0);
-        let world_up = Vector3::new(0.0, -1.0, 0.0);
+        let up = Vector3::new(0.0, 1.0, 0.0);
 
         //Camera Rotation
         let yaw: f32 = -90.0;
@@ -200,10 +207,10 @@ impl Camera for DefaultCamera{
             if key_map_inst.d == true {
                 self.position += self.right * camera_speed;
             }
-            if (key_map_inst.ctrl_l == true) | (key_map_inst.q == true) {
+            if (key_map_inst.q == true) {
                 self.position = self.position - Vector3::new(0.0, camera_speed, 0.0);
             }
-            if (key_map_inst.shift_l == true) | (key_map_inst.e == true) {
+            if (key_map_inst.e == true) {
                 self.position = self.position + Vector3::new(0.0, camera_speed, 0.0);
             }
         }
@@ -214,10 +221,10 @@ impl Camera for DefaultCamera{
         // delta * sensitvity * time_delta * slowdown (virtual speed up)
         let virtual_speedup = 1.0; //currently not used because of the new float delta
         let x_offset: f32 = key_map_inst.mouse_delta_x as f32 * sensitivity * delta_time * virtual_speedup;
-        let y_offset: f32 = key_map_inst.mouse_delta_y as f32 * sensitivity * delta_time * virtual_speedup;
+        let y_offset: f32 = -1.0 * key_map_inst.mouse_delta_y as f32 * sensitivity * delta_time * virtual_speedup; //reversed because of opengl style calculation
         //needed to exchange these beacuse of the z-is-up system
-        self.yaw -= x_offset;
-        self.pitch -= y_offset;
+        self.yaw += x_offset;
+        self.pitch += y_offset;
 
         if self.pitch > 89.0 {
             self.pitch = 89.0;
@@ -248,6 +255,20 @@ impl Camera for DefaultCamera{
             self.up
         );
         view
+    }
+
+    ///Returns an 4x4 matrix containing view and projection
+    fn get_view_projection_matrix(&self) -> Matrix4<f32>{
+        let view = self.get_view_matrix();
+        let projection = self.get_perspective();
+        //a bias to undo the vulkan NDC
+        let bias = Matrix4::new(
+          1.0, 0.0, 0.0, 0.0,
+          0.0, -1.0, 0.0, 0.0,
+          0.0, 0.0, 0.5, 0.0,
+          0.0, 0.0, 0.5, 1.0
+        );
+        projection * view
     }
 
     ///Returns the direction the camera is facing
@@ -283,7 +304,6 @@ impl Camera for DefaultCamera{
 
     //Calculates the perspective based on the engine and camera settings
     fn get_perspective(&self) -> Matrix4<f32>{
-        //TODO update the perspective to use current engine settings
         let (width, height) = {
             let engine_settings_lck = self.settings.lock().expect("Faield to lock settings");
 
@@ -292,8 +312,16 @@ impl Camera for DefaultCamera{
                 (*engine_settings_lck).get_dimensions()[1]
             )
         };
-
-        perspective(Deg(self.fov),
+        //from https://matthewwellings.com/blog/the-new-vulkan-coordinate-system/
+        let bias: Matrix4<f32> = Matrix4::new(
+            1.0, 0.0, 0.0, 0.0,
+            0.0, -1.0, 0.0, 0.0,
+            0.0, 0.0, 0.5, 0.5,
+            0.0, 0.0, 0.0, 1.0
+        );
+        //bias has to be multiplied to comply with the opengl -> vulkan coorinate system
+        //(+y is down and depth is -1.0 - 1.0)
+        bias * perspective(Deg(self.fov),
         (width as f32 / height as f32),
         self.near_plane, self.far_plane)
     }

@@ -155,6 +155,7 @@ impl Renderer {
         //select needed device extensions
         let device_ext = vulkano::device::DeviceExtensions {
             khr_swapchain: true,
+            khr_maintenance1: true,
             .. vulkano::device::DeviceExtensions::none()
         };
 

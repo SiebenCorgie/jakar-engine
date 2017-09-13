@@ -137,6 +137,11 @@ pub fn load_gltf_texture(
         },
         None => {}, //this texture has no sampler => using the default one
     }
+
+    //now set some flipping
+    //texture_builder = texture_builder.with_rotation_180();
+
+
     //finally build the texture
     let new_texture = texture_builder.build_with_name(&name);
     //now add a copy to the manager and return the other one
@@ -335,7 +340,7 @@ pub fn load_gltf_mesh(
             }
         }
         //position
-        let positions: Vec<[f32; 3]> = primitive
+        let mut positions: Vec<[f32; 3]> = primitive
             .positions(buffers)
             .unwrap()
             .map(|x| x.into())
@@ -365,7 +370,6 @@ pub fn load_gltf_mesh(
             Vec::new()
         };
 
-        //TODO create mesh, as Arc, store it in the mesh manager, look for materials, if
         let mesh_name = scene_name.clone() + "_mesh_" + &primitive_index.to_string();
 
         let (device, queue) = {

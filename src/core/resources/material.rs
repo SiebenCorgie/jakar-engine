@@ -448,7 +448,8 @@ impl MaterialBuilder{
     }
 }
 
-
+///Describes a standart material
+///
 ///The material descibes the physical implementation of the material
 ///It mostly contains three textures:
 /// - albedo: the color representation (without light)
@@ -465,7 +466,6 @@ impl MaterialBuilder{
 /// * If the third component (B) and/or the fourth component (A) are present
 ///   then they are ignored.
 
-///Describes a standart material
 pub struct Material {
 
     pub name: String,
@@ -630,7 +630,7 @@ impl Material {
     /// - Binding 0 = point lights
     /// - Binding 1 = directional lights
     /// - Binding 2 = spot lights
-    /// - Binding 3 = struct which describes how many actual lights wher sent
+    /// - Binding 3 = struct which describes how many actual lights where send
     ///*ENHANCE*: This and the first set could be created in the uniform manager because they are
     ///always the same
     pub fn recreate_set_04(&mut self){

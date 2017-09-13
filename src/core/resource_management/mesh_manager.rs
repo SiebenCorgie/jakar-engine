@@ -2,7 +2,7 @@
 use core::resources::mesh;
 use core::simple_scene_system::node;
 use tools::Importer;
-use tools::assimp_importer;
+//use tools::assimp_importer;
 
 use vulkano;
 
@@ -98,7 +98,7 @@ impl MeshManager {
         scene_manager_scenes: Arc<Mutex<node::GenericNode>>
     )
     {
-
+    /*
         let mut meshes_instance = self.meshes.clone();
         let mut scene_instance = scene_manager_scenes.clone();
         let device_instance = device.clone();
@@ -148,5 +148,6 @@ impl MeshManager {
 
             //println!("STATUS: MESH_MANAGER: Finshed importing {}", name_instance.clone());
         });
+    */
     }
 }

@@ -20,7 +20,6 @@ pub struct UniformManager {
 
     u_light_count: pbr_fragment::ty::LightCount,
 
-
     ///First uniform buffer pool block, used or model, view and perspecive matrix
     buffer_pool_01_mvp: vulkano::buffer::cpu_pool::CpuBufferPool<pbr_fragment::ty::Data>,
 
@@ -51,12 +50,8 @@ impl UniformManager{
             proj : <Matrix4<f32>>::identity().into(),
         };
 
-
-        /*
-        let points = //s::PointLightInfo{
-            l_point: Vec::new(),
-        };
-        */
+        //Create an fixed array for each light
+        //TODO make a variable size array and pass it via &Vec<T>
         let points = {
             let empty_light = pbr_fragment::ty::PointLight{
                 color: [1.0; 3],
@@ -72,11 +67,7 @@ impl UniformManager{
             }
 
         };
-        /*
-        let direct = //s::DirectionlLightInfo{
-            l_directional: Vec::new(),
-        };
-        */
+
         let direct = {
             let empty_light = pbr_fragment::ty::DirectionalLight{
                 color: [1.0; 3],
@@ -92,11 +83,7 @@ impl UniformManager{
                 d_light: add_array,
             }
         };
-        /*
-        let spots = //s::SpotLightInfo{
-            l_spot: Vec::new(),
-        };
-        */
+
         let spots = {
             let empty_light = pbr_fragment::ty::SpotLight{
                 color: [1.0; 3],
@@ -208,7 +195,6 @@ impl UniformManager{
     CpuBufferPoolSubbuffer<pbr_fragment::ty::LightCount, Arc<vulkano::memory::pool::StdMemoryPool>>{
         self.buffer_pool_05_count.next(self.u_light_count.clone())
     }
-
 
     ///Updates the internal data used for the uniform buffer creation
     pub fn update(

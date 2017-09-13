@@ -302,6 +302,7 @@ void main()
   if (u_tex_usage_info.b_albedo != 1) {
     albedo = u_tex_fac.albedo_factor.xyz;
   }else{
+    //convert from srgb (lazy)
     albedo = pow(texture(t_Albedo, v_TexCoord).rgb, vec3(2.2)) * u_tex_fac.albedo_factor.xyz;
   }
 
@@ -310,7 +311,7 @@ void main()
   if (u_tex_usage_info.b_metal != 1) {
     metallic = u_tex_fac.metal_factor;
   }else{
-    metallic = texture(t_Metall_Rough, v_TexCoord).g * u_tex_fac.metal_factor;
+    metallic = texture(t_Metall_Rough, v_TexCoord).r * u_tex_fac.metal_factor;
   }
 
   //Set roughness color
@@ -318,7 +319,7 @@ void main()
   if (u_tex_usage_info.b_roughness != 1) {
     roughness = u_tex_fac.roughness_factor;
   }else{
-    roughness = texture(t_Metall_Rough, v_TexCoord).b * u_tex_fac.roughness_factor;
+    roughness = texture(t_Metall_Rough, v_TexCoord).g * u_tex_fac.roughness_factor;
   }
 
   //Set ao color
@@ -326,7 +327,7 @@ void main()
   if (u_tex_usage_info.b_occlusion != 1) {
     ao = u_tex_fac.occlusion_factor;
   }else{
-    ao = texture(t_Metall_Rough, v_TexCoord).r * u_tex_fac.occlusion_factor;
+    ao = texture(t_Occlusion, v_TexCoord).r * u_tex_fac.occlusion_factor;
   }
 
   //TODO implemetn emmessive
@@ -338,7 +339,7 @@ void main()
   }else {
     N = texture(t_Normal, v_TexCoord).rgb;
     //N = srgb_to_linear(N);
-    N = normalize(v_TBN * ((2.0 * N - 1.0) * vec3(u_tex_fac.normal_factor, u_tex_fac.normal_factor, 1.0)));
+    N = normalize(v_TBN * ((2.0 * N - 1.0))); // * vec3(u_tex_fac.normal_factor, u_tex_fac.normal_factor, 1.0)));
   }
 
   //N = normalize(TBN * ((2.0 * N - 1.0) * u_tex_fac.normal_factor));
@@ -346,7 +347,8 @@ void main()
   //N = normalize(N * 2.0 - 1.0);
   //N = normalize(TBN * N);
 
-  //vec3 N = normalize(v_normal);
+//  vec3 N = normalize(v_normal);
+
   //vec3 N = getNormalFromMap();
   vec3 V = normalize(u_main.camera_position - v_position);
 

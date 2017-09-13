@@ -2,7 +2,7 @@
 
 extern crate cgmath;
 extern crate collision;
-extern crate assimp;
+//extern crate assimp; Put the assimp crate out because of legacy and compile problems
 
 //All thrid party crates
 extern crate winit;

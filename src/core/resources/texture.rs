@@ -38,6 +38,7 @@ pub struct TextureBuilder {
     min_lod: f32,
     max_lod: f32,
 
+
     //image
     //Some helpful postprogressing
     b_blur: bool,
@@ -72,6 +73,7 @@ struct ImageInfo {
     pub format: vulkano::format::Format,
     pub data: Vec<u8>,
 }
+
 
 impl TextureBuilder {
     ///Creates a new builder struct with default parameters from an image at `image_path`

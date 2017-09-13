@@ -49,89 +49,11 @@ fn main() {
         input_handler.key_map.clone()
     );
 
-    asset_manager.import_gltf("PickleRick", "pickle_rick/scene.gltf");
+    asset_manager.import_gltf("TestScene", "TestScene/TestScene.gltf");
 
 
     //Start the input thread
     input_handler.start();
-    /*
-    //Import the ball_01
-    asset_manager.import_scene("ball_01", "Ball_01.obj");
-    asset_manager.import_scene("ball_02", "Ball_02.obj");
-    asset_manager.import_scene("plane", "Plane.obj");
-    //asset_manager.import_scene("ball_01_02", "ball_01s.fbx");
-    //asset_manager.import_scene("ball_01_03", "ball_01s.fbx");
-    {
-        println!("metal", );
-        //Albedo
-        let mut tex_builder_01 = asset_manager.create_texture("/share/3DFiles/TextureLibary/Metal/RustSteal/lowRes/rustediron2_basecolor.png");
-        tex_builder_01 = tex_builder_01.with_flipped_v();
-        asset_manager.add_texture_to_manager(tex_builder_01, "metal_albedo").expect("failed to add new_texture");
-        //Normal
-        let mut tex_builder_02 = asset_manager.create_texture("/share/3DFiles/TextureLibary/Metal/RustSteal/lowRes/rustediron2_normal.png");
-        tex_builder_02 = tex_builder_02.with_flipped_v();
-        asset_manager.add_texture_to_manager(tex_builder_02, "metal_normal").expect("failed to add new_texture");
-        //Physical
-        let mut tex_builder_03 = asset_manager.create_texture("/share/3DFiles/TextureLibary/Metal/RustSteal/lowRes/rustediron2_physical.png");
-        tex_builder_03 = tex_builder_03.with_flipped_v();
-        asset_manager.add_texture_to_manager(tex_builder_03, "metal_physical").expect("failed to add new_texture");
-        //Creating a new material, currently a bit ugly
-        {
-
-            let albedo_in_manager = asset_manager.get_texture_manager().get_texture("metal_albedo");
-            let nrm_in_manager = asset_manager.get_texture_manager().get_texture("metal_normal");
-            let physical_in_manager = asset_manager.get_texture_manager().get_texture("metal_physical");
-
-            let new_material = core::resources::material::MaterialBuilder::new(
-                Some(albedo_in_manager),
-                Some(nrm_in_manager),
-                Some(physical_in_manager.clone()),
-                Some(physical_in_manager),
-                None,
-                asset_manager.get_texture_manager().get_none()
-            ).with_factors(
-                core::resources::material::MaterialFactors::new()
-                .with_factor_albedo([1.0, 1.0, 1.0, 1.0])
-            );
-
-            asset_manager.add_material_to_manager(new_material, "new_material").expect("failed to add new_material");
-        }
-        println!("Metal end", );
-    }
-
-    //Black Material
-    {
-        let mut tex_builder_01 = asset_manager.create_texture("brickwall128.jpg");
-        //tex_builder_01 = tex_builder_01.with_flipped_v();
-        //tex_builder_01 = tex_builder_01.with_flipped_h();
-        asset_manager.add_texture_to_manager(tex_builder_01, "cube_albedo").expect("failed to add new_texture");
-        //Normal
-        let mut tex_builder_02 = asset_manager.create_texture("brickwall_normal128.jpg");
-        //tex_builder_02 = tex_builder_02.with_flipped_v();
-        asset_manager.add_texture_to_manager(tex_builder_02, "cube_normal").expect("failed to add new_texture");
-
-        let albedo_in_manager = asset_manager.get_texture_manager().get_texture("cube_albedo");
-        let nrm_in_manager = asset_manager.get_texture_manager().get_texture("cube_normal");
-
-        let new_material = core::resources::material::MaterialBuilder::new(
-            Some(albedo_in_manager),
-            Some(nrm_in_manager),
-            None,
-            None,
-            None,
-            asset_manager.get_texture_manager().get_none()
-        ).with_factors(
-            core::resources::material::MaterialFactors::new()
-            //.with_factor_albedo([0.4, 0.2, 0.0, 1.0])
-            .with_factor_metal(0.0)
-            .with_factor_roughness(0.1)
-        );
-
-        asset_manager.add_material_to_manager(new_material, "metalBlack").expect("failed to add new_material");
-
-    }
-
-    */
 
     //SUN========================================================================
     let mut sun = light::LightDirectional::new("Sun");
@@ -156,13 +78,13 @@ fn main() {
     let spot_node_01 = node::ContentType::Light(node::LightsContent::SpotLight(spot_01));
     asset_manager.get_active_scene().add_child(spot_node_01);
     //SPOT 01 ===================================================================
-
+*/
 
     //POINT 00 ==================================================================
     let mut point_00 = light::LightPoint::new("Point_00");
     point_00.set_color(Vector3::new(1.0, 1.0, 1.0));
     point_00.set_intensity(150.0);
-    point_00.set_location(Vector3::new(0.0, 0.0, 0.0));
+    point_00.set_location(Vector3::new(0.0, 1.0, 0.0));
 
     let point_node_00 = node::ContentType::Light(node::LightsContent::PointLight(point_00));
     asset_manager.get_active_scene().add_child(point_node_00);
@@ -203,7 +125,7 @@ fn main() {
     let point_node_04 = node::ContentType::Light(node::LightsContent::PointLight(point_04));
     asset_manager.get_active_scene().add_child(point_node_04);
     //POINT 04 ==================================================================
-*/
+
 
 
 
@@ -220,61 +142,16 @@ fn main() {
     let mut max_fps = 0.0;
 
     loop {
-        //Add the ball_01 scene if finished loading. This will be managed by a defined loader later
-        if adding_status == false && asset_manager.has_scene("ball_01") && asset_manager.has_scene("ball_02"){
-            println!("Adding ball_01", );
-            let mut ball_01_scene ={
-                //let scene_manager = asset_manager.get_scene_manager();
-                asset_manager.get_scene_manager().get_scene_arc("ball_01").expect("no ball_01s :(")
-            };
-
-            for i in (*ball_01_scene).lock().unwrap().get_all_meshes().iter(){
-                //Unwrap the mesh from the tubel
-                let mesh = i.0.clone();
-
-                let mesh_inst = mesh.clone();
-                let mut mesh_lck = mesh_inst.lock().expect("failed to change material");
-                (*mesh_lck).set_material("new_material");
-            }
-            asset_manager.add_scene_to_main_scene("ball_01");
-            asset_manager.add_scene_to_main_scene("ball_02");
-
-            adding_status = true;
-            println!("STATUS: GAME: added all ball_01s=============================================", );
-
-        }
-
-        if !adding_status_plane && asset_manager.has_scene("plane"){
-            println!("Adding plane", );
-
-            let plane_scene = asset_manager.get_scene_manager().get_scene_arc("plane").expect("no plane :(");
-
-            println!("Set plane lock", );
-            for i in (*plane_scene).lock().unwrap().get_all_meshes().iter(){
-                let mesh = i.0.clone();
-                println!("Cloned mesh", );
-                let mut mesh_lck = mesh.lock().expect("failed to lock plane");
-                println!("Locked mesh", );
-                (*mesh_lck).set_material("metalBlack");
-                println!("SetMaterial", );
-            }
-
-            asset_manager.add_scene_to_main_scene("plane");
-
-            adding_status_plane = true;
-            println!("Finished plane", );
-        }
-
-        if !adding_status_plane && asset_manager.has_scene("PickleRick"){
+        if !adding_status_plane && asset_manager.has_scene("TestScene"){
 
             {
                 let mut man = asset_manager.get_scene_manager();
-                let mut boom_scene = man.get_scene("PickleRick");
+                let mut boom_scene = man.get_scene("TestScene");
                 boom_scene.unwrap().scale(1.0);
             }
 
-            asset_manager.add_scene_to_main_scene("PickleRick");
-            println!("Adding PickleRick", );
+            asset_manager.add_scene_to_main_scene("TestScene");
+            println!("Adding TestScene", );
             adding_status_plane = true;
         }
 
@@ -313,7 +190,7 @@ fn main() {
             //Get the ball_02 scene and translate it by 10,10,0
             let ball_01_scene ={
                 //Get the reference in the current active scene
-                match asset_manager.get_active_scene().get_node("PickleRick"){
+                match asset_manager.get_active_scene().get_node("TestScene"){
                     Some(scene) => scene,
                     None => continue,
                 }
@@ -327,7 +204,7 @@ fn main() {
             //Get the ball_02 scene and translate it by 10,10,0
             let mut plane_scene ={
                 //Get the reference in the current active scene
-                match asset_manager.get_active_scene().get_node("PickleRick"){
+                match asset_manager.get_active_scene().get_node("TestScene"){
                     Some(scene) => scene,
                     None => continue,
                 }
@@ -341,7 +218,7 @@ fn main() {
             //Get the ball_02 scene and translate it by 10,10,0
             let mut tree_scene ={
                 //Get the reference in the current active scene
-                match asset_manager.get_active_scene().get_node("PickleRick"){
+                match asset_manager.get_active_scene().get_node("TestScene"){
                     Some(scene) => scene,
                     None => continue,
                 }

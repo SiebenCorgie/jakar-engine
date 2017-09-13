@@ -8,7 +8,7 @@ use core::resource_management::material_manager;
 use core::resources::light;
 use core::resources::mesh;
 use core::resource_management::mesh_manager;
-use tools::assimp_importer;
+//use tools::assimp_importer;
 use tools::Importer;
 use tools::gltf_importer;
 use core::resource_management::scene_manager;

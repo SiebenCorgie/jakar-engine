@@ -15,7 +15,7 @@ collision = "0.11.0"
 gltf-importer = "0.9.1"
 gltf-utils = "0.9.1"
 gltf = "0.9.1"
-assimp = "0.2.1"
+#assimp = "0.2.1"
 time = "0.1.37"
 
 [[example]]
