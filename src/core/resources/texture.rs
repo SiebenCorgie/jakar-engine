@@ -10,6 +10,7 @@ use vulkano::sampler::Sampler;
 use vulkano::image::Dimensions::Dim2d;
 use vulkano::format::FormatDesc;
 use vulkano::format::AcceptsPixels;
+use vulkano::sync::GpuFuture;
 use vulkano;
 
 use image;
@@ -289,7 +290,12 @@ impl TextureBuilder {
     ///This function will use the information currently present in the `TextureBuilder`
     ///and create a `core::resources::Texture` from it
     pub fn build_with_name(self, texture_name: &str) -> Arc<Texture>
-        {
+    {
+
+        // This variable will be modified during the function, and will correspond to when the
+        // transfer commands are finished.
+        let mut final_future = Box::new(vulkano::sync::now(self.queue.device().clone())) as Box<vulkano::sync::GpuFuture>;
+
         //Setup a sampler from the info
         let tmp_sampler = Sampler::new(
             self.device.clone(),
@@ -418,6 +424,8 @@ impl TextureBuilder {
                 .expect("failed to create immutable image")
             };
             //drop the future to wait for gpu
+            final_future = Box::new(final_future.join(tex_future));
+
             texture_tmp
         };
         let texture_struct = Texture{

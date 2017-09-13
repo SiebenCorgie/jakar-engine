@@ -14,7 +14,7 @@ layout(location = 0) in vec3 v_normal;
 layout(location = 1) in vec3 FragmentPosition;
 layout(location = 2) in vec2 v_TexCoord;
 layout(location = 3) in vec3 v_position;
-//layout(location = 4) in mat3 TBN;
+layout(location = 4) in mat3 v_TBN;
 
 
 //Global uniforms
@@ -290,6 +290,10 @@ vec3 calcSpotLight(SpotLight light, vec3 FragmentPosition, vec3 albedo, float me
   return ((kD * albedo / PI + specular) * radiance * NdotL) * spot_intensity;  // note that we already multiplied the BRDF by the Fresnel (kS) so we won't multiply by kS again
 }
 
+vec3 srgb_to_linear(vec3 c) {
+    return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(0.04045, c));
+}
+
 // ----------------------------------------------------------------------------
 void main()
 {
@@ -326,22 +330,23 @@ void main()
   }
 
   //TODO implemetn emmessive
-  /*
+  vec3 N;
   if (u_tex_usage_info.b_normal != 1){
     //N = vec3(u_tex_fac.normal_factor);
     //from three-rs
-    vec3 N = TBN[2].xyz;
+    N = v_normal; //use the vertex normal
   }else {
-    vec3 N = texture(t_Normal, v_TexCoord).rgb;
-    N = normalize(TBN * ((2.0 * N - 1.0) * vec3(u_tex_fac.normal_factor, u_tex_fac.normal_factor, 1.0)));
+    N = texture(t_Normal, v_TexCoord).rgb;
+    //N = srgb_to_linear(N);
+    N = normalize(v_TBN * ((2.0 * N - 1.0) * vec3(u_tex_fac.normal_factor, u_tex_fac.normal_factor, 1.0)));
   }
-  */
+
   //N = normalize(TBN * ((2.0 * N - 1.0) * u_tex_fac.normal_factor));
 
   //N = normalize(N * 2.0 - 1.0);
   //N = normalize(TBN * N);
 
-  vec3 N = normalize(v_normal);
+  //vec3 N = normalize(v_normal);
   //vec3 N = getNormalFromMap();
   vec3 V = normalize(u_main.camera_position - v_position);
 
@@ -389,4 +394,6 @@ void main()
   color = pow(color, vec3(1.0/2.2));
 
   f_color = vec4(color, 1.0);
+
+  //f_color = vec4(N, 1.0);
 }
