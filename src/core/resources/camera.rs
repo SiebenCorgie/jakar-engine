@@ -331,6 +331,7 @@ impl Camera for DefaultCamera{
         let matrix = self.get_perspective() * self.get_view_matrix();
         collision::Frustum::from_matrix4(matrix).expect("failed to create frustum")
     }
+    
 }
 
 //Helper function for calculating the view

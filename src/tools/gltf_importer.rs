@@ -15,15 +15,7 @@ use image;
 
 use std::path::Path;
 use std::sync::{Arc, Mutex};
-///An Import struct used to store information needed to create all meshes, textures etc.
-pub struct GltfImporter {
-    root_node: node::GenericNode,
-    device: Arc<vulkano::device::Device>,
-    queue: Arc<vulkano::device::Queue>
-}
 
-//TODO everything into struct which also holds a copy of the texture, material, mesh and scene
-//manager for easy adding etc.
 
 ///Imports a gltf texture
 pub fn load_gltf_texture(

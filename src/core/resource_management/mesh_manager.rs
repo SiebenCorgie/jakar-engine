@@ -93,11 +93,14 @@ impl MeshManager {
     ///
     /// By doing this the sub.meshes can be reused to create new scene and a complex scene with
     /// different objects stays in one sub-scene
+
+    //Deprecaed in favor of the gltf loader
     pub fn import_mesh(&mut self, name: &str, path: &str, device: Arc<vulkano::device::Device>,
         queue: Arc<vulkano::device::Queue>,
         scene_manager_scenes: Arc<Mutex<node::GenericNode>>
     )
     {
+
     /*
         let mut meshes_instance = self.meshes.clone();
         let mut scene_instance = scene_manager_scenes.clone();

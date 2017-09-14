@@ -338,18 +338,9 @@ void main()
     N = v_normal; //use the vertex normal
   }else {
     N = texture(t_Normal, v_TexCoord).rgb;
-    //N = srgb_to_linear(N);
-    N = normalize(v_TBN * ((2.0 * N - 1.0))); // * vec3(u_tex_fac.normal_factor, u_tex_fac.normal_factor, 1.0)));
+    //N = v_normal;
+    N = v_TBN * (N * 2 - 1);
   }
-
-  //N = normalize(TBN * ((2.0 * N - 1.0) * u_tex_fac.normal_factor));
-
-  //N = normalize(N * 2.0 - 1.0);
-  //N = normalize(TBN * N);
-
-//  vec3 N = normalize(v_normal);
-
-  //vec3 N = getNormalFromMap();
   vec3 V = normalize(u_main.camera_position - v_position);
 
   // calculate reflectance at normal incidence; if dia-electric (like plastic) use F0
@@ -397,5 +388,5 @@ void main()
 
   f_color = vec4(color, 1.0);
 
-  //f_color = vec4(N, 1.0);
+  //f_color = vec4(v_TBN[2], 1.0);
 }

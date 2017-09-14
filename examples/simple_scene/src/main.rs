@@ -78,7 +78,7 @@ fn main() {
     let spot_node_01 = node::ContentType::Light(node::LightsContent::SpotLight(spot_01));
     asset_manager.get_active_scene().add_child(spot_node_01);
     //SPOT 01 ===================================================================
-*/
+
 
     //POINT 00 ==================================================================
     let mut point_00 = light::LightPoint::new("Point_00");
@@ -125,7 +125,7 @@ fn main() {
     let point_node_04 = node::ContentType::Light(node::LightsContent::PointLight(point_04));
     asset_manager.get_active_scene().add_child(point_node_04);
     //POINT 04 ==================================================================
-
+*/
 
 
 
@@ -200,7 +200,7 @@ fn main() {
             //println!("Translated", );
         }
 
-        if input_handler.get_key_map_copy().z{
+        if input_handler.get_key_map_copy().r{
             //Get the ball_02 scene and translate it by 10,10,0
             let mut plane_scene ={
                 //Get the reference in the current active scene
@@ -213,7 +213,7 @@ fn main() {
             plane_scene.rotate(Vector3::new(0.0, 1.0, 0.0));
         }
 
-        if input_handler.get_key_map_copy().u{
+        if input_handler.get_key_map_copy().y{
             println!("Translating test #########!", );
             //Get the ball_02 scene and translate it by 10,10,0
             let mut tree_scene ={
@@ -226,6 +226,36 @@ fn main() {
             println!("Translating!", );
             //Set the translation on this node
             tree_scene.translate(Vector3::new(0.0, 1.0, 0.0));
+        }
+
+        if input_handler.get_key_map_copy().z{
+            println!("Translating test #########!", );
+            //Get the ball_02 scene and translate it by 10,10,0
+            let mut tree_scene ={
+                //Get the reference in the current active scene
+                match asset_manager.get_active_scene().get_node("TestScene"){
+                    Some(scene) => scene,
+                    None => continue,
+                }
+            };
+            println!("Translating!", );
+            //Set the translation on this node
+            tree_scene.translate(Vector3::new(0.0, 0.0, 1.0));
+        }
+
+        if input_handler.get_key_map_copy().x{
+            println!("Translating test #########!", );
+            //Get the ball_02 scene and translate it by 10,10,0
+            let mut tree_scene ={
+                //Get the reference in the current active scene
+                match asset_manager.get_active_scene().get_node("TestScene"){
+                    Some(scene) => scene,
+                    None => continue,
+                }
+            };
+            println!("Translating!", );
+            //Set the translation on this node
+            tree_scene.translate(Vector3::new(1.0, 0.0, 0.0));
         }
 
         asset_manager.get_material_manager().print_all_materials();

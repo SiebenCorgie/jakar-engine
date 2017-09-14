@@ -631,6 +631,7 @@ impl Material {
     /// - Binding 1 = directional lights
     /// - Binding 2 = spot lights
     /// - Binding 3 = struct which describes how many actual lights where send
+    ///
     ///*ENHANCE*: This and the first set could be created in the uniform manager because they are
     ///always the same
     pub fn recreate_set_04(&mut self){
