@@ -47,10 +47,17 @@ void main() {
 
   vec4 pos = u_main.model * vec4(position, 1.0);
 
+  vec3 new_normal = normal;
+  new_normal.y = -new_normal.y;
+
+  vec4 new_tangent = tangent;
+  new_tangent.y = -new_tangent.y;
+
+
   mat3 normal_matrix = mat3(transpose(inverse(u_main.model)));
 
-  vec3 T = normalize(normal_matrix * tangent.xyz);
-  vec3 N = normalize(normal_matrix * normal);
+  vec3 T = normalize(normal_matrix * new_tangent.xyz);
+  vec3 N = normalize(normal_matrix * new_normal);
 
   //vec3 T = normalize(vec3(u_main.model * vec4(tangent.xyz, 0.0)));
   //vec3 N = normalize(vec3(u_main.model * vec4(normal, 0.0)));
@@ -65,7 +72,7 @@ void main() {
   FragmentPosition = vec3(pos);
   v_position = pos.xyz / pos.w;
   v_TexCoord = tex_coord;
-  v_normal = mat3(transpose(inverse(u_main.model))) * normal;
+  v_normal = mat3(transpose(inverse(u_main.model))) * new_normal;
 
   //The proj has been manipulated like here: https://matthewwellings.com/blog/the-new-vulkan-coordinate-system/
   gl_Position = u_main.proj * u_main.view * u_main.model * vec4(position, 1.0);

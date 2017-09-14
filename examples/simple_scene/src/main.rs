@@ -57,7 +57,8 @@ fn main() {
 
     //SUN========================================================================
     let mut sun = light::LightDirectional::new("Sun");
-    sun.set_direction(Vector3::new(1.0, -0.5, 0.0));
+    //looking down in vulkan space
+    sun.set_direction(Vector3::new(1.0, 0.5, 0.0));
     sun.set_color(Vector3::new(1.0, 0.75, 0.75));
     sun.set_intensity(200.0);
 
