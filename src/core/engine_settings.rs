@@ -1,11 +1,19 @@
 
 use winit;
+use vulkano;
 
 ///The struc with the information
 #[derive(Clone)]
 pub struct EngineSettings {
     ///Displayed name
     pub app_name: String,
+    ///The version of this application
+    pub app_version: vulkano::instance::Version,
+
+    ///Engine name
+    pub engine_name: String,
+    ///The version of the engine
+    pub engine_version: vulkano::instance::Version,
 
     ///Dimensions in pixel
     pub window_dimensions: [u32; 2],
@@ -49,7 +57,23 @@ impl EngineSettings{
 
         EngineSettings{
             //main
-            app_name: String::from("Ori-Engine"),
+            app_name: String::from("Jakar-Engine"),
+            ///The version of this application
+            app_version: vulkano::instance::Version{
+                major: 0,
+                minor: 1,
+                patch: 0,
+            },
+
+            ///Engine name
+            engine_name: String::from("Jakar-Engine"),
+            ///The version of the engine
+            engine_version: vulkano::instance::Version{
+                major: 0,
+                minor: 1,
+                patch: 0,
+            },
+
             //window
             window_dimensions: [800, 600],
             window_location: [100, 100],
@@ -125,6 +149,17 @@ impl EngineSettings{
         self.app_name = String::from(name);
         self
     }
+
+    ///Sets the application version
+    pub fn with_app_version(mut self, major: u16, minor: u16, patch: u16) -> Self{
+        self.app_version = vulkano::instance::Version{
+            major: major,
+            minor: minor,
+            patch: patch,
+        };
+        self
+    }
+
     ///Sets the dimensions of a currently used instance of `EngineSettings`
     pub fn set_dimensions(&mut self, width: u32, height: u32){
         self.window_dimensions = [width, height];

@@ -82,8 +82,24 @@ impl Renderer {
         let layer = "VK_LAYER_LUNARG_standard_validation";
         let layers = vec![&layer];
 
+        //Create an vulkano app info from the settings
+        let app_info = {
+            use std::borrow::Cow;
+            let engine_settings_lck = engine_settings.lock().expect("failed to lock settings");
+
+            let app_name = Some(Cow::Owned((*engine_settings_lck).app_name.clone()));
+            let engine_name = Some(Cow::Owned((*engine_settings_lck).engine_name.clone()));
+
+            vulkano::instance::ApplicationInfo{
+                application_name: app_name,
+                application_version: Some((*engine_settings_lck).app_version.clone()),
+                engine_name: engine_name,
+                engine_version: Some((*engine_settings_lck).engine_version.clone()),
+            }
+        };
+
         //Create a vulkan instance from these extensions
-        let instance = vulkano::instance::Instance::new(None, &extensions, layers)
+        let instance = vulkano::instance::Instance::new(Some(&app_info), &extensions, layers)
         .expect("failed to create instance");
 
         let engine_settings_wrk = {
@@ -224,7 +240,7 @@ impl Renderer {
 
 
 
-        let mut uniform_manager_tmp = uniform_manager::UniformManager::new(
+        let uniform_manager_tmp = uniform_manager::UniformManager::new(
             device.clone()
         );
 
