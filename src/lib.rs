@@ -17,7 +17,6 @@ extern crate gltf;
 extern crate gltf_importer;
 extern crate gltf_utils;
 
-
 ///The engine core defines most functions and
 ///traits needed to feed the renderer and communicate with the physics.
 ///It also mamanges the scene tree and how to get specific information out of it
@@ -52,9 +51,6 @@ mod tests {
 /*TODO
 3rd Render on main thread, manage materials on event on different thread,
 manage objects on secondary thread, manage loading on n-threads (per object?)
-4th then continue
-
-4th create get_*_in_frustum functions for all types in ContentTypes done, needs to be tested
 5th create a high level fn collection for adding and removing things from the scene tree
 6th build a simple forward renderer with vulkano and test the scene tree //NOTE Done in 3.1-3.4 ?
 7th make core, render and later physics independend threads //NOTE Done in 3.1-3.4 ?

@@ -374,7 +374,7 @@ impl TextureBuilder {
                         let image_data = gray_image.into_raw().clone();
                         ImageInfo{
                             dimensions: Dim2d { width: width, height: height },
-                            format: vulkano::format::Format::R8Srgb,
+                            format: vulkano::format::Format::R8Unorm,
                             data: image_data,
                         }
                     },
@@ -385,7 +385,7 @@ impl TextureBuilder {
                         //(Dim2d { width: width, height: height },vulkano::format::R8G8Srgb, image_data)
                         ImageInfo{
                             dimensions: Dim2d { width: width, height: height },
-                            format: vulkano::format::Format::R8G8Srgb,
+                            format: vulkano::format::Format::R8G8Unorm,
                             data: image_data,
                         }
                     },
@@ -398,7 +398,7 @@ impl TextureBuilder {
                         //(Dim2d { width: width, height: height },vulkano::format::R8G8B8A8Srgb, image_data)
                         ImageInfo{
                             dimensions: Dim2d { width: width, height: height },
-                            format: vulkano::format::Format::R8G8B8A8Srgb,
+                            format: vulkano::format::Format::R8G8B8A8Unorm,
                             data: image_data,
                         }
                     },
@@ -409,7 +409,7 @@ impl TextureBuilder {
                         //(Dim2d { width: width, height: height },vulkano::format::R8G8B8A8Srgb, image_data)
                         ImageInfo{
                             dimensions: Dim2d { width: width, height: height },
-                            format: vulkano::format::Format::R8G8B8A8Srgb,
+                            format: vulkano::format::Format::R8G8B8A8Unorm,
                             data: image_data,
                         }
                     },

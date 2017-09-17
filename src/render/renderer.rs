@@ -232,7 +232,7 @@ impl Renderer {
         //TODO, create custom renderpass with different stages (light computing, final shading (how to loop?),
         //postprogress) => Dig through docs.
         //Create a simple renderpass
-        println!("Createing Render Pass", );
+        println!("Createing Render Pass with output format: {:?}", swapchain.format());
         let renderpass = Arc::new(
             ordered_passes_renderpass!(queue.device().clone(),
             attachments: {
