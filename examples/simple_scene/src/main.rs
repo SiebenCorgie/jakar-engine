@@ -49,7 +49,7 @@ fn main() {
         input_handler.key_map.clone()
     );
 
-    asset_manager.import_gltf("Grenade", "futuristic_grenade/scene.gltf");
+    asset_manager.import_gltf("Glasses", "Glasses/Glasses.gltf");
 
 
     //Start the input thread
@@ -60,7 +60,7 @@ fn main() {
     //looking down in vulkan space
     sun.set_direction(Vector3::new(1.0, -0.5, 0.0));
     sun.set_color(Vector3::new(1.0, 0.75, 0.75));
-    sun.set_intensity(50.0);
+    sun.set_intensity(90.0);
 
     let sun_node = node::ContentType::Light(node::LightsContent::DirectionalLight(sun));
     asset_manager.get_active_scene().add_child(sun_node);
@@ -143,16 +143,16 @@ fn main() {
     let mut max_fps = 0.0;
 
     loop {
-        if !adding_status_plane && asset_manager.has_scene("Grenade"){
+        if !adding_status_plane && asset_manager.has_scene("Glasses"){
 
             {
                 let mut man = asset_manager.get_scene_manager();
-                let mut boom_scene = man.get_scene("Grenade");
+                let mut boom_scene = man.get_scene("Glasses");
                 boom_scene.unwrap().scale(1.0);
             }
 
-            asset_manager.add_scene_to_main_scene("Grenade");
-            println!("Adding Grenade", );
+            asset_manager.add_scene_to_main_scene("Glasses");
+            println!("Adding Glasses", );
             adding_status_plane = true;
         }
 
@@ -191,7 +191,7 @@ fn main() {
             //Get the ball_02 scene and translate it by 10,10,0
             let ball_01_scene ={
                 //Get the reference in the current active scene
-                match asset_manager.get_active_scene().get_node("Grenade"){
+                match asset_manager.get_active_scene().get_node("Glasses"){
                     Some(scene) => scene,
                     None => continue,
                 }
@@ -205,7 +205,7 @@ fn main() {
             //Get the ball_02 scene and translate it by 10,10,0
             let mut plane_scene ={
                 //Get the reference in the current active scene
-                match asset_manager.get_active_scene().get_node("Grenade"){
+                match asset_manager.get_active_scene().get_node("Glasses"){
                     Some(scene) => scene,
                     None => continue,
                 }
@@ -219,7 +219,7 @@ fn main() {
             //Get the ball_02 scene and translate it by 10,10,0
             let mut tree_scene ={
                 //Get the reference in the current active scene
-                match asset_manager.get_active_scene().get_node("Grenade"){
+                match asset_manager.get_active_scene().get_node("Glasses"){
                     Some(scene) => scene,
                     None => continue,
                 }
@@ -234,7 +234,7 @@ fn main() {
             //Get the ball_02 scene and translate it by 10,10,0
             let mut tree_scene ={
                 //Get the reference in the current active scene
-                match asset_manager.get_active_scene().get_node("Grenade"){
+                match asset_manager.get_active_scene().get_node("Glasses"){
                     Some(scene) => scene,
                     None => continue,
                 }
@@ -249,7 +249,7 @@ fn main() {
             //Get the ball_02 scene and translate it by 10,10,0
             let mut tree_scene ={
                 //Get the reference in the current active scene
-                match asset_manager.get_active_scene().get_node("Grenade"){
+                match asset_manager.get_active_scene().get_node("Glasses"){
                     Some(scene) => scene,
                     None => continue,
                 }
