@@ -20,24 +20,31 @@ use vulkano::pipeline::GraphicsPipelineAbstract;
 
 use winit;
 
+use std::thread;
 use std::sync::{Arc,Mutex};
 use std::time::{Duration,Instant};
 use std::mem;
-use time;
+
+///An enum describing states of the renderer
+#[derive(Eq, PartialEq)]
+enum RendererState {
+    RUNNING,
+    WAITING,
+    SHOULD_END,
+    ENDED
+}
+
+
 
 ///The main renderer
 pub struct Renderer  {
     ///Holds the renderers pipeline_manager
     pipeline_manager: Arc<Mutex<pipeline_manager::PipelineManager>>,
 
-    //Vulkano data
-    extensions: vulkano::instance::InstanceExtensions,
-    instance: Arc<vulkano::instance::Instance>,
-    debug_callback: Option<DebugCallback>,
+
     //window: vulkano_win::Window,
     window: window::Window,
     device: Arc<vulkano::device::Device>,
-    queues: vulkano::device::QueuesIter,
     queue: Arc<vulkano::device::Queue>,
     swapchain: Arc<vulkano::swapchain::Swapchain>,
     images: Vec<Arc<vulkano::image::SwapchainImage>>,
@@ -52,9 +59,8 @@ pub struct Renderer  {
 
     engine_settings: Arc<Mutex<engine_settings::EngineSettings>>,
     uniform_manager: Arc<Mutex<uniform_manager::UniformManager>>,
-    //A reference to the keymap to create input dependent functions
-    key_map: Arc<Mutex<KeyMap>>,
 
+    state: Arc<Mutex<RendererState>>,
 }
 
 impl Renderer {
@@ -307,12 +313,8 @@ impl Renderer {
             pipeline_manager: pipeline_manager,
 
             //Vulkano data
-            extensions: extensions,
-            instance: instance.clone(),
-            debug_callback: _debug_callback,
             window: window,
             device: device,
-            queues: queues,
             queue: queue,
             swapchain: swapchain,
             images: images,
@@ -327,7 +329,7 @@ impl Renderer {
             engine_settings: engine_settings.clone(),
             uniform_manager: Arc::new(Mutex::new(uniform_manager_tmp)),
 
-            key_map: key_map,
+            state: Arc::new(Mutex::new(RendererState::WAITING)),
         }
     }
 
@@ -626,7 +628,7 @@ impl Renderer {
 
         (pipe, uni_man, device)
     }
-
+    
     ///Returns an instance of the engine settings
     ///This might be a dublicate, still helpful
     pub fn get_engine_settings(&mut self) -> Arc<Mutex<engine_settings::EngineSettings>>{

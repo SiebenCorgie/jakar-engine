@@ -370,7 +370,6 @@ impl AssetManager {
                 &name_inst,
                 managers,
             );
-
         });
     }
 

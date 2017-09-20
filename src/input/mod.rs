@@ -322,7 +322,6 @@ impl Input{
 
     ///Ends the input polling thread, should be done when exiting the the main loop
     pub fn end(&mut self){
-
         self.input_handler.end();
 
         //Wait some mil seconds so the thread has time to end

@@ -17,6 +17,8 @@ pub enum InputHandlerStates {
 pub struct InputHandler {
     key_map: Arc<Mutex<KeyMap>>,
 
+    input_thread: Option<thread::JoinHandle<()>>,
+
     events_loop: Arc<Mutex<winit::EventsLoop>>,
     pub state: Arc<Mutex<InputHandlerStates>>,
 
@@ -35,6 +37,8 @@ impl InputHandler{
     ) -> Self{
         InputHandler{
             key_map: key_map,
+
+            input_thread: None,
 
             events_loop: events_loop,
 
@@ -63,7 +67,7 @@ impl InputHandler{
 
 
         //Start the continues input polling
-        let thread = thread::spawn(move ||{
+        self.input_thread = Some(thread::spawn(move ||{
 
             //Create a time which keeps track of the lst time to calculate the later
             // `thread::sleep() duartion to keep steady `self.max_polling_speed`
@@ -413,7 +417,7 @@ impl InputHandler{
                 last_time = Instant::now();
 
             }
-        });
+        }));
     }
 
     ///Ends the input thread via a end flag
@@ -424,5 +428,6 @@ impl InputHandler{
         .expect("Failed to lock input thread state for ending");
 
          *state_lck = InputHandlerStates::ShouldEnd;
+
     }
 }

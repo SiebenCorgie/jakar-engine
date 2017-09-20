@@ -49,7 +49,7 @@ fn main() {
         input_handler.key_map.clone()
     );
 
-    asset_manager.import_gltf("Glasses", "Glasses/Glasses.gltf");
+    asset_manager.import_gltf("PickleRick", "pickle_rick/scene.gltf");
 
 
     //Start the input thread
@@ -143,16 +143,16 @@ fn main() {
     let mut max_fps = 0.0;
 
     loop {
-        if !adding_status_plane && asset_manager.has_scene("Glasses"){
+        if !adding_status_plane && asset_manager.has_scene("PickleRick"){
 
             {
                 let mut man = asset_manager.get_scene_manager();
-                let mut boom_scene = man.get_scene("Glasses");
+                let mut boom_scene = man.get_scene("PickleRick");
                 boom_scene.unwrap().scale(1.0);
             }
 
-            asset_manager.add_scene_to_main_scene("Glasses");
-            println!("Adding Glasses", );
+            asset_manager.add_scene_to_main_scene("PickleRick");
+            println!("Adding PickleRick", );
             adding_status_plane = true;
         }
 
@@ -191,7 +191,7 @@ fn main() {
             //Get the ball_02 scene and translate it by 10,10,0
             let ball_01_scene ={
                 //Get the reference in the current active scene
-                match asset_manager.get_active_scene().get_node("Glasses"){
+                match asset_manager.get_active_scene().get_node("PickleRick"){
                     Some(scene) => scene,
                     None => continue,
                 }
@@ -205,7 +205,7 @@ fn main() {
             //Get the ball_02 scene and translate it by 10,10,0
             let mut plane_scene ={
                 //Get the reference in the current active scene
-                match asset_manager.get_active_scene().get_node("Glasses"){
+                match asset_manager.get_active_scene().get_node("PickleRick"){
                     Some(scene) => scene,
                     None => continue,
                 }
@@ -219,7 +219,7 @@ fn main() {
             //Get the ball_02 scene and translate it by 10,10,0
             let mut tree_scene ={
                 //Get the reference in the current active scene
-                match asset_manager.get_active_scene().get_node("Glasses"){
+                match asset_manager.get_active_scene().get_node("PickleRick"){
                     Some(scene) => scene,
                     None => continue,
                 }
@@ -234,7 +234,7 @@ fn main() {
             //Get the ball_02 scene and translate it by 10,10,0
             let mut tree_scene ={
                 //Get the reference in the current active scene
-                match asset_manager.get_active_scene().get_node("Glasses"){
+                match asset_manager.get_active_scene().get_node("PickleRick"){
                     Some(scene) => scene,
                     None => continue,
                 }
@@ -249,7 +249,7 @@ fn main() {
             //Get the ball_02 scene and translate it by 10,10,0
             let mut tree_scene ={
                 //Get the reference in the current active scene
-                match asset_manager.get_active_scene().get_node("Glasses"){
+                match asset_manager.get_active_scene().get_node("PickleRick"){
                     Some(scene) => scene,
                     None => continue,
                 }
