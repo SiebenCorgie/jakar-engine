@@ -17,6 +17,21 @@ use std::time::{Instant, Duration};
 extern crate winit;
 
 fn main() {
+
+    let settings = core::engine_settings::EngineSettings::new()
+    .with_dimensions(1600, 900)
+    .with_name("jakar Instance")
+    .set_vulkan_silent()
+    .with_fullscreen_mode(false)
+    .with_cursor_state(winit::CursorState::Normal)
+    .with_cursor_visibility(winit::MouseCursor::NoneCursor)
+    .with_msaa_factor(4)
+    ;
+
+    //Start the engine
+    let mut engine = jakar_engine::JakarEngine::start(Some(settings));
+
+    /*
     //Start
     //Settings
     let settings = Arc::new(Mutex::new(core::engine_settings::EngineSettings::new()
@@ -49,11 +64,10 @@ fn main() {
         input_handler.key_map.clone()
     );
 
-    asset_manager.import_gltf("PickleRick", "pickle_rick/scene.gltf");
+    */
 
+    engine.get_asset_manager().import_gltf("Grenade", "examples/simple_scene/futuristic_grenade/scene.gltf");
 
-    //Start the input thread
-    input_handler.start();
 
     //SUN========================================================================
     let mut sun = light::LightDirectional::new("Sun");
@@ -63,7 +77,7 @@ fn main() {
     sun.set_intensity(90.0);
 
     let sun_node = node::ContentType::Light(node::LightsContent::DirectionalLight(sun));
-    asset_manager.get_active_scene().add_child(sun_node);
+    engine.get_asset_manager().get_active_scene().add_child(sun_node);
     //SUN========================================================================
 
 /*
@@ -130,7 +144,7 @@ fn main() {
 
 
 
-    asset_manager.get_active_scene().print_member(0);
+    engine.get_asset_manager().get_active_scene().print_member(0);
 
     let mut adding_status_plane = false;
     let mut adding_status = false;
@@ -143,16 +157,17 @@ fn main() {
     let mut max_fps = 0.0;
 
     loop {
-        if !adding_status_plane && asset_manager.has_scene("PickleRick"){
+        if !adding_status_plane && engine.get_asset_manager().has_scene("Grenade"){
 
             {
-                let mut man = asset_manager.get_scene_manager();
-                let mut boom_scene = man.get_scene("PickleRick");
-                boom_scene.unwrap().scale(1.0);
+                let mut a_man = engine.get_asset_manager();
+                let mut s_man = a_man.get_scene_manager();
+                let mut scene = s_man.get_scene("Grenade").unwrap();
+                scene.scale(1.0);
             }
 
-            asset_manager.add_scene_to_main_scene("PickleRick");
-            println!("Adding PickleRick", );
+            engine.get_asset_manager().add_scene_to_main_scene("Grenade");
+            println!("Adding Grenade", );
             adding_status_plane = true;
         }
 
@@ -168,101 +183,113 @@ fn main() {
 
         }
 */
+        let key_map = engine.get_input_handler().get_key_map_copy();
 
-        asset_manager.update();
         //println!("STATUS: GAME: Updated all assets", );
-        (*render).lock().expect("Failed to lock renderer for rendeball_02").render(&mut asset_manager);
         //Check if loop should close
-        if input_handler.get_key_map_copy().closed{
+        if key_map.closed{
             println!("STATUS: GAME: Shuting down", );
-            input_handler.end();
+            engine.end();
             break;
         }
 
-        if input_handler.get_key_map_copy().escape{
-            input_handler.end();
+        if key_map.escape{
             println!("Max FPS: {}", max_fps);
             println!("Min FPS: {}", min_fps);
-
+            engine.end();
             break;
         }
 
-        if input_handler.get_key_map_copy().t{
+        if key_map.t{
             //Get the ball_02 scene and translate it by 10,10,0
-            let ball_01_scene ={
+            {
+                let mut a_man = engine.get_asset_manager();
+                let s_man = a_man.get_active_scene();
+                let node = s_man.get_node("Grenade");
+
                 //Get the reference in the current active scene
-                match asset_manager.get_active_scene().get_node("PickleRick"){
-                    Some(scene) => scene,
+                match node{
+                    Some(scene) => {
+                        scene.set_location(Vector3::new(0.0, 0.0, 0.0));
+                    },
                     None => continue,
                 }
-            };
+            }
             //Set the translation on this node
-            ball_01_scene.set_location(Vector3::new(0.0, 0.0, 0.0));
             //println!("Translated", );
         }
 
-        if input_handler.get_key_map_copy().r{
+        if key_map.r{
             //Get the ball_02 scene and translate it by 10,10,0
-            let mut plane_scene ={
+            {
+                let mut a_man = engine.get_asset_manager();
+                let s_man = a_man.get_active_scene();
+                let node = s_man.get_node("Grenade");
+
                 //Get the reference in the current active scene
-                match asset_manager.get_active_scene().get_node("PickleRick"){
-                    Some(scene) => scene,
+                match node{
+                    Some(scene) => {
+                        scene.rotate(Vector3::new(0.0, 1.0, 0.0));
+                    },
                     None => continue,
                 }
-            };
-            //Set the translation on this node
-            plane_scene.rotate(Vector3::new(0.0, 1.0, 0.0));
+            }
         }
 
-        if input_handler.get_key_map_copy().y{
+        if key_map.y{
             println!("Translating test #########!", );
             //Get the ball_02 scene and translate it by 10,10,0
-            let mut tree_scene ={
+            {
+                let mut a_man = engine.get_asset_manager();
+                let s_man = a_man.get_active_scene();
+                let node = s_man.get_node("Grenade");
+
                 //Get the reference in the current active scene
-                match asset_manager.get_active_scene().get_node("PickleRick"){
-                    Some(scene) => scene,
+                match node{
+                    Some(scene) => {
+                        scene.translate(Vector3::new(0.0, 1.0, 0.0));
+                    },
                     None => continue,
                 }
-            };
-            println!("Translating!", );
-            //Set the translation on this node
-            tree_scene.translate(Vector3::new(0.0, 1.0, 0.0));
+            }
         }
 
-        if input_handler.get_key_map_copy().z{
-            println!("Translating test #########!", );
-            //Get the ball_02 scene and translate it by 10,10,0
-            let mut tree_scene ={
+        if key_map.z{
+            {
+                let mut a_man = engine.get_asset_manager();
+                let s_man = a_man.get_active_scene();
+                let node = s_man.get_node("Grenade");
+
                 //Get the reference in the current active scene
-                match asset_manager.get_active_scene().get_node("PickleRick"){
-                    Some(scene) => scene,
+                match node{
+                    Some(scene) => {
+                        scene.translate(Vector3::new(0.0, 0.0, 1.0));
+                    },
                     None => continue,
                 }
-            };
-            println!("Translating!", );
-            //Set the translation on this node
-            tree_scene.translate(Vector3::new(0.0, 0.0, 1.0));
+            }
         }
 
-        if input_handler.get_key_map_copy().x{
-            println!("Translating test #########!", );
-            //Get the ball_02 scene and translate it by 10,10,0
-            let mut tree_scene ={
+        if key_map.x{
+            {
+                let mut a_man = engine.get_asset_manager();
+                let s_man = a_man.get_active_scene();
+                let node = s_man.get_node("Grenade");
+
                 //Get the reference in the current active scene
-                match asset_manager.get_active_scene().get_node("PickleRick"){
-                    Some(scene) => scene,
+                match node{
+                    Some(scene) => {
+                        scene.translate(Vector3::new(1.0, 0.0, 0.0));
+                    },
                     None => continue,
                 }
-            };
-            println!("Translating!", );
-            //Set the translation on this node
-            tree_scene.translate(Vector3::new(1.0, 0.0, 0.0));
+            }
         }
 
-        asset_manager.get_material_manager().print_all_materials();
-        asset_manager.get_scene_manager().print_all_scenes();
+        //engine.get_asset_manager().get_material_manager().print_all_materials();
+        //engine.get_asset_manager().get_scene_manager().print_all_scenes();
         //Prints all materials and the scene tree
-        asset_manager.get_active_scene().print_member(0);
+        //engine.get_asset_manager().get_active_scene().print_member(0);
 
         let fps_time = start_time.elapsed().subsec_nanos();
 

@@ -316,8 +316,8 @@ impl Input{
     }
 
     ///Starts the input polling thread
-    pub fn start(&mut self){
-        self.input_handler.start();
+    pub fn start(&mut self) -> thread::JoinHandle<()> {
+        self.input_handler.start()
     }
 
     ///Ends the input polling thread, should be done when exiting the the main loop

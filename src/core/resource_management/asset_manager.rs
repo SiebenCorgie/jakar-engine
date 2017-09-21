@@ -21,6 +21,7 @@ use core::resources::material;
 use rt_error;
 
 use render::renderer;
+use render::uniform_manager;
 use render::pipeline;
 use render::pipeline_manager;
 use render::shader_impls::pbr_vertex;
@@ -33,22 +34,31 @@ use vulkano;
 
 ///The main struct for the scene manager
 ///It is responible for handling the materials and scenes as well as the assets
+#[derive(Clone)]
 pub struct AssetManager {
-    ///Holds the current active scene
+    //Holds the current active scene
     active_main_scene: node::GenericNode,
 
-    ///holds all textures
+    //holds all textures
     texture_manager: Arc<Mutex<texture_manager::TextureManager>>,
 
-    ///Holds the current material manager
+    //Holds the current material manager
     material_manager: Arc<Mutex<material_manager::MaterialManager>>,
-
+    //hold all meshes
     mesh_manager: Arc<Mutex<mesh_manager::MeshManager>>,
-
+    //hoolds all scenes
     scene_manager: Arc<Mutex<scene_manager::SceneManager>>,
 
     ///Holds a reference to the renderer
-    renderer: Arc<Mutex<renderer::Renderer>>,
+    //renderer: Arc<Mutex<renderer::Renderer>>,
+    //things needed to create vulkano dependend data like textures and materials
+    pipeline_manager: Arc<Mutex<pipeline_manager::PipelineManager>>,
+    device: Arc<vulkano::device::Device>,
+    queue: Arc<vulkano::device::Queue>,
+    uniform_manager: Arc<Mutex<uniform_manager::UniformManager>>,
+
+
+
 
     ///A Debug camera, will be removed in favor of a camera_managemant system
     camera: DefaultCamera,
@@ -63,7 +73,10 @@ pub struct AssetManager {
 impl AssetManager {
     ///Creates a new idependend scene manager
     pub fn new(
-        renderer: Arc<Mutex<renderer::Renderer>>,
+        pipeline_manager: Arc<Mutex<pipeline_manager::PipelineManager>>,
+        device: Arc<vulkano::device::Device>,
+        queue: Arc<vulkano::device::Queue>,
+        uniform_manager: Arc<Mutex<uniform_manager::UniformManager>>,
         settings: Arc<Mutex<engine_settings::EngineSettings>>,
         key_map: Arc<Mutex<KeyMap>>,
     )->Self{
@@ -71,26 +84,19 @@ impl AssetManager {
         //The camera will be moved to a camera manager
         let camera = DefaultCamera::new(settings.clone(), key_map.clone());
 
-        //Gt us needed instances
-        let device = {
-            let render_lck = renderer.lock().expect("failed to hold renderer lock");
-            (*render_lck).get_device().clone()
-        };
-
-        let queue = {
-            let render_lck = renderer.lock().expect("failed to hold renderer lock");
-            (*render_lck).get_queue().clone()
-        };
 
         let mut tmp_texture_manager = texture_manager::TextureManager::new(
-            device, queue, settings.clone()
+            device.clone(), queue.clone(), settings.clone()
         );
 
         let (fallback_alb, fallback_nrm, fallback_phy) = tmp_texture_manager.get_fallback_textures();
         let none_texture = tmp_texture_manager.get_none();
 
         let tmp_material_manager = material_manager::MaterialManager::new(
-            renderer.clone(),
+            &pipeline_manager,
+            &device,
+            &uniform_manager,
+            &settings,
             fallback_alb,
             fallback_nrm,
             fallback_phy,
@@ -104,7 +110,12 @@ impl AssetManager {
             material_manager: Arc::new(Mutex::new(tmp_material_manager)),
             mesh_manager: Arc::new(Mutex::new(mesh_manager::MeshManager::new())),
             scene_manager: new_scene_manager,
-            renderer: renderer,
+
+            pipeline_manager: pipeline_manager,
+            device: device,
+            queue: queue,
+            uniform_manager: uniform_manager,
+
             camera: camera,
 
             settings: settings,
@@ -249,9 +260,7 @@ impl AssetManager {
 
         //Update the uniform manager with the latest infos about camera and light
         {
-            let render_lck = self.renderer.lock().expect("failed to lock renderer");
-            let uniform_manager = (*render_lck).get_uniform_manager();
-            let mut uniform_manager_lck = uniform_manager.lock().expect("failed to lock uniform_man.");
+            let mut uniform_manager_lck = self.uniform_manager.lock().expect("failed to lock uniform_man.");
             (*uniform_manager_lck).update(
                 uniform_data, point_shader_info, directional_shader_info, spot_shader_info, c_point, c_dir, c_spot
             );
@@ -291,13 +300,6 @@ impl AssetManager {
         &mut self.active_main_scene
     }
 
-    ///Starts the asset thread, responsible for managing all assets
-    ///Might be removed because not neccessary
-    pub fn start_asset_thread(&mut self){
-        // NOTE has to be implemented
-        return
-    }
-
     //Returns a reference to the texture manager
     pub fn get_texture_manager(&mut self) -> MutexGuard<texture_manager::TextureManager>{
         self.texture_manager.lock().expect("failed to lock texture manager")
@@ -328,16 +330,16 @@ impl AssetManager {
         //Lock in scope to prevent dead lock while importing
 
         let device_inst = {
-            self.renderer.lock().expect("failed to hold renderer lock").get_device().clone()
+            self.device.clone()
         };
         let queue_inst = {
-            self.renderer.lock().expect("failed to hold renderer lock").get_queue().clone()
+            self.queue.clone()
         };
         let uniform_manager_inst = {
-            self.renderer.lock().expect("failed to hold renderer lock").get_uniform_manager().clone()
+            self.uniform_manager.clone()
         };
         let pipeline_manager_inst = {
-            self.renderer.lock().expect("failed to hold renderer lock").get_pipeline_manager().clone()
+            self.pipeline_manager.clone()
         };
 
 
@@ -379,10 +381,10 @@ impl AssetManager {
         //Lock in scope to prevent dead lock while importing
 
         let device_inst = {
-            self.renderer.lock().expect("failed to hold renderer lock").get_device().clone()
+            self.device.clone()
         };
         let queue_inst = {
-            self.renderer.lock().expect("failed to hold renderer lock").get_queue().clone()
+            self.queue.clone()
         };
 
         //Create the topy scene via an empty which will be used to add all the meshe-nodes
@@ -435,14 +437,13 @@ impl AssetManager {
     pub fn create_texture(&mut self, path: &str) -> texture::TextureBuilder{
 
         //lock the renderer
-        let  render_lck = self.renderer.lock().expect("failed to hold renderer");
 
         //Create a second material
         //create new texture
         let new_texture = texture::TextureBuilder::from_image(
             path,
-            (*render_lck).get_device(),
-            (*render_lck).get_queue(),
+            self.device.clone(),
+            self.queue.clone(),
             self.settings.clone()
         );
         new_texture
@@ -464,16 +465,16 @@ impl AssetManager {
     pub fn add_material_to_manager(&mut self, material: material::MaterialBuilder, name: &str)
     -> Result<String, String>
     {
-        //lock the renderer
-        let render_inst = self.renderer.clone();
-        let  render_lck = render_inst.lock().expect("failed to hold renderer");
-        let (pipe, uni_man, device) = (*render_lck).get_material_instances();
+        let default_pipeline = {
+            let mut pipe_lck = self.pipeline_manager.lock().expect("failed to lock pipeline manager");
+            (*pipe_lck).get_default_pipeline()
+        };
 
         let final_material = material.build(
             name,
-            pipe,
-            uni_man,
-            device,
+            default_pipeline,
+            self.uniform_manager.clone(),
+            self.device.clone(),
         );
 
         self.get_material_manager().add_material(final_material)

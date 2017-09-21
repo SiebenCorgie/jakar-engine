@@ -17,8 +17,6 @@ pub enum InputHandlerStates {
 pub struct InputHandler {
     key_map: Arc<Mutex<KeyMap>>,
 
-    input_thread: Option<thread::JoinHandle<()>>,
-
     events_loop: Arc<Mutex<winit::EventsLoop>>,
     pub state: Arc<Mutex<InputHandlerStates>>,
 
@@ -37,9 +35,6 @@ impl InputHandler{
     ) -> Self{
         InputHandler{
             key_map: key_map,
-
-            input_thread: None,
-
             events_loop: events_loop,
 
             settings: settings,
@@ -57,7 +52,7 @@ impl InputHandler{
     }
 
     ///Starts the input reading and saves the current key-map for usage in everything input releated
-    pub fn start(&mut self){
+    pub fn start(&mut self) -> thread::JoinHandle<()>{
 
         let key_map_inst = self.key_map.clone();
         let events_loop_inst = self.events_loop.clone();
@@ -67,7 +62,7 @@ impl InputHandler{
 
 
         //Start the continues input polling
-        self.input_thread = Some(thread::spawn(move ||{
+        let input_thread = thread::spawn(move ||{
 
             //Create a time which keeps track of the lst time to calculate the later
             // `thread::sleep() duartion to keep steady `self.max_polling_speed`
@@ -417,7 +412,9 @@ impl InputHandler{
                 last_time = Instant::now();
 
             }
-        }));
+        });
+
+        input_thread
     }
 
     ///Ends the input thread via a end flag

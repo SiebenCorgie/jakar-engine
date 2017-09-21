@@ -52,8 +52,6 @@ pub struct Renderer  {
     depth_buffer: Arc<vulkano::image::AttachmentImage<vulkano::format::D16Unorm>>,
     framebuffers: Vec<Arc<FramebufferAbstract + Send + Sync>>,
 
-    previous_frame: Option<Box<GpuFuture>>,
-
     //Is true if we need to recreate the swap chain
     recreate_swapchain: bool,
 
@@ -64,12 +62,12 @@ pub struct Renderer  {
 }
 
 impl Renderer {
-    ///Creates a new renderer with all subsystems
+    ///Creates a new renderer with all subsystems, returns the renderer and the GPUs future.
     pub fn new(
             events_loop: Arc<Mutex<winit::EventsLoop>>,
             engine_settings: Arc<Mutex<engine_settings::EngineSettings>>,
             key_map: Arc<Mutex<KeyMap>>,
-        ) -> Self{
+        ) -> (Self, Box<GpuFuture>){
         //Init Vulkan
 
         //Check for needed extensions
@@ -297,7 +295,7 @@ impl Renderer {
             store_framebuffer.push(i.clone());
         }
 
-        let previous_frame = Some(Box::new(vulkano::sync::now(device.clone())) as Box<GpuFuture>);
+        let previous_frame = Box::new(vulkano::sync::now(device.clone())) as Box<GpuFuture>;
 
         //Creates the renderers pipeline manager
         let pipeline_manager = Arc::new(
@@ -309,7 +307,7 @@ impl Renderer {
         );
         println!("Finished Render Setup", );
         //Pas everthing to the struct
-        Renderer{
+        let renderer = Renderer{
             pipeline_manager: pipeline_manager,
 
             //Vulkano data
@@ -322,15 +320,15 @@ impl Renderer {
             depth_buffer: depth_buffer,
             framebuffers: store_framebuffer,
 
-            previous_frame: previous_frame,
-
             recreate_swapchain: false,
 
             engine_settings: engine_settings.clone(),
             uniform_manager: Arc::new(Mutex::new(uniform_manager_tmp)),
 
             state: Arc::new(Mutex::new(RendererState::WAITING)),
-        }
+        };
+
+        (renderer, previous_frame)
     }
 
 
@@ -411,14 +409,29 @@ impl Renderer {
     }
 
     ///Renders the scene with the parameters supplied by the asset_manager
-    pub fn render(&mut self, asset_manager: &mut asset_manager::AssetManager){
+    ///and returns the future of this frame. The future can be joint to wait for the gpu
+    ///or be supplied to the next update();
+    pub fn render(
+        &mut self,
+        asset_manager: &mut asset_manager::AssetManager,
+        previous_frame: Box<GpuFuture>,
+    ) -> Box<GpuFuture>{
+
+
+        let mut local_previous_frame = previous_frame;
 
         //println!("STATUS: RENDER CORE: Starting render ", );
         //DEBUG
         let start_time = Instant::now();
-
+        /*
         //Clean the last frame for starting a new one
-        self.previous_frame.as_mut().expect("failed to clean previous frame").cleanup_finished();
+        match local_previous_frame{
+            Some(mut frame) => frame.cleanup_finished(),
+            None => {},
+        }
+        */
+        println!("Waiting for last frame", );
+        local_previous_frame.cleanup_finished();
 
 
         //If found out in last frame that images are out of sync, generate new ones
@@ -426,7 +439,7 @@ impl Renderer {
             if !self.recreate_swapchain(){
                 //If we got the UnsupportedDimensions Error (and therefor returned false)
                 //Abord the frame
-                return;
+                return local_previous_frame;
             }
         }
 
@@ -439,7 +452,7 @@ impl Renderer {
             Ok(r) => r,
             Err(_) => {
                 self.recreate_swapchain = true;
-                return;
+                return local_previous_frame;
             },
         };
 
@@ -557,12 +570,11 @@ impl Renderer {
         .end_render_pass().expect("failed to end")
         .build().expect("failed to end");;
 
-        //println!("STATUS: RENDER CORE: Trying flush", );
+
+        println!("STATUS: RENDER CORE: Trying flush", );
 
         //TODO find a better methode then Option<Box<GpuFuture>>
-        let future = self.previous_frame
-        .take()
-        .expect("failed to take previous frame")
+        let future = local_previous_frame
         .join(acquire_future)
         .then_execute(
             self.queue.clone(), command_buffer
@@ -573,11 +585,14 @@ impl Renderer {
         )
         .then_signal_fence_and_flush().expect("failed to flush");
 
-        self.previous_frame = Some(Box::new(future) as Box<_>);
+        let new_frame = Box::new(future) as Box<_>;
 
         //DEBUG
         let fps_time = start_time.elapsed().subsec_nanos();
         //println!("STATUS: RENDER: FPS: {}", 1.0/ (fps_time as f32 / 1_000_000_000.0) );
+        //now overwrite the old gpu future with the new one
+        println!("Ending frame with new future", );
+        new_frame
     }
 
     ///Returns the uniform manager
@@ -590,11 +605,6 @@ impl Renderer {
         self.pipeline_manager.clone()
     }
 
-    ///Starts the rendering loop UNIMPLEMENTED
-    pub fn start_loop(){
-
-    }
-
     ///Returns the device of this renderer
     pub fn get_device(&self) -> Arc<vulkano::device::Device>{
         self.device.clone()
@@ -605,7 +615,7 @@ impl Renderer {
         self.queue.clone()
     }
 
-    ///A helper function whicht will creat a tubel of
+    ///A helper function which will create a tubel of
     ///(`pipeline_manager`, `uniform_manager`, `device`)
     ///This is needed for the material creation
     pub fn get_material_instances(&self) -> (
@@ -628,7 +638,7 @@ impl Renderer {
 
         (pipe, uni_man, device)
     }
-    
+
     ///Returns an instance of the engine settings
     ///This might be a dublicate, still helpful
     pub fn get_engine_settings(&mut self) -> Arc<Mutex<engine_settings::EngineSettings>>{

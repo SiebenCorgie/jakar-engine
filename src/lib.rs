@@ -29,38 +29,45 @@ pub mod tools;
 ///processing
 pub mod input;
 
+use std::time::{Instant, Duration};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::thread;
+use std::sync::mpsc;
 
 
-
-///An builder object which can be used to create an engine with specific settings
-pub struct EngineBuilder {
-    pub settings: core::engine_settings::EngineSettings,
+///Describes the current status of the engine
+#[derive(PartialEq)]
+pub enum EngineStatus {
+    STARTING,
+    RUNNING,
+    WAITING,
+    ENDING
 }
 
+///An struct representing the top level of this engine
+///
+///It is responsible for handling all sub systems of the engine as well as providing an API to
+/// the user which can be used to manipulate data
+pub struct JakarEngine {
+    ///The renderer
+    pub renderer: Arc<Mutex<render::renderer::Renderer>>,
+    render_thread: Option<thread::JoinHandle<()>>,
 
-impl EngineBuilder {
+    pub asset_manager: Arc<Mutex<core::resource_management::asset_manager::AssetManager>>,
+    asset_thread: Option<thread::JoinHandle<()>>,
 
-    //Creates an new `EngineBuilder` if not changed, the engine can be started with default settings
-    pub fn new() -> Self{
+    pub input_system: Arc<Mutex<input::Input>>,
+    input_thread: Option<thread::JoinHandle<()>>,
 
-        let settings = Arc::new(Mutex::new(core::engine_settings::EngineSettings::new()
-        .with_dimensions(1600, 900)
-        .with_name("jakar Instance")
-        .set_vulkan_silent()
-        .with_fullscreen_mode(false)
-        .with_cursor_state(winit::CursorState::Grab)
-        .with_cursor_visibility(winit::MouseCursor::NoneCursor)
-        .with_msaa_factor(4)
-        ));
+    pub engine_settings: Arc<Mutex<core::engine_settings::EngineSettings>>,
 
+    pub engine_status: Arc<Mutex<EngineStatus>>,
 
-        EngineBuilder{
-            settings: core::engine_settings::EngineSettings::new(),
-        }
-    }
+}
 
+///Implements the main functions for the engine. Other functionality can be imported in scope
+///via traits.
+impl JakarEngine {
     ///Starts the engine which will create the following sub systems in their own threads:
     ///
     /// - Renderer
@@ -74,103 +81,301 @@ impl EngineBuilder {
     ///     - Scene manager
     ///     - Texture manager
     /// - Input system
-    pub fn start(mut self) -> JakarEngine{
-        //Input
+    pub fn start(settings: Option<core::engine_settings::EngineSettings>) -> Self{
+        //first create the thread save engine settings and the engine status.
+        //they are needed to start the input, asset and rendering thread.
+        //Thoose will return their main features which will be an Arc<Mutex<T>> of the
+        //rendering struct, the asset manager and the input handler. Later there will be an physics
+        //handler as well.
+        let engine_settings = {
+            match settings{
+                Some(s_settings) => Arc::new(Mutex::new(s_settings)),
+                None =>{
+                    //Creating default settings
+                    let n_settings = Arc::new(
+                        Mutex::new(
+                            core::engine_settings::EngineSettings::new()
+                            .with_dimensions(1600, 900)
+                            .with_name("jakar Instance")
+                            .set_vulkan_silent()
+                            .with_fullscreen_mode(false)
+                            .with_cursor_state(winit::CursorState::Grab)
+                            .with_cursor_visibility(winit::MouseCursor::NoneCursor)
+                            .with_msaa_factor(4)
+                        )
+                    );
+                    n_settings
+                }
+            }
+        };
+        let engine_status = Arc::new(Mutex::new(EngineStatus::STARTING));
 
-        //Create the settings
-        let arc_settings = Arc::new(Mutex::new(self.settings));
+        //=========================================================================================
+
+        //Start the input thread
+        //we don't need anything else because the input handler get closed by the implementation
+        //TODO handle thread in engine as well
 
         let mut input_handler = Arc::new(
             Mutex::new(
-                input::Input::new(arc_settings.clone()).with_polling_speed(60)
+                input::Input::new(engine_settings.clone()).with_polling_speed(60)
             )
         );
-
-
-
-        //Create a renderer with the input system
-        let render = {
-            let mut input_sys = input_handler.lock().expect("failed to lock input system before start");
-            Arc::new(
-                Mutex::new(
-                    render::renderer::Renderer::new(
-                        (*input_sys).get_events_loop(),
-                        arc_settings.clone(),
-                        (*input_sys).get_key_map(),
-                    )
-                )
-            )
-        };
-
-        //Create a asset manager for the renderer
-        let mut asset_manager = {
-            let input_sys = input_handler.lock().expect("failed to lock input system before start");
-
-            Arc::new(
-                Mutex::new(
-                    core::resource_management::asset_manager::AssetManager::new(
-                        render.clone(),
-                        arc_settings.clone(),
-                        (*input_sys).key_map.clone()
-                    )
-                )
-            )
-        };
-
-
-        //Start the input thread
-        {
+        //now start the thread and return it
+        let input_thread_handle = {
             let mut input_sys = input_handler.lock().expect("failed to lock input system before start");
 
             //Start the input thread
-            (*input_sys).start();
+            (*input_sys).start()
+        };
+
+        //=========================================================================================
+
+        //Start the renderer
+        //first create reciver and sender for the render handler
+        let (render_t_sender, render_t_reciver) = mpsc::channel();
+        //also create an sender and reciver to send the newly created asset manager once it is available
+        let (render_asset_sender, render_asset_reciver) = mpsc::channel();
+
+        //copy all relevant infos and move them into the thread
+        let mut render_engine_status = engine_status.clone();
+        let mut render_input_system = input_handler.clone();
+        let mut render_settings = engine_settings.clone();
+        let render_thread = thread::spawn(move ||{
+            //Now create the renderer
+            println!("Creating renderer", );
+            //Create a renderer with the input system
+            let (mut render, mut gpu_future) = {
+                let mut input_sys = render_input_system.lock().expect("failed to lock input system before start");
+
+                let render_build = render::renderer::Renderer::new(
+                    (*input_sys).get_events_loop(),
+                    render_settings.clone(),
+                    (*input_sys).get_key_map(),
+                );
+                //wrapping the renderer in an Arc
+                let arc_render = Arc::new(Mutex::new(render_build.0));
+                let gpu_future_box = render_build.1;
+                //return both
+                (arc_render, gpu_future_box)
+            };
+            //Created an renderer, send it to the engien struct
+            render_t_sender.send(render.clone());
+
+            //wait till we are reciving an asset manager
+            let asset_manager_inst: Arc<Mutex<core::resource_management::asset_manager::AssetManager>> = render_asset_reciver
+            .recv()
+            .expect("faield to recive asset manager in render thread");
+
+            //now start the rendering loop
+            'render_thread: loop{
+                println!("Rendering!", );
+                //lock the renderer and render an image
+                let mut renderer_lck = render
+                .lock().expect("failed to lock renderer");
+
+                //now render a frame and get the new gpu future, this one can be used to stopp the
+                //rendering correctly bey joining the gpu future
+
+                //to render a frame we just copy the whole asset manager and submit the copy to the
+                //renderer, this might be optimized
+                let mut asset_copy = {
+                    let asset_manager_lck = asset_manager_inst
+                    .lock().expect("failed to lock asset manager");
+                    (*asset_manager_lck).clone()
+                };
+
+                gpu_future = (*renderer_lck).render(&mut asset_copy, gpu_future);
+
+                let engine_is_running = {
+                    let status = render_engine_status.lock().expect("failed to lock engine status");
+                    match *status{
+                        EngineStatus::RUNNING => true,
+                        EngineStatus::STARTING => true, //also keeping the loop when still starting, the asset manager should be available because of the .recv() call
+                        _ => false,
+                    }
+                };
+
+                if !engine_is_running{
+                    //engine is stoping, ending loop
+                    println!("Ending rendering thread", );
+                    //end frame on gpu
+                    gpu_future.cleanup_finished();
+                    break;
+                }
+
+            }
+        });
+
+        //now recive the renderer in the main thread
+        let renderer_isnt = render_t_reciver.recv().expect("failed to recive renderer for jakar struct");
+
+        //=========================================================================================
+
+        //Same as the renderer, crate an reciver and sender for the asset manager,
+        //also create clones for needed systems to create the asset manager
+        let (asset_t_sender, asset_t_reciver) = mpsc::channel();
+
+        let asset_t_status = engine_status.clone();
+        let asset_t_settings = engine_settings.clone();
+        let asset_t_pipeline_manager = {
+            let mut ren_inst = renderer_isnt.lock().expect("failed to lock renderer");
+            (*ren_inst).get_pipeline_manager()
+        };
+        let asset_t_device = {
+            let ren_inst = renderer_isnt.lock().expect("failed to lock renderer");
+            (*ren_inst).get_device()
+        };
+        let asset_t_queue = {
+            let ren_inst = renderer_isnt.lock().expect("failed to lock renderer");
+            (*ren_inst).get_queue()
+        };
+        let asset_t_uniform_manager = {
+            let ren_inst = renderer_isnt.lock().expect("failed to lock renderer");
+            (*ren_inst).get_uniform_manager()
+        };
+        let asset_t_input_handler = input_handler.clone();
+        //Start the asset manager
+        let asset_thread = thread::spawn(move ||{
+            println!("starting asset thread", );
+            //Create a asset manager for the renderer
+            let mut asset_manager = {
+                let input_sys = asset_t_input_handler.lock().expect("failed to lock input system before start");
+
+                Arc::new(
+                    Mutex::new(
+                        core::resource_management::asset_manager::AssetManager::new(
+                            asset_t_pipeline_manager,
+                            asset_t_device,
+                            asset_t_queue,
+                            asset_t_uniform_manager,
+                            asset_t_settings,
+                            (*input_sys).key_map.clone()
+                        )
+                    )
+                )
+            };
+
+            //now send the asset manager to the main thread
+            asset_t_sender.send(asset_manager.clone());
+            //also send a copy to the rendering thread
+            render_asset_sender.send(asset_manager.clone());
+
+            //finished with starting the asset manager, now loop till we are told to stop
+            //TODO
+            //create a time stemp which will be used to calculate the waiting time for each tick
+            let mut last_time = Instant::now();
+            //TODO make the polling speed configurable
+            let max_polling_speed_inst: i32 = 60;
+            'asset_loop: loop{
+                println!("Working on Assets! ==================", );
+                //now update the asset mananger
+                //in scope, because we want to be able to do other stuff while the thread is waiting
+                {
+                    let mut asset_manager_lck = asset_manager.lock().expect("failed to lock asset manager while updating assets");
+                    (*asset_manager_lck).update();
+                }
+
+                //Before restarting the asset loop we might have to wait to be not too fast
+
+                //Calculate the time to wait
+                //get difference between last time and now
+                let difference = last_time.elapsed();
+
+                //test if the difference is smaller then the max_polling_speed
+                //if yes the thread was too fast and we need to sleep for the rest of time till
+                //we get the time to compleate the polling
+                let compare_time = Duration::new(0, ((1.0 / max_polling_speed_inst as f32) * 1_000_000_000.0) as u32);
+                //println!("Max_speed: {:?}", compare_time.clone());
+                //println!("Difference: {:?}", difference.clone());
+
+                if  (difference.subsec_nanos() as f64) <
+                    (compare_time.subsec_nanos() as f64) {
+
+                    //Sleep the rest time till we finish the max time in f64
+                    let time_to_sleep =
+                    compare_time.subsec_nanos() as f64 - difference.subsec_nanos() as f64;
+                    //calc a duration
+                    let sleep_duration = Duration::new(0, time_to_sleep as u32);
+                    //and sleep it
+                    println!("Sleeping {:?} on asset thread", sleep_duration);
+                    thread::sleep(sleep_duration);
+                }
+
+                //Reset the last time for next frame
+                last_time = Instant::now();
+
+                //now check for the engine status, if we should end, end the loop and therefore return the thread
+                let engine_is_running = {
+                    let status = asset_t_status.lock().expect("failed to lock engine status");
+                    match *status{
+                        EngineStatus::RUNNING => true,
+                        EngineStatus::STARTING => true, //also keeping the loop when still starting, the asset manager should be available because of the .recv() call
+                        _ => false,
+                    }
+                };
+
+                if !engine_is_running{
+                    //engine is stoping, ending loop
+                    println!("Ending asset thread", );
+                    break;
+                }
+
+            }
+
+
+
+        });
+
+        //=========================================================================================
+
+        //Now switch the state to "running"
+        {
+            let mut engine_status_lck = engine_status.lock().expect("failed to lock engine status");
+            (*engine_status_lck) = EngineStatus::RUNNING;
         }
 
 
+        //Recive the renderer and asset manager and store them in the struct
+        let asset_manager_inst = asset_t_reciver.recv().expect("failed to recive asset manager for jakar struct");
 
+
+        //now create the engine struct and retun it to the instigator
         JakarEngine{
+            renderer: renderer_isnt,
+            render_thread: Some(render_thread),
 
-            renderer: render,
-            asset_manager: asset_manager,
+            asset_manager: asset_manager_inst,
+            asset_thread: Some(asset_thread),
+
             input_system: input_handler,
+            input_thread: Some(input_thread_handle),
 
-            engine_settings: arc_settings,
+            engine_settings: engine_settings,
+
+            engine_status: engine_status,
         }
     }
 
-    ///Set the settings used to create the engine to `settings`
-    pub fn with_settings(mut self, settings: core::engine_settings::EngineSettings) -> Self{
-        self.settings = settings;
-        self
-    }
+    ///Ends all threads of the engine and then Returns
+    pub fn end(&mut self){
+        //Setting the engine status to end
+        //then close input
+        //then wait for the threads to finish
+        {
+            let mut status_lck = self.engine_status.lock().expect("failed to lock engine status");
+            (*status_lck) = EngineStatus::ENDING;
+        }
+        //now end input
+        {
+            let mut input_lock = self.input_system.lock().expect("failed to lock input");
+            (*input_lock).end();
+        }
+        //wait some milliseconds to give the threads some time as well as the gpu
+        thread::sleep(Duration::from_millis(1000));
 
-    ///Returns a reference to the current settings instance which then can be manipulated
-    pub fn get_settings(&mut self) -> core::engine_settings::EngineSettings{
-        self.settings.clone()
-    }
-}
-
-
-///An struct representing the top level of this engine
-///
-///It is responsible for handling all sub systems of the engine as well as providing an API to
-/// the user which can be used to manipulate data
-pub struct JakarEngine {
-    ///The renderer
-    pub renderer: Arc<Mutex<render::renderer::Renderer>>,
-    pub asset_manager: Arc<Mutex<core::resource_management::asset_manager::AssetManager>>,
-    pub input_system: Arc<Mutex<input::Input>>,
-
-    pub engine_settings: Arc<Mutex<core::engine_settings::EngineSettings>>,
-
-}
-
-///Implements the main functions for the engine. Other functionality can be imported in scope
-///via traits
-impl JakarEngine {
-    ///Updates the engine
-    pub fn update(&mut self){
-        self.get_asset_manager().update();
+        //now do nothing but:
+        //TODO implement thread joining
     }
 
     ///Returns the asset manager
@@ -183,6 +388,12 @@ impl JakarEngine {
     pub fn get_renderer<'a>(&'a mut self) -> MutexGuard<'a, render::renderer::Renderer>{
         let render_lock = self.renderer.lock().expect("failed to lock asset manager");
         render_lock
+    }
+
+    //Returns the input handler
+    pub fn get_input_handler<'a>(&'a mut self) -> MutexGuard<'a, input::Input>{
+        let input_lock = self.input_system.lock().expect("failed to lock input handler");
+        input_lock
     }
 }
 

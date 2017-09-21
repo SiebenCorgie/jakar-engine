@@ -4,6 +4,8 @@ use core::resources::material;
 use render;
 use render::renderer;
 use render::pipeline;
+use render::uniform_manager;
+use core::engine_settings;
 use render::pipeline_manager;
 use core::resources::texture::Texture;
 use vulkano;
@@ -20,7 +22,10 @@ impl MaterialManager {
     ///for a good performance, the none texture should be as small as possible.
     ///For instance a black 1x1 pixel.
     pub fn new(
-        render: Arc<Mutex<render::renderer::Renderer>>,
+        pipeline_manager: &Arc<Mutex<pipeline_manager::PipelineManager>>,
+        device: &Arc<vulkano::device::Device>,
+        uniform_manager: &Arc<Mutex<uniform_manager::UniformManager>>,
+        settings: &Arc<Mutex<engine_settings::EngineSettings>>,
         albedo_texture: Arc<Texture>,
         normal_texture: Arc<Texture>,
         physical_texture: Arc<Texture>,
@@ -29,9 +34,7 @@ impl MaterialManager {
     )->Self{
         //We'll have to check for a default pipeline, otherwise the Manager creation could fail
         {
-            let mut render_lck = render.lock().expect("Failed to lock renderer");
-
-            let pipeline_copy = (*render_lck).get_pipeline_manager().clone();
+            let pipeline_copy = pipeline_manager.clone();
             {
                 if !(*pipeline_copy).lock()
                     .expect("Failed to lock pipeline manager in material manager creation")
@@ -47,14 +50,9 @@ impl MaterialManager {
         //println!("STATUS: MATERIAL_MANAGER: Checked pipeline for default pipeline in material manager creation", );
         //Creates a fallback material to which the programm can fallback in case of a "materal not found"
 
-        let (pipe, uni_man, device) ={
-            let mut render_lck = render.lock().expect("Failed to lock renderer");
-            (*render_lck).get_material_instances()
-        };
-
-        let engine_settings = {
-            let mut render_lck = render.lock().expect("Failed to lock renderer");
-            (*render_lck).get_engine_settings()
+        let default_pipe = {
+            let mut pipe_lck = pipeline_manager.lock().expect("failed to lock pipeline manager");
+            (*pipe_lck).get_default_pipeline()
         };
 
         //finally create the material from the textures
@@ -71,9 +69,9 @@ impl MaterialManager {
                 )
                 .build(
                     "fallback",
-                    pipe,
-                    uni_man,
-                    device,
+                    default_pipe,
+                    uniform_manager.clone(),
+                    device.clone(),
                 )
             )
         );
