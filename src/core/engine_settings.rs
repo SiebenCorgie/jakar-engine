@@ -29,12 +29,25 @@ pub struct EngineSettings {
     pub main_monitor: i32,
 
 
-    //Debug settings:
+    ///Debug settings:
     pub silent_vulkan: bool,
 
-    //Graphics settings
+    ///Graphics settings:
+    ///filtering options, should be power of two between 1 and 16
     pub anisotropic_filtering: f32,
+    ///Samples for each pixel, should be power of two between 1 and 16 (but can be higher)
     pub msaa: u32,
+
+
+    ///Max input pollings per second (default 60)
+    pub max_input_speed: u32,
+    ///Max asset updates per second (default 120)
+    pub max_asset_updates: u32,
+    ///Max frames per second in the rendering thread (default 700 fps)
+    pub max_fps: u32,
+
+
+
 
 }
 
@@ -86,7 +99,29 @@ impl EngineSettings{
             //Graphics settings
             anisotropic_filtering: 1.0,
             msaa: 1,
+
+            max_input_speed: 60,
+            max_asset_updates: 120,
+            max_fps: 700,
         }
+    }
+
+    ///Sets the maximum updates per second value for the asset thread.
+    pub fn with_asset_update_speed(mut self, speed: u32) -> Self{
+        self.max_asset_updates = speed;
+        self
+    }
+
+    ///Sets the maximum polls per second value for the input thread.
+    pub fn with_input_poll_speed(mut self, speed: u32) -> Self{
+        self.max_input_speed = speed;
+        self
+    }
+
+    ///Sets the maximum frames per second value for the render thread.
+    pub fn with_fps(mut self, fps: u32) -> Self{
+        self.max_fps = fps;
+        self
     }
 
     ///Sets the main monitor, used to define where the fullscreen mode has to be applied

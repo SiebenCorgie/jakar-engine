@@ -310,11 +310,6 @@ impl Input{
         }
     }
 
-    pub fn with_polling_speed(mut self, polls_per_second: i32) -> Self{
-        self.input_handler = self.input_handler.with_polling_speed(polls_per_second);
-        self
-    }
-
     ///Starts the input polling thread
     pub fn start(&mut self) -> thread::JoinHandle<()> {
         self.input_handler.start()

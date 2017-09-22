@@ -571,7 +571,7 @@ impl Renderer {
         .build().expect("failed to end");;
 
 
-        println!("STATUS: RENDER CORE: Trying flush", );
+        //println!("STATUS: RENDER CORE: Trying flush", );
 
         //TODO find a better methode then Option<Box<GpuFuture>>
         let future = local_previous_frame
@@ -591,7 +591,7 @@ impl Renderer {
         let fps_time = start_time.elapsed().subsec_nanos();
         //println!("STATUS: RENDER: FPS: {}", 1.0/ (fps_time as f32 / 1_000_000_000.0) );
         //now overwrite the old gpu future with the new one
-        println!("Ending frame with new future", );
+        //println!("Ending frame with new future", );
         new_frame
     }
 

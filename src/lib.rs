@@ -51,13 +51,13 @@ pub enum EngineStatus {
 pub struct JakarEngine {
     ///The renderer
     pub renderer: Arc<Mutex<render::renderer::Renderer>>,
-    render_thread: Option<thread::JoinHandle<()>>,
+    render_thread: thread::JoinHandle<()>,
 
     pub asset_manager: Arc<Mutex<core::resource_management::asset_manager::AssetManager>>,
-    asset_thread: Option<thread::JoinHandle<()>>,
+    asset_thread: thread::JoinHandle<()>,
 
     pub input_system: Arc<Mutex<input::Input>>,
-    input_thread: Option<thread::JoinHandle<()>>,
+    input_thread: thread::JoinHandle<()>,
 
     pub engine_settings: Arc<Mutex<core::engine_settings::EngineSettings>>,
 
@@ -116,9 +116,9 @@ impl JakarEngine {
         //we don't need anything else because the input handler get closed by the implementation
         //TODO handle thread in engine as well
 
-        let mut input_handler = Arc::new(
+        let input_handler = Arc::new(
             Mutex::new(
-                input::Input::new(engine_settings.clone()).with_polling_speed(60)
+                input::Input::new(engine_settings.clone())
             )
         );
         //now start the thread and return it
@@ -138,15 +138,24 @@ impl JakarEngine {
         let (render_asset_sender, render_asset_reciver) = mpsc::channel();
 
         //copy all relevant infos and move them into the thread
-        let mut render_engine_status = engine_status.clone();
-        let mut render_input_system = input_handler.clone();
-        let mut render_settings = engine_settings.clone();
+        let render_engine_status = engine_status.clone();
+        let render_input_system = input_handler.clone();
+        let render_settings = engine_settings.clone();
         let render_thread = thread::spawn(move ||{
             //Now create the renderer
             println!("Creating renderer", );
+
+            //now read the maximum fps the engine should have
+            let max_fps = {
+                let settings = render_settings.lock().expect("failed to lock render settings");
+                (*settings).max_fps
+            };
+
             //Create a renderer with the input system
-            let (mut render, mut gpu_future) = {
-                let mut input_sys = render_input_system.lock().expect("failed to lock input system before start");
+            let (render, mut gpu_future) = {
+                let mut input_sys = render_input_system
+                .lock()
+                .expect("failed to lock input system before start");
 
                 let render_build = render::renderer::Renderer::new(
                     (*input_sys).get_events_loop(),
@@ -160,16 +169,23 @@ impl JakarEngine {
                 (arc_render, gpu_future_box)
             };
             //Created an renderer, send it to the engien struct
-            render_t_sender.send(render.clone());
+            match render_t_sender.send(render.clone()){
+                Ok(_) => {},
+                Err(e) => println!("Failed to send renderer to main thread: {}", e),
+            }
 
             //wait till we are reciving an asset manager
             let asset_manager_inst: Arc<Mutex<core::resource_management::asset_manager::AssetManager>> = render_asset_reciver
             .recv()
             .expect("faield to recive asset manager in render thread");
 
+            //Set the thread start time
+            let mut last_time = Instant::now();
+
+            let mut fps_time_start = Instant::now();
+
             //now start the rendering loop
             'render_thread: loop{
-                println!("Rendering!", );
                 //lock the renderer and render an image
                 let mut renderer_lck = render
                 .lock().expect("failed to lock renderer");
@@ -199,10 +215,23 @@ impl JakarEngine {
                 if !engine_is_running{
                     //engine is stoping, ending loop
                     println!("Ending rendering thread", );
+                    //wait a second for the gpu to finish its last work, then clean up the future
+                    thread::sleep_ms(60);
                     //end frame on gpu
                     gpu_future.cleanup_finished();
                     break;
                 }
+
+                //now sleep the rest if needed
+                sleep_rest_time(last_time, max_fps);
+
+
+                let fps_time = fps_time_start.elapsed().subsec_nanos();
+
+                let fps = 1.0/ (fps_time as f32 / 1_000_000_000.0);
+                println!("This Frame: {}", fps);
+
+                fps_time_start = Instant::now();
 
             }
         });
@@ -237,9 +266,15 @@ impl JakarEngine {
         let asset_t_input_handler = input_handler.clone();
         //Start the asset manager
         let asset_thread = thread::spawn(move ||{
-            println!("starting asset thread", );
+            //dirst of all read some values we need later for the thread speed etc.
+            //read the maximum asset thread speed from the configuration
+            let max_speed = {
+                let settings = asset_t_settings.lock().expect("failed to locks settings");
+                (*settings).max_asset_updates
+            };
+
             //Create a asset manager for the renderer
-            let mut asset_manager = {
+            let asset_manager = {
                 let input_sys = asset_t_input_handler.lock().expect("failed to lock input system before start");
 
                 Arc::new(
@@ -257,18 +292,23 @@ impl JakarEngine {
             };
 
             //now send the asset manager to the main thread
-            asset_t_sender.send(asset_manager.clone());
+            match asset_t_sender.send(asset_manager.clone()){
+                Ok(_) => {},
+                Err(e) => println!("Failed to send asset manager to main thread: {}", e),
+            }
             //also send a copy to the rendering thread
-            render_asset_sender.send(asset_manager.clone());
+            match render_asset_sender.send(asset_manager.clone()){
+                Ok(_) => {},
+                Err(e) => println!("Failed to send asset manager to renderer thread: {}", e),
+            }
 
             //finished with starting the asset manager, now loop till we are told to stop
             //TODO
             //create a time stemp which will be used to calculate the waiting time for each tick
             let mut last_time = Instant::now();
-            //TODO make the polling speed configurable
-            let max_polling_speed_inst: i32 = 60;
+
+
             'asset_loop: loop{
-                println!("Working on Assets! ==================", );
                 //now update the asset mananger
                 //in scope, because we want to be able to do other stuff while the thread is waiting
                 {
@@ -276,34 +316,7 @@ impl JakarEngine {
                     (*asset_manager_lck).update();
                 }
 
-                //Before restarting the asset loop we might have to wait to be not too fast
 
-                //Calculate the time to wait
-                //get difference between last time and now
-                let difference = last_time.elapsed();
-
-                //test if the difference is smaller then the max_polling_speed
-                //if yes the thread was too fast and we need to sleep for the rest of time till
-                //we get the time to compleate the polling
-                let compare_time = Duration::new(0, ((1.0 / max_polling_speed_inst as f32) * 1_000_000_000.0) as u32);
-                //println!("Max_speed: {:?}", compare_time.clone());
-                //println!("Difference: {:?}", difference.clone());
-
-                if  (difference.subsec_nanos() as f64) <
-                    (compare_time.subsec_nanos() as f64) {
-
-                    //Sleep the rest time till we finish the max time in f64
-                    let time_to_sleep =
-                    compare_time.subsec_nanos() as f64 - difference.subsec_nanos() as f64;
-                    //calc a duration
-                    let sleep_duration = Duration::new(0, time_to_sleep as u32);
-                    //and sleep it
-                    println!("Sleeping {:?} on asset thread", sleep_duration);
-                    thread::sleep(sleep_duration);
-                }
-
-                //Reset the last time for next frame
-                last_time = Instant::now();
 
                 //now check for the engine status, if we should end, end the loop and therefore return the thread
                 let engine_is_running = {
@@ -321,6 +334,9 @@ impl JakarEngine {
                     break;
                 }
 
+                //sleep for the rest time to be not too fast
+                last_time = sleep_rest_time(last_time, max_speed);
+
             }
 
 
@@ -337,19 +353,21 @@ impl JakarEngine {
 
 
         //Recive the renderer and asset manager and store them in the struct
-        let asset_manager_inst = asset_t_reciver.recv().expect("failed to recive asset manager for jakar struct");
+        let asset_manager_inst = asset_t_reciver
+        .recv()
+        .expect("failed to recive asset manager for jakar struct");
 
 
         //now create the engine struct and retun it to the instigator
         JakarEngine{
             renderer: renderer_isnt,
-            render_thread: Some(render_thread),
+            render_thread: render_thread,
 
             asset_manager: asset_manager_inst,
-            asset_thread: Some(asset_thread),
+            asset_thread: asset_thread,
 
             input_system: input_handler,
-            input_thread: Some(input_thread_handle),
+            input_thread: input_thread_handle,
 
             engine_settings: engine_settings,
 
@@ -358,7 +376,7 @@ impl JakarEngine {
     }
 
     ///Ends all threads of the engine and then Returns
-    pub fn end(&mut self){
+    pub fn end(self){
         //Setting the engine status to end
         //then close input
         //then wait for the threads to finish
@@ -372,10 +390,24 @@ impl JakarEngine {
             (*input_lock).end();
         }
         //wait some milliseconds to give the threads some time as well as the gpu
-        thread::sleep(Duration::from_millis(1000));
+        thread::sleep(Duration::from_millis(100));
 
-        //now do nothing but:
-        //TODO implement thread joining
+        //now try to join the thread
+        match self.render_thread.join(){
+            Ok(_) => println!("Ended render thread successfuly!"),
+            Err(_) => println!("Failed to end render thread while ending"),
+        }
+
+        match self.asset_thread.join(){
+            Ok(_) => println!("Ended asset_thread thread successfuly!"),
+            Err(_) => println!("Failed to end asset_thread thread while ending"),
+        }
+
+        match self.input_thread.join(){
+            Ok(_) => println!("Ended input_thread thread successfuly!"),
+            Err(_) => println!("Failed to end input_thread thread while ending"),
+        }
+        println!("Finished ending Engine, returning to main thread", );
     }
 
     ///Returns the asset manager
@@ -423,4 +455,37 @@ manage objects on secondary thread, manage loading on n-threads (per object?)
 ///Returns an runtime error
 pub fn rt_error(location: &str, content: &str){
     println!("ERROR AT: {} FOR: {}", location, content);
+}
+
+///calculate the time a thread must sleep to be not too fast based on
+/// the `last_time` the thread was active and the `current_time`
+///then actually returns after this time with a new `last_time`
+fn sleep_rest_time(last_time: Instant, max_speed: u32) -> Instant{
+    //Before restarting the asset loop we might have to wait to be not too fast
+
+    //Calculate the time to wait
+    //get difference between last time and now
+    let difference = last_time.elapsed();
+
+    //test if the difference is smaller then the max_polling_speed
+    //if yes the thread was too fast and we need to sleep for the rest of time till
+    //we get the time to compleate the polling
+    let compare_time = Duration::new(0, ((1.0 / max_speed as f32) * 1_000_000_000.0) as u32);
+    //println!("Max_speed: {:?}", compare_time.clone());
+    //println!("Difference: {:?}", difference.clone());
+
+    if  (difference.subsec_nanos() as f64) <
+        (compare_time.subsec_nanos() as f64) {
+
+        //Sleep the rest time till we finish the max time in f64
+        let time_to_sleep =
+        compare_time.subsec_nanos() as f64 - difference.subsec_nanos() as f64;
+        //calc a duration
+        let sleep_duration = Duration::new(0, time_to_sleep as u32);
+        //and sleep it
+        println!("Sleeping {:?} ...", sleep_duration);
+        thread::sleep(sleep_duration);
+    }
+
+    Instant::now()
 }

@@ -22,7 +22,7 @@ pub struct InputHandler {
 
     settings: Arc<Mutex<engine_settings::EngineSettings>>,
 
-    max_polling_speed: i32,
+    max_polling_speed: u32,
 }
 
 
@@ -33,6 +33,13 @@ impl InputHandler{
         events_loop: Arc<Mutex<winit::EventsLoop>>,
         settings: Arc<Mutex<engine_settings::EngineSettings>>,
     ) -> Self{
+
+        //read the max polling speed
+        let max_polling_speed = {
+            let n_settings = settings.lock().expect("failed to lock settings");
+            (*n_settings).max_input_speed
+        };
+
         InputHandler{
             key_map: key_map,
             events_loop: events_loop,
@@ -41,14 +48,8 @@ impl InputHandler{
 
             state: Arc::new(Mutex::new(InputHandlerStates::Running)),
 
-            max_polling_speed: 60,
+            max_polling_speed: max_polling_speed,
         }
-    }
-
-    ///Sets the max speed of the input (60 is 60 polls/second)
-    pub fn with_polling_speed(mut self, max_speed: i32) -> Self{
-        self.max_polling_speed = max_speed;
-        self
     }
 
     ///Starts the input reading and saves the current key-map for usage in everything input releated

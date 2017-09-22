@@ -23,7 +23,7 @@ fn main() {
     .with_name("jakar Instance")
     .set_vulkan_silent()
     .with_fullscreen_mode(false)
-    .with_cursor_state(winit::CursorState::Normal)
+    .with_cursor_state(winit::CursorState::Grab)
     .with_cursor_visibility(winit::MouseCursor::NoneCursor)
     .with_msaa_factor(4)
     ;
