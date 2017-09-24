@@ -22,26 +22,6 @@ layout(set = 0, binding = 0) uniform Data {
   mat4 proj;
 } u_main;
 
-//Generate TBN from normal only
-mat3 get_tbn() {
-
-  vec3 new_normal = normal;
-  new_normal.y = -new_normal.y;
-
-  vec3 t;
-  vec3 b;
-  vec3 c1 = cross(new_normal, vec3(0.0, 0.0, 1.0));
-  vec3 c2 = cross(new_normal, vec3(0.0, 1.0, 0.0));
-  if (length(c1) > length(c2))
-    t = c1;
-  else
-    t = c2;
-  t = normalize(t);
-  b = normalize(cross(new_normal, t));
-
-  return mat3(t,b,new_normal);
-}
-
 
 void main() {
 

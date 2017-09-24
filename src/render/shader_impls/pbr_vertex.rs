@@ -2,5 +2,5 @@ use vulkano_shader_derive;
 
 #[derive(VulkanoShader)]
 #[ty = "vertex"]
-#[path = "data/test.vs"]
+#[path = "data/shader/pbr_opaque.vs"]
 struct Dummy;
