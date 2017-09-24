@@ -169,31 +169,65 @@ impl UniformManager{
 
         tmp_data_struct.model = transform_matrix.into();
 
-        self.buffer_pool_01_mvp.next(tmp_data_struct)
+        match self.buffer_pool_01_mvp.next(tmp_data_struct){
+            Ok(k) => k,
+            Err(e) => {
+                println!("{:?}", e);
+                panic!("failed to allocate new sub buffer!")
+            },
+        }
     }
 
     ///Returns a subbuffer of the u_point_light
     pub fn get_subbuffer_02 (&mut self) ->
     CpuBufferPoolSubbuffer<pbr_fragment::ty::point_lights, Arc<vulkano::memory::pool::StdMemoryPool>>{
-        self.buffer_pool_02_point.next(self.u_point_lights.clone())
+
+        match self.buffer_pool_02_point.next(self.u_point_lights.clone()){
+            Ok(k) => k,
+            Err(e) => {
+                println!("{:?}", e);
+                panic!("failed to allocate new sub buffer!")
+            },
+        }
     }
 
     ///Returns a subbuffer of the u_directional_light
     pub fn get_subbuffer_03 (&mut self) ->
     CpuBufferPoolSubbuffer<pbr_fragment::ty::directional_lights, Arc<vulkano::memory::pool::StdMemoryPool>>{
-        self.buffer_pool_03_dir.next(self.u_directional_lights.clone())
+
+        match self.buffer_pool_03_dir.next(self.u_directional_lights.clone()){
+            Ok(k) => k,
+            Err(e) => {
+                println!("{:?}", e);
+                panic!("failed to allocate new sub buffer!")
+            },
+        }
     }
 
     ///Returns a subbuffer of the u_spot_light
     pub fn get_subbuffer_04 (&mut self) ->
     CpuBufferPoolSubbuffer<pbr_fragment::ty::spot_lights, Arc<vulkano::memory::pool::StdMemoryPool>>{
-        self.buffer_pool_04_spot.next(self.u_spot_lights.clone())
+
+        match self.buffer_pool_04_spot.next(self.u_spot_lights.clone()){
+            Ok(k) => k,
+            Err(e) => {
+                println!("{:?}", e);
+                panic!("failed to allocate new sub buffer!")
+            },
+        }
     }
 
     ///Returns a subbuffer of the u_spot_light
     pub fn get_subbuffer_05 (&mut self) ->
     CpuBufferPoolSubbuffer<pbr_fragment::ty::LightCount, Arc<vulkano::memory::pool::StdMemoryPool>>{
-        self.buffer_pool_05_count.next(self.u_light_count.clone())
+
+        match self.buffer_pool_05_count.next(self.u_light_count.clone()){
+            Ok(k) => k,
+            Err(e) => {
+                println!("{:?}", e);
+                panic!("failed to allocate new sub buffer!")
+            },
+        }
     }
 
     ///Updates the internal data used for the uniform buffer creation

@@ -12,6 +12,7 @@ use cgmath::*;
 
 use std::sync::{Mutex,Arc};
 
+//=================================================================================================
 
 ///A Struct used for prototyping the usage flags of the textures
 #[derive(Clone)]
@@ -122,6 +123,8 @@ impl TextureUsageFlags{
     }
 }
 
+//=================================================================================================
+
 ///A Struct defining the the material factors. They are used as Colors/factors if no textures
 /// are present
 #[derive(Clone)]
@@ -198,8 +201,7 @@ impl MaterialFactors{
     }
 }
 
-
-
+//=================================================================================================
 
 ///A Structure used to build a material from in the MaterialBuilder described attributes
 pub struct MaterialBuilder {
@@ -382,18 +384,34 @@ impl MaterialBuilder{
             .build().expect("failed to build set_02")
         );
 
+        let usage_info_sub_buffer = {
+            match usage_info_pool.next(self.texture_usage_info.clone().to_shader_flags()){
+                Ok(k) => k,
+                Err(e) => {
+                    println!("{:?}", e);
+                    panic!("failed to allocate new sub buffer!")
+                },
+            }
+        };
+
+        let material_factor_sub_buffer = {
+            match material_factor_pool.next(self.material_factors.clone().to_shader_factors()){
+                Ok(k) => k,
+                Err(e) => {
+                    println!("{:?}", e);
+                    panic!("failed to allocate new sub buffer!")
+                },
+            }
+        };
+
         //Create the Usage Flag descriptor
         let set_03 = Arc::new(PersistentDescriptorSet::start(
                 pipeline.clone(), 2
             )
-            .add_buffer(usage_info_pool.next(
-                //need to clone for storing in struct later
-                self.texture_usage_info.clone().to_shader_flags()
-            ).clone()).expect("Failed to create descriptor set")
-            .add_buffer(material_factor_pool.next(
-                //need to clone for storing in struct later
-                self.material_factors.clone().to_shader_factors()
-            ).clone()).expect("failed to create the first material factor pool")
+            .add_buffer(usage_info_sub_buffer
+            ).expect("Failed to create descriptor set")
+            .add_buffer(material_factor_sub_buffer
+            ).expect("failed to create the first material factor pool")
             .build().expect("failed to build first descriptor 03")
         );
 
@@ -447,6 +465,8 @@ impl MaterialBuilder{
         }
     }
 }
+
+//=================================================================================================
 
 ///Describes a standart material
 ///
@@ -663,7 +683,15 @@ impl Material {
      vulkano::buffer::cpu_pool::CpuBufferPoolSubbuffer<pbr_fragment::ty::TextureUsageInfo,
      Arc<vulkano::memory::pool::StdMemoryPool>>
      {
-        self.usage_info_pool.next(self.texture_usage_info.clone())
+        match self.usage_info_pool.next(self.texture_usage_info.clone()){
+            Ok(k) => k,
+            Err(e) => {
+                println!("{:?}", e);
+                panic!("failed to allocate new sub buffer!")
+            },
+        }
+
+
     }
 
     ///Returns a subbuffer from the material_factor_pool to be used with the 3rd set
@@ -671,7 +699,13 @@ impl Material {
     vulkano::buffer::cpu_pool::CpuBufferPoolSubbuffer<pbr_fragment::ty::TextureFactors,
     Arc<vulkano::memory::pool::StdMemoryPool>>
     {
-        self.material_factor_pool.next(self.material_factors.clone())
+        match self.material_factor_pool.next(self.material_factors.clone()){
+            Ok(k) => k,
+            Err(e) => {
+                println!("{:?}", e);
+                panic!("failed to allocate new sub buffer!")
+            },
+        }
     }
 
     ///Returns the u_world_set generated from a model specific `transform_matrix` as well as the
@@ -708,3 +742,5 @@ impl Material {
         self.name.clone()
     }
 }
+
+//=================================================================================================

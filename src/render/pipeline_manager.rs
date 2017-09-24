@@ -22,13 +22,13 @@ impl PipelineManager{
         renderpass: Arc<vulkano::framebuffer::RenderPassAbstract + Send + Sync>,
     ) -> Self
     {
-        let mut BTreeMap = BTreeMap::new();
+        let mut b_tree_map = BTreeMap::new();
         //Creates a default pipeline from a default shader
         let default_pipeline = pipeline::Pipeline::new(device, renderpass);
-        BTreeMap.insert(String::from("DefaultPipeline"), default_pipeline);
+        b_tree_map.insert(String::from("DefaultPipeline"), default_pipeline);
 
         PipelineManager{
-            pipelines: BTreeMap,
+            pipelines: b_tree_map,
         }
     }
 
@@ -60,7 +60,7 @@ impl PipelineManager{
     }
 
     ///Adds a pipeline made for the specified shader
-    pub fn add_pipeline_from_shader(&mut self, name: &str,device: Arc<vulkano::device::Device>,
+    pub fn add_pipeline(&mut self, name: &str,device: Arc<vulkano::device::Device>,
         renderpass: Arc<vulkano::framebuffer::RenderPassAbstract + Send + Sync>,
     )
     {
