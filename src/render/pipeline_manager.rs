@@ -24,7 +24,15 @@ impl PipelineManager{
     {
         let mut b_tree_map = BTreeMap::new();
         //Creates a default pipeline from a default shader
-        let default_pipeline = pipeline::Pipeline::new(device, renderpass);
+
+        //the default inputs (all for the best visual graphics)
+        let inputs_default = pipeline::PipelineInput{
+            data: true,
+            has_textures: true,
+            has_light: true,
+        };
+
+        let default_pipeline = pipeline::Pipeline::new_opaque(device, renderpass, inputs_default);
         b_tree_map.insert(String::from("DefaultPipeline"), default_pipeline);
 
         PipelineManager{
@@ -60,11 +68,19 @@ impl PipelineManager{
     }
 
     ///Adds a pipeline made for the specified shader
+    ///TODO make the shader specified
     pub fn add_pipeline(&mut self, name: &str,device: Arc<vulkano::device::Device>,
         renderpass: Arc<vulkano::framebuffer::RenderPassAbstract + Send + Sync>,
     )
     {
-        let tmp_pipeline = pipeline::Pipeline::new(device,renderpass);
+        //the default inputs (all for the best visual graphics)
+        let inputs_default = pipeline::PipelineInput{
+            data: true,
+            has_textures: true,
+            has_light: true,
+        };
+
+        let tmp_pipeline = pipeline::Pipeline::new_opaque(device,renderpass, inputs_default);
         self.pipelines.insert(String::from(name), tmp_pipeline);
     }
 

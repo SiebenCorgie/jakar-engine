@@ -1,15 +1,87 @@
 use vulkano;
 use vulkano::pipeline;
 use vulkano_shaders;
-
+use vulkano::pipeline::shader::GraphicsEntryPointAbstract;
 
 use std::sync::Arc;
 use core::resources::mesh;
 
-
-
 use render::shader_impls::pbr_vertex;
 use render::shader_impls::pbr_fragment;
+use render::shader_impls;
+
+///Descibes all possible scissors / viewport behavoir
+pub enum ViewportScissorsBehavoir {
+    ///When used, the scissors will always cover the whole viewport
+    DefinedViewport(pipeline::viewport::Viewport),
+    ///Defines both types independently
+    DefinedViewportAndScissors((pipeline::viewport::Viewport, pipeline::viewport::Scissor)),
+    ///Defines the viewport and let the scissors fixed
+    DefineViewportFixedScissors(pipeline::viewport::Viewport),
+    ///Defines the viewport each frame (dynamic) and creates a scissors covering the whole viewport
+    DynamicViewportScissorsIrrelevant(u32),
+    ///Defines the viewport once, but the scissors can be changed each frame
+    FixedViewportDynamicScissors(pipeline::viewport::Viewport),
+    ///Defines both dynamic, both have to be set dynamic per frame, usually used for resizable views
+    ViewportScissorsDynamic(u32),
+}
+
+///Describes the cullmode of this pipeline
+pub enum CullMode {
+    Disabled,
+    Front,
+    Back,
+    FrontAndBack
+}
+
+///Describes how polygones are drawn
+pub enum PolygoneMode {
+    ///Polygones are drawn as filled faces (usually used)
+    Fill,
+    ///Are drawn as lines with an width defined by the u32. If the width is 0.0, the line width is set
+    ///dynamicly at render time.
+    Line(u32),
+    ///Polygones are drawn as points (at each vertice)
+    Point
+}
+
+
+///A struct which can be used to configure the pipeline which can be build via the `new()` functions
+///of the `Pipeline` struct
+pub struct PipelineConfig {
+    ///Should be true if only one single vertex buffer is used
+    pub single_vertex_bufffer: bool,
+
+    ///Defines the shader type of the loaded pipeline.
+    ///TODO this should be moved in a less static abroach, but I don't know how atm.
+    pub shader_type: shader_impls::JakarShaders,
+
+    ///Describes how vertices must be grouped together to form primitives.
+    pub topology_type: pipeline::input_assembly::PrimitiveTopology,
+
+    ///Describes the Vieport and scissors behavoir of the new pipeline
+    pub viewport_scissors: ViewportScissorsBehavoir,
+
+    ///True if the depth should be clamped between 0.0 and 1.0
+    pub has_depth_clamp: bool,
+
+    ///Should be true if the faces are oriented clockwise. The default is counter clockwise
+    pub has_faces_clockwise: bool,
+
+    ///Defines the cull mode of this pipeline
+    pub cull_mode: CullMode,
+
+    ///Defines how the polygones are drawn
+    pub polygone_mode: PolygoneMode,
+
+    //TODO
+    //Set depth stencil
+    //blend type
+    //give renderpass
+
+
+}
+
 
 ///Describes the input needed for the shaders in this pipeline to work.
 ///
@@ -52,9 +124,10 @@ pub struct Pipeline {
 
 impl Pipeline{
     ///Creates a pipeline for a shader, TODO make it possible to create a custom pipeline easily
-    pub fn new(
+    pub fn new_opaque(
         device: Arc<vulkano::device::Device>,
         renderpass: Arc<vulkano::framebuffer::RenderPassAbstract + Send + Sync>,
+        inputs: PipelineInput,
     )
         -> Self
     {
@@ -79,11 +152,7 @@ impl Pipeline{
         //Create the Struct
         Pipeline{
             pipeline: tmp_pipeline,
-            inputs: PipelineInput{
-                data: true,
-                has_textures: true,
-                has_light: true,
-            }
+            inputs: inputs
         }
     }
 
