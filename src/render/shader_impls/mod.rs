@@ -62,7 +62,10 @@ pub enum JakarShaders {
     ),
 }
 
-///A list of loadable shader types which can also be used to modifiy loadable shaders.
+///A list of loadable shader types.
+///
+///NOTE: This type is only used for the configuration in the `PipelineConfiguration` struct.
+/// The final shader and its properties will be stored in an `JakarShaders` enum.
 pub enum ShaderTypes {
     PbrOpaque,
     Wireframe,

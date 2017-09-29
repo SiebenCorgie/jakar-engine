@@ -24,7 +24,7 @@ pub enum ViewportScissorsBehavoir {
     ///Defines both types independently
     DefinedViewportAndScissors((pipeline::viewport::Viewport, pipeline::viewport::Scissor)),
     ///Defines the viewport and let the scissors fixed
-    DefineViewportFixedScissors(pipeline::viewport::Viewport),
+    DynamicViewportFixedScissors(pipeline::viewport::Scissor),
     ///Defines the viewport each frame (dynamic) and creates a scissors covering the whole viewport
     DynamicViewportScissorsIrrelevant(u32),
     ///Defines the viewport once, but the scissors can be changed each frame
@@ -344,11 +344,12 @@ impl Pipeline{
 
         //load the shader from configuration
         // the tubel loads the following objects depending on type of the shader (in order):
-        // - vertex shader
-        // - fragment shader
-        // - geometry shader
-        // - tesselation control shader
-        // - tesselation evaluation shader
+        // the shader struct containg max. the following shaders:
+        //     - vertex shader
+        //     - fragment shader
+        //     - geometry shader
+        //     - tesselation control shader
+        //     - tesselation evaluation shader
         // - shader inputs struct (describes which inputs are needed for this pipeline later)
         // - shader sets (describes which shaders are used for pipeline creation)
         let (shader, shader_type, shader_inputs, used_shader_sets) = {
@@ -394,10 +395,143 @@ impl Pipeline{
         //get the renderpass
         let render_pass = pipeline_configuration.render_pass;
 
-        //Create a pipeline
+        //Create a pipeline vertex buffer definition
         let vertex_buffer_definition = vulkano::pipeline::vertex::SingleBufferDefinition::<mesh::Vertex>::new();
 
         //Now start the pipeline and configure it based on the PipelineSettings
+        //TODO make sure to get a: Option<Arc<pipeline::GraphicsPipelineAbstract + Send + Sync>>
+        let mut pipeline = Some(
+            vulkano::pipeline::GraphicsPipeline::start()
+        );
+
+        //add the vertex buffer definition and create a new pipeline from it
+        let mut vertex_def_pipeline = {
+            Some(
+                pipeline
+                .take()
+                .expect("failed to get pipeline #1")
+                .vertex_input(vertex_buffer_definition)
+            )
+        };
+
+        //set the topolgy type
+        let mut topology_pipeline = {
+            Some(
+                vertex_def_pipeline
+                .take()
+                .expect("failed to get pipeline #1")
+                .primitive_topology(pipeline_configuration.topology_type)
+            )
+        };
+
+        //Set the viewport and scissors behavoir
+        let mut view_scis_pipeline = {
+
+            match pipeline_configuration.viewport_scissors{
+                ViewportScissorsBehavoir::DefinedViewport(viewport)=> {
+                    Some(
+                        topology_pipeline
+                        .take()
+                        .expect("failed to get pipeline #1")
+                        .viewports(vec![viewport])
+                    )
+                },
+                ViewportScissorsBehavoir::DefinedViewportAndScissors((viewport, scissor))=> {
+                    Some(
+                        topology_pipeline
+                        .take()
+                        .expect("failed to get pipeline #1")
+                        .viewports_scissors(vec![(viewport, scissor)])
+                    )
+                },
+                ViewportScissorsBehavoir::DynamicViewportFixedScissors(scissors)=> {
+                    Some(
+                        topology_pipeline
+                        .take()
+                        .expect("failed to get pipeline #1")
+                        .viewports_dynamic_scissors_fixed(vec![scissors])
+                    )
+                },
+                ViewportScissorsBehavoir::DynamicViewportScissorsIrrelevant(id)=> {
+                    Some(
+                        topology_pipeline
+                        .take()
+                        .expect("failed to get pipeline #1")
+                        .viewports_dynamic_scissors_irrelevant(id)
+                    )
+                },
+                ViewportScissorsBehavoir::FixedViewportDynamicScissors(viewport)=> {
+                    Some(
+                        topology_pipeline
+                        .take()
+                        .expect("failed to get pipeline #1")
+                        .viewports_fixed_scissors_dynamic(vec![viewport])
+                    )
+                },
+                ViewportScissorsBehavoir::ViewportScissorsDynamic(id)=> {
+                    Some(
+                        topology_pipeline
+                        .take()
+                        .expect("failed to get pipeline #1")
+                        .viewports_scissors_dynamic(id)
+                    )
+                },
+            }
+        };
+
+
+        //set depth clamp
+        let mut depth_clamp_pipeline = {
+            Some(
+                view_scis_pipeline
+                .take()
+                .expect("failed to get pipeline #1")
+                .depth_clamp(pipeline_configuration.has_depth_clamp)
+            )
+        };
+
+        //Setup clockwise or counter clockwise faces
+        let mut face_rot_pipeline = {
+            if pipeline_configuration.has_faces_clockwise{
+                Some(
+                    depth_clamp_pipeline
+                    .take()
+                    .expect("failed to get pipeline #1")
+                    .front_face_counter_clockwise()
+                )
+            }else{
+                //if not inverted just go on with the old one
+                depth_clamp_pipeline
+            }
+
+        };
+
+        /*
+        //Set vertex_shader, fragment shader, geometry shader and tesselation shader at once
+        //and build the pipeline to an Arc<GraphicsPipelineAbstract> for easy storage
+        let mut vertex_shader_pipeline = {
+            //sort the shaders and return the fragment one
+            let vertex_shader_tmp_pipe = {
+                match shader{
+                    shader_impls::JakarShaders::PbrOpaque((vs, _, _, _)) => {
+                        pipeline
+                        .take()
+                        .expect("failed to get pipeline #2")
+                        .vertex_shader(vs, ())
+                    },
+                    shader_impls::JakarShaders::Wireframe((vs, fs, _, _)) => {
+                        pipeline
+                        .take()
+                        .expect("failed to get pipeline #2")
+                        .vertex_shader(vs, ())
+                    },
+                }
+            };
+
+
+        };
+        */
+
 
         let tmp_pipeline: Arc<pipeline::GraphicsPipelineAbstract + Send + Sync> = Arc::new(vulkano::pipeline::GraphicsPipeline::start()
             .vertex_input(vertex_buffer_definition)
