@@ -218,6 +218,7 @@ impl GenericNode{
     }
 
     ///Adds a child node to this node
+    #[inline]
     pub fn add_child(&mut self, child: ContentType){
         //create the new node from the type
         let tmp_child = GenericNode::new(child);
@@ -226,6 +227,7 @@ impl GenericNode{
     }
 
     ///Adds a already prepared node, good for merging different trees
+    #[inline]
     pub fn add_node(&mut self, node: GenericNode){
         //Add it based on its own name
         self.children.insert(node.name.clone(), node);
@@ -233,6 +235,7 @@ impl GenericNode{
 
     ///Adds a `node_to_add` as a child to a node with `node_name` as name
     ///good merging node trees at a specific point
+    #[inline]
     pub fn add_node_at_sub_node(&mut self, node_name: &str,  node_to_add: GenericNode){
         let node = self.get_node(node_name);
         match node{
@@ -269,11 +272,13 @@ impl GenericNode{
     }
 
     ///Returns the transform matrix
+    #[inline]
     pub fn get_transform_matrix(&self) -> Matrix4<f32>{
         Matrix4::from(self.transform)
     }
 
     ///Sets the transform of this node without changing its children
+    #[inline]
     pub fn set_transform_single(&mut self, new_transform: Decomposed<Vector3<f32>, Quaternion<f32>>){
         self.transform = new_transform;
     }

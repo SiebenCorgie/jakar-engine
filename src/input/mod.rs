@@ -311,11 +311,13 @@ impl Input{
     }
 
     ///Starts the input polling thread
+    #[inline]
     pub fn start(&mut self) -> thread::JoinHandle<()> {
         self.input_handler.start()
     }
 
     ///Ends the input polling thread, should be done when exiting the the main loop
+    #[inline]
     pub fn end(&mut self){
         self.input_handler.end();
 
@@ -324,15 +326,19 @@ impl Input{
     }
 
     ///Returns the Events loop, used for renderer creation
+    #[inline]
     pub fn get_events_loop(&mut self) -> Arc<Mutex<winit::EventsLoop>>{
         self.events_loop.clone()
     }
 
     ///Returns the input handler
+    #[inline]
     pub fn get_input_handler(&mut self) -> &mut input_handler::InputHandler{
         &mut self.input_handler
     }
 
+    ///Creates a copy of the current key map
+    #[inline]
     pub fn get_key_map_copy(&self) -> KeyMap{
         //get the map
         let key_map = {
@@ -345,6 +351,9 @@ impl Input{
         key_map
     }
 
+    ///Returns a mutable reference to the current key map copy.
+    ///NOTE: This copy will be overwritten from time to time by the input thread.
+    #[inline]
     pub fn get_key_map(&self) -> Arc<Mutex<KeyMap>>{
         self.key_map.clone()
     }

@@ -73,11 +73,13 @@ impl Window{
     }
 
     ///Returns the window surface
+    #[inline]
     pub fn surface(&mut self) -> &Arc<vulkano::swapchain::Surface> {
         self.window.surface()
     }
 
     ///Returns the window component
+    #[inline]
     pub fn window(&mut self) -> &winit::Window{
         self.window.window()
     }

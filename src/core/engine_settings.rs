@@ -107,53 +107,62 @@ impl EngineSettings{
     }
 
     ///Sets the maximum updates per second value for the asset thread.
+    #[inline]
     pub fn with_asset_update_speed(mut self, speed: u32) -> Self{
         self.max_asset_updates = speed;
         self
     }
 
     ///Sets the maximum polls per second value for the input thread.
+    #[inline]
     pub fn with_input_poll_speed(mut self, speed: u32) -> Self{
         self.max_input_speed = speed;
         self
     }
 
     ///Sets the maximum frames per second value for the render thread.
+    #[inline]
     pub fn with_fps(mut self, fps: u32) -> Self{
         self.max_fps = fps;
         self
     }
 
     ///Sets the main monitor, used to define where the fullscreen mode has to be applied
+    #[inline]
     pub fn with_main_monitor(mut self, id: i32) -> Self{
         self.main_monitor = id;
         self
     }
     ///Sets the fullscreen mode (true = fullscreen)
+    #[inline]
     pub fn with_fullscreen_mode(mut self, mode: bool) -> Self{
         self.fullscreen = mode;
         self
     }
 
     ///Sets a new visibility state for the cursor
+    #[inline]
     pub fn with_cursor_visibility(mut self, state: winit::MouseCursor) -> Self{
         self.cursor_visible_state = state;
         self
     }
 
     ///sets the cursor state, most usefull is a free or a crapped cursor
+    #[inline]
     pub fn with_cursor_state(mut self, state: winit::CursorState) -> Self{
         self.cursor_state = state;
         self
     }
 
     ///Sets up a custom anisotropical filtering factor
+    #[inline]
     pub fn with_anisotropical_filtering(mut self, af_factor: f32)-> Self{
         self.anisotropic_filtering = af_factor;
         self
     }
 
     ///Sets up a custom anisotropical filtering factor
+    #[inline]
     pub fn with_msaa_factor(mut self, msaa_factor: u32) -> Self{
         self.msaa = msaa_factor;
         self
@@ -161,31 +170,41 @@ impl EngineSettings{
 
 
     /// Sets vulkan silent, vulkan won't print any validation layer infos anymore
+    #[inline]
     pub fn set_vulkan_silent(mut self) -> Self{
         self.silent_vulkan = true;
         self
     }
+
     ///returns the silent status of vulkan
+    #[inline]
     pub fn vulkan_silence(&self) -> bool{
         self.silent_vulkan.clone()
     }
+
     ///Sets the dimensions of `self` to `width` and `height`
+    #[inline]
     pub fn with_dimensions(mut self, width: u32, height: u32) -> Self{
         self.window_dimensions = [width, height];
         self
     }
+
     ///Sets the Location of `self` to `width` and `height`
+    #[inline]
     pub fn at_location(mut self, width: u32, height: u32) -> Self{
         self.window_location = [width, height];
         self
     }
+
     ///Sets the name of this settings
+    #[inline]
     pub fn with_name(mut self, name: &str) -> Self{
         self.app_name = String::from(name);
         self
     }
 
     ///Sets the application version
+    #[inline]
     pub fn with_app_version(mut self, major: u16, minor: u16, patch: u16) -> Self{
         self.app_version = vulkano::instance::Version{
             major: major,
@@ -196,10 +215,13 @@ impl EngineSettings{
     }
 
     ///Sets the dimensions of a currently used instance of `EngineSettings`
+    #[inline]
     pub fn set_dimensions(&mut self, width: u32, height: u32){
         self.window_dimensions = [width, height];
     }
+
     ///Returns the dimensions
+    #[inline]
     pub fn get_dimensions(&self) -> [u32; 2]{
         self.window_dimensions.clone()
     }

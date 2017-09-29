@@ -154,36 +154,42 @@ impl MaterialFactors{
 
 
     ///Creates the Factor struct with a given albdeo factor
+    #[inline]
     pub fn with_factor_albedo(mut self, factor: [f32; 4]) -> Self{
         self.albedo_factor = factor;
         self
     }
 
     ///Creates the Factor struct with a given normal factor
+    #[inline]
     pub fn with_factor_normal(mut self, factor: f32) -> Self{
         self.normal_factor = factor;
         self
     }
 
     ///Creates the Factor struct with a given metal factor
+    #[inline]
     pub fn with_factor_metal(mut self, factor: f32) -> Self{
         self.metal_factor = factor;
         self
     }
 
     ///Creates the Factor struct with a given roughness factor
+    #[inline]
     pub fn with_factor_roughness(mut self, factor: f32) -> Self{
         self.roughness_factor = factor;
         self
     }
 
     ///Creates the Factor struct with a given occlusion factor
+    #[inline]
     pub fn with_factor_occlusion(mut self, factor: f32) -> Self{
         self.occlusion_factor = factor;
         self
     }
 
     ///Creates the Factor struct with a given emissive factor
+    #[inline]
     pub fn with_factor_emissive(mut self, factor: [f32; 3]) -> Self{
         self.emissive_factor = factor;
         self
@@ -281,12 +287,14 @@ impl MaterialBuilder{
 
     ///can be used to set different usage flags, most of the flag should be sorted correctly by
     ///the supplied textures though
+    #[inline]
     pub fn with_usage_flags(mut self, new_flags: TextureUsageFlags) -> Self{
         self.texture_usage_info = new_flags;
         self
     }
 
     ///can be used to set custom factors
+    #[inline]
     pub fn with_factors(mut self, new_factors: MaterialFactors) -> Self{
         self.material_factors = new_factors;
         self
@@ -528,38 +536,46 @@ pub struct Material {
 impl Material {
 
     ///Returns the used uniform manager
+    #[inline]
     pub fn get_uniform_manager(&self) -> Arc<Mutex<uniform_manager::UniformManager>>{
         self.uniform_manager.clone()
     }
 
     ///Adds a albedo texture to the material
+    #[inline]
     pub fn set_albedo_texture(&mut self, albedo: Arc<texture::Texture>){
         self.t_albedo = albedo;
         self.texture_usage_info.b_albedo = 1;
     }
 
     ///Adds a normal Texture
+    #[inline]
     pub fn set_normal_texture(&mut self, normal: Arc<texture::Texture>){
         self.t_normal = normal;
         self.texture_usage_info.b_normal = 1;
     }
 
     ///Adds a physical texture
+    #[inline]
     pub fn set_metallic_roughness_texture(&mut self, physical: Arc<texture::Texture>){
         self.t_metallic_roughness = physical;
     }
 
     ///Adds a emissive texture
+    #[inline]
     pub fn set_emissive_texture(&mut self, emissive: Arc<texture::Texture>){
         self.t_emissive = emissive;
         self.texture_usage_info.b_emissive = 1;
     }
 
+    ///Overrwrites the old usage infor with the new ones.
+    #[inline]
     pub fn set_texture_usage_info(&mut self, info: TextureUsageFlags){
         self.texture_usage_info = info.to_shader_flags();
     }
 
     ///Sets the material factors
+    #[inline]
     pub fn set_material_factor_info(&mut self, info: MaterialFactors){
         self.material_factors = info.to_shader_factors();
     }
@@ -616,11 +632,13 @@ impl Material {
 
 
     ///Returns the name of the currently used pipeline
+    #[inline]
     pub fn get_pipeline(&self) -> Arc<GraphicsPipelineAbstract + Send + Sync>{
         self.pipeline.clone()
     }
 
     ///Updates all sets tied to this material
+    #[inline]
     pub fn update(&mut self){
         //println!("STATUS: MATERIAL: In material, updating now", );
         //The first set is now recreted on request from a transform matrix
@@ -710,6 +728,7 @@ impl Material {
 
     ///Returns the u_world_set generated from a model specific `transform_matrix` as well as the
     ///global view and projection matrix
+    #[inline]
     pub fn get_set_01(&mut self, transform_matrix: Matrix4<f32>) -> Arc<DescriptorSet + Send + Sync>{
 
         self.recreate_set_01(transform_matrix);
@@ -717,27 +736,32 @@ impl Material {
     }
 
     ///Returns the second set which holds the material textures
+    #[inline]
     pub fn get_set_02(&self) -> Arc<DescriptorSet + Send + Sync>{
         self.set_02.clone()
 
     }
 
     ///Returns the 3rd descriptor set, responsible for the material specific settings
+    #[inline]
     pub fn get_set_03(&self) -> Arc<DescriptorSet + Send + Sync>{
         self.set_03.clone()
     }
 
     ///Returns the 4th desciptor set responsible for the lighting information
+    #[inline]
     pub fn get_set_04(&self) -> Arc<DescriptorSet + Send + Sync>{
         self.set_04.clone()
     }
 
     ///Sets a new pipeline
+    #[inline]
     pub fn set_pipeline(&mut self, new_pipe: Arc<GraphicsPipelineAbstract + Send + Sync>){
         self.pipeline = new_pipe;
     }
 
     ///Returns a copy/clone of this name
+    #[inline]
     pub fn get_name(&self) -> String{
         self.name.clone()
     }

@@ -8,6 +8,8 @@ use std::sync::Arc;
 use vulkano;
 use vulkano::pipeline::GraphicsPipelineAbstract;
 
+use render::shader_impls;
+
 
 ///Manages all available pipeline
 pub struct PipelineManager {
@@ -26,13 +28,9 @@ impl PipelineManager{
         //Creates a default pipeline from a default shader
 
         //the default inputs (all for the best visual graphics)
-        let inputs_default = pipeline::PipelineInput{
-            data: true,
-            has_textures: true,
-            has_light: true,
-        };
+        let default_pipeline = pipeline::PipelineConfig::default(renderpass.clone());
 
-        let default_pipeline = pipeline::Pipeline::new_opaque(device, renderpass, inputs_default);
+        let default_pipeline = pipeline::Pipeline::new(device, default_pipeline);
         b_tree_map.insert(String::from("DefaultPipeline"), default_pipeline);
 
         PipelineManager{
@@ -41,6 +39,7 @@ impl PipelineManager{
     }
 
     ///Returns true if there is a pipeline with this name
+    #[inline]
     pub fn has_pipeline(&self, name: &str) -> bool{
         if self.pipelines.contains_key(&String::from(name)){
             return true
@@ -67,20 +66,16 @@ impl PipelineManager{
         self.get_default_pipeline()
     }
 
-    ///Adds a pipeline made for the specified shader
+    ///Adds a pipeline made for the specified properties. Returns a the name under which this pipeline was actually
+    ///created, as well as an Arc<T> clone of the vulkano-pipeline object
     ///TODO make the shader specified
     pub fn add_pipeline(&mut self, name: &str,device: Arc<vulkano::device::Device>,
         renderpass: Arc<vulkano::framebuffer::RenderPassAbstract + Send + Sync>,
     )
     {
-        //the default inputs (all for the best visual graphics)
-        let inputs_default = pipeline::PipelineInput{
-            data: true,
-            has_textures: true,
-            has_light: true,
-        };
+        let pipeline_config = pipeline::PipelineConfig::default(renderpass);
 
-        let tmp_pipeline = pipeline::Pipeline::new_opaque(device,renderpass, inputs_default);
+        let tmp_pipeline = pipeline::Pipeline::new(device, pipeline_config);
         self.pipelines.insert(String::from(name), tmp_pipeline);
     }
 

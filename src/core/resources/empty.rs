@@ -25,10 +25,12 @@ impl Empty{
 
 impl ReturnBoundInfo for Empty{
     ///return the max size of its bound
+    #[inline]
     fn get_bound_max(&self)-> Point3<f32>{
         self.bound.max.clone()
     }
     ///return the min size of its bound
+    #[inline]
     fn get_bound_min(&self)-> Point3<f32>{
         self.bound.min.clone()
     }
@@ -50,6 +52,7 @@ impl ReturnBoundInfo for Empty{
     }
 
     ///Returns it' bound
+    #[inline]
     fn get_bound(&self) -> collision::Aabb3<f32>{
         self.bound.clone()
     }

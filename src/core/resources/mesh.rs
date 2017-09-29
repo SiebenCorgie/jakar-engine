@@ -105,26 +105,31 @@ impl Mesh {
     }
 
     ///Returns the name of the material this mesh uses
+    #[inline]
     pub fn get_material_name(&self) -> String{
         self.material.clone()
     }
 
     ///Can be used to set to a new material
+    #[inline]
     pub fn set_material(&mut self, new_mat: &str){
         self.material = String::from(new_mat);
     }
 
     ///Returns all indices
+    #[inline]
     pub fn get_indices(&self) -> Vec<u32>{
         self.indices.clone()
     }
 
     ///Return all vertices
+    #[inline]
     pub fn get_all_vertices(&self) -> Vec<Vertex>{
         self.vertices.clone()
     }
 
     ///Returns all pos data
+    #[inline]
     pub fn get_all_positions(&self)-> Vec<[f32; 3]>{
         let mut return_vec = Vec::new();
         for i in self.vertices.iter(){
@@ -134,6 +139,7 @@ impl Mesh {
     }
 
     ///Returns all pos data
+    #[inline]
     pub fn get_all_uvs(&self)-> Vec<[f32; 2]>{
         let mut return_vec = Vec::new();
         for i in self.vertices.iter(){
@@ -204,19 +210,23 @@ impl Mesh {
 
 impl ReturnBoundInfo for Mesh{
     ///return the max size of its bound
+    #[inline]
     fn get_bound_max(&self)-> Point3<f32>{
         self.bound.max.clone()
     }
     ///return the min size of its bound
+    #[inline]
     fn get_bound_min(&self)-> Point3<f32>{
         self.bound.min.clone()
     }
     ///Sets the bound to the new values (in mesh space)
+    #[inline]
     fn set_bound(&mut self, min: Point3<f32>, max: Point3<f32>){
         self.bound = collision::Aabb3::new(min, max);
     }
 
     ///Returns it' bound
+    #[inline]
     fn get_bound(&self) -> collision::Aabb3<f32>{
         self.bound.clone()
     }

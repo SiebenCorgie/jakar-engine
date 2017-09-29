@@ -419,13 +419,14 @@ impl InputHandler{
     }
 
     ///Ends the input thread via a end flag
+    #[inline]
     pub fn end(&mut self){
+        {
+            let mut state_lck = self.state
+            .lock()
+            .expect("Failed to lock input thread state for ending");
 
-        let mut state_lck = self.state
-        .lock()
-        .expect("Failed to lock input thread state for ending");
-
-         *state_lck = InputHandlerStates::ShouldEnd;
-
+            *state_lck = InputHandlerStates::ShouldEnd;
+        }
     }
 }

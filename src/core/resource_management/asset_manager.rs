@@ -278,6 +278,7 @@ impl AssetManager {
     }
 
     ///Returns the scene manager as a locked mutex, need to be returned
+    #[inline]
     pub fn get_scene_manager<'a>(&'a mut self) -> MutexGuard<'a, scene_manager::SceneManager>{
         //lock own manager to return borrow
         //let scene_inst = self.scene_manager.clone();
@@ -286,41 +287,49 @@ impl AssetManager {
     }
 
     ///Returns the camera in use TODO this will be managed by a independent camera manager in the future
+    #[inline]
     pub fn get_camera(&mut self) -> &mut DefaultCamera{
         &mut self.camera
     }
 
     ///Sets the root scene to a `new_scene_root`
+    #[inline]
     pub fn set_active_scene(&mut self, new_scene_root: node::GenericNode){
         self.active_main_scene = new_scene_root;
     }
 
     ///Returns a reference to the active scene
+    #[inline]
     pub fn get_active_scene(&mut self) -> &mut node::GenericNode{
         &mut self.active_main_scene
     }
 
     //Returns a reference to the texture manager
+    #[inline]
     pub fn get_texture_manager(&mut self) -> MutexGuard<texture_manager::TextureManager>{
         self.texture_manager.lock().expect("failed to lock texture manager")
     }
 
     ///Returns a reference to the material manager
+    #[inline]
     pub fn get_material_manager(&mut self) -> MutexGuard<material_manager::MaterialManager>{
         self.material_manager.lock().expect("failed to hold material manager")
     }
 
     ///Returns the mesh manager
+    #[inline]
     pub fn get_mesh_manager(&mut self) -> MutexGuard<mesh_manager::MeshManager>{
         self.mesh_manager.lock().expect("failed to hold mesh manager")
     }
 
     //Returns a raw copy of the meshes in the current active scene tree
+    #[inline]
     pub fn get_all_meshes(&mut self) -> Vec<(Arc<Mutex<mesh::Mesh>>, Matrix4<f32>)>{
         self.active_main_scene.get_all_meshes()
     }
 
     ///Returns all meshes in the view frustum of the currently active camera
+    #[inline]
     pub fn get_meshes_in_frustum(&mut self) -> Vec<(Arc<Mutex<mesh::Mesh>>, Matrix4<f32>)>{
         self.active_main_scene.get_meshes_in_frustum(&self.camera)
     }
@@ -428,6 +437,7 @@ impl AssetManager {
     }
 
     ///Returns true if a scene with `name` as name exists in the local scene manager
+    #[inline]
     pub fn has_scene(&mut self, name: &str) -> bool{
         let scene_manager = self.get_scene_manager();
         scene_manager.has_scene(name.clone())
@@ -452,6 +462,7 @@ impl AssetManager {
     ///Takes a `texture::TextureBuilder` and adds the texture by `name` to the texture manager.
     ///builds the texture and adds it to the internal manager,
     /// returns an error if the texture already exists
+    #[inline]
     pub fn add_texture_to_manager(
         &mut self, texture_builder: texture::TextureBuilder, tex_name: &str
     ) -> Result<(), &'static str>
@@ -482,6 +493,7 @@ impl AssetManager {
 
     ///A small helper function which returns the used engine settings, good if you have to transport
     ///much data between function
+    #[inline]
     pub fn get_settings(&self) -> Arc<Mutex<engine_settings::EngineSettings>>{
         self.settings.clone()
     }

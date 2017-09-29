@@ -1,6 +1,8 @@
 use vulkano;
 use std::sync::Arc;
 
+use render;
+
 ///The normal PBR vertex shader
 pub mod pbr_vertex;
 
@@ -29,66 +31,68 @@ pub struct Shader<V, F, G, TC, TE> {
     pub tesselation: Option<(TC,TE)>,
 }
 
-///Holds a list of all available shader types
+///Defines all possible shader constructs which are supported by the engine
+#[derive(Copy, Clone)]
+pub enum ShaderSetTypes {
+    VertFrag,
+    VertFragGeo,
+    VertFragGeoTess,
+    VertFragTess,
+}
+
+///Holds a list of all available shader types which can be loaded
 pub enum JakarShaders {
-    ///Defines the default opaque shader
+    ///Defines the default opaque shader (3 dummys)
+    PbrOpaque(
+        (
+            pbr_vertex::Shader,
+            pbr_fragment::Shader,
+            render::pipeline::PipelineInput,
+            ShaderSetTypes
+        )
+    ),
+    ///Defines the default Wireframe shader (3 dummys)
+    Wireframe(
+        (
+            wireframe_vertex::Shader,
+            wireframe_fragment::Shader,
+            render::pipeline::PipelineInput,
+            ShaderSetTypes
+        )
+    ),
+}
+
+///A list of loadable shader types which can also be used to modifiy loadable shaders.
+pub enum ShaderTypes {
     PbrOpaque,
-    ///Defines the default Wireframe shader
     Wireframe,
 }
 
-///Returns the opaque pbr shader
-fn get_pbr_opaque_shader(device: Arc<vulkano::device::Device>) -> (pbr_vertex::Shader, pbr_fragment::Shader){
-    (
-        pbr_vertex::Shader::load(device.clone()).expect("failed to load vertex pbr shader"),
-        pbr_fragment::Shader::load(device).expect("failed to load fragment pbr shader")
-    )
-}
+///Loads an shader from specified type and returns the shaders as well as an `PipelineInputs` struct
+/// to define the needed Inputs and the `ShaderSetTypes` for the pipeline creation.
+pub fn load_shader(device: Arc<vulkano::device::Device>, shader_type: ShaderTypes) ->
+    JakarShaders
+{
+    match shader_type{
+        PbrOpaque => {
+            //load shader
+            let vs = pbr_vertex::Shader::load(device.clone()).expect("failed to load vertex pbr shader");
+            let fs = pbr_fragment::Shader::load(device).expect("failed to load fragment pbr shader");
 
-///Returns the wireframe shader set
-fn get_wireframe_shader(device: Arc<vulkano::device::Device>) -> (wireframe_vertex::Shader, wireframe_fragment::Shader){
-    (
-        wireframe_vertex::Shader::load(device.clone()).expect("failed to load vertex pbr shader"),
-        wireframe_fragment::Shader::load(device).expect("failed to load fragment pbr shader")
-    )
-}
+            //Create needed inputs
+            let inputs = render::pipeline::PipelineInput::new_all();
+            //Sets which sets are used for the shader
+            let sets = ShaderSetTypes::VertFrag;
+            //now return them
+            JakarShaders::PbrOpaque((vs, fs, inputs, sets))
+        }
+        Wireframe => {
+            let vs = wireframe_vertex::Shader::load(device.clone()).expect("failed to load vertex pbr shader");
+            let fs = wireframe_fragment::Shader::load(device).expect("failed to load fragment pbr shader");
+            let inputs = render::pipeline::PipelineInput::with_none();
+            let sets = ShaderSetTypes::VertFrag;
 
-/*
-pub enum JakarShaders {
-    ///Defines the default opaque shader
-    PbrOpaque(Shader
-        <
-        pbr_vertex::Shader,
-        pbr_fragment::Shader,
-        (), (), ()
-        >),
-    ///Defines the default Wireframe shader
-    Wireframe(Shader
-        <
-        wireframe_vertex::Shader,
-        wireframe_fragment::Shader,
-        (), (), ()
-        >),
-}
-*/
-/*
-pub fn get_shader<V, F, G, TC, TE>(s_type: JakarShaders, device: Arc<vulkano::device::Device>) -> Shader<V, F, G, TC, TE> {
-    match s_type{
-        JakarShaders::PbrOpaque => {
-            Shader{
-                ///holds the vertex shader (always needed).
-                vertex: pbr_vertex::Shader::load(device).expect("failed to load vertex pbr shader"),
-                ///holds the fragment shader (always needed).
-                framgent: pbr_fragment::Shader::load(device).expect("failed to load fragment pbr shader"),
-                ///Can hold a geometry shader if provided
-                geometry: None,
-                ///Can hold an tesselation control and evaluation shader
-                tesselation: None,
-            }
+            JakarShaders::Wireframe((vs, fs, inputs, sets))
         }
     }
 }
-
-TODO Currently no nice way to make this :/ I'll have to investigate
-
-*/

@@ -272,31 +272,37 @@ impl Camera for DefaultCamera{
     }
 
     ///Returns the direction the camera is facing
+    #[inline]
     fn get_direction(&self) -> Vector3<f32> {
         self.front
     }
 
     ///Sets the direction of the camera to a Vector3<f32>
+    #[inline]
     fn set_direction(&mut self, new_direction: Vector3<f32>){
         self.front = new_direction.normalize();
     }
 
     ///Returns the position of the camera as Vector3<f32>
+    #[inline]
     fn get_position(&self) -> Vector3<f32> {
         self.position
     }
 
     ///Sets the position
+    #[inline]
     fn set_position(&mut self, new_pos: Vector3<f32>){
         self.position = new_pos;
     }
 
     ///Sets the field of view for this camera
+    #[inline]
     fn set_fov(&mut self, new_fov: f32){
         self.fov = new_fov;
     }
 
     ///Sets the frustum far and near plane
+    #[inline]
     fn set_frustum_planes(&mut self, near: f32, far: f32) {
         self.far_plane = far;
         self.near_plane = near;
@@ -327,14 +333,16 @@ impl Camera for DefaultCamera{
     }
 
     ///Returns the frustum bound of this camera as a AABB
+    #[inline]
     fn get_frustum_bound(&self) -> collision::Frustum<f32>{
         let matrix = self.get_perspective() * self.get_view_matrix();
         collision::Frustum::from_matrix4(matrix).expect("failed to create frustum")
     }
-    
+
 }
 
 //Helper function for calculating the view
+#[inline]
 fn to_radians(degree: f32) -> f32 {
     degree * (consts::PI / 180.0) as f32
 }

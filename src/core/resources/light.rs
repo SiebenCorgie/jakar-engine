@@ -94,31 +94,37 @@ impl LightPoint{
     }
 
     ///sets the lights intensity
+    #[inline]
     pub fn set_intensity(&mut self, new_itensity: f32){
         self.intensity = new_itensity;
     }
 
     ///returns the refernce to the intensity
+    #[inline]
     pub fn get_intensity(&mut self) -> &mut f32{
         &mut self.intensity
     }
 
     ///Returns the location reference
+    #[inline]
     pub fn get_location(&mut self) -> &mut Vector3<f32>{
         &mut self.location
     }
 
     ///Returns the location reference
+    #[inline]
     pub fn set_location(&mut self, new_location: Vector3<f32>){
         self.location = new_location
     }
 
     ///Sets its color, the value gets normalized, set the intensity via `set_intensity`
+    #[inline]
     pub fn set_color(&mut self, new_color: Vector3<f32>){
         self.color = new_color;
     }
 
     ///Returns the reference to its color
+    #[inline]
     pub fn get_color(&mut self) -> &mut Vector3<f32>{
         &mut self.color
     }
@@ -126,10 +132,12 @@ impl LightPoint{
 
 impl ReturnBoundInfo for LightPoint{
     ///return the max size of its bound
+    #[inline]
     fn get_bound_max(&self)-> Point3<f32>{
         self.bound.max.clone()
     }
     ///return the min size of its bound
+    #[inline]
     fn get_bound_min(&self)-> Point3<f32>{
         self.bound.min.clone()
     }
@@ -151,6 +159,7 @@ impl ReturnBoundInfo for LightPoint{
     }
 
     ///Returns its bound
+    #[inline]
     fn get_bound(&self) -> collision::Aabb3<f32>{
         self.bound.clone()
     }
@@ -218,41 +227,49 @@ impl LightDirectional{
     }
 
     ///Change the direction
+    #[inline]
     pub fn set_direction(&mut self, new_direction: Vector3<f32>){
         self.direction = new_direction;
     }
 
     ///Returns the direction reference
+    #[inline]
     pub fn get_direction(&mut self) -> &mut Vector3<f32>{
         &mut self.direction
     }
 
     ///Returns the location reference
+    #[inline]
     pub fn get_location(&mut self) -> &mut Vector3<f32>{
         &mut self.location
     }
 
     ///Returns the location reference
+    #[inline]
     pub fn set_location(&mut self, new_location: Vector3<f32>){
         self.location = new_location
     }
 
     ///set intensity
+    #[inline]
     pub fn set_intensity(&mut self, new_itensity: f32){
         self.intensity = new_itensity;
     }
 
     ///returns the refernce to the intensity
+    #[inline]
     pub fn get_intensity(&mut self) -> &mut f32{
         &mut self.intensity
     }
 
     ///Sets its color, the value gets normalized, set the intensity via `set_intensity`
+    #[inline]
     pub fn set_color(&mut self, new_color: Vector3<f32>){
         self.color = new_color;
     }
 
     ///Returns the reference to its color
+    #[inline]
     pub fn get_color(&mut self) -> &mut Vector3<f32>{
         &mut self.color
     }
@@ -286,6 +303,7 @@ impl ReturnBoundInfo for LightDirectional{
     }
 
     ///Returns it' bound
+    #[inline]
     fn get_bound(&self) -> collision::Aabb3<f32>{
         self.bound.clone()
     }
@@ -362,61 +380,73 @@ impl LightSpot{
     }
 
     ///Change the direction
+    #[inline]
     pub fn set_direction(&mut self, new_direction: Vector3<f32>){
         self.direction = new_direction;
     }
 
     ///Returns the direction reference
+    #[inline]
     pub fn get_direction(&mut self) -> &mut Vector3<f32>{
         &mut self.direction
     }
 
     ///Returns the location reference
+    #[inline]
     pub fn get_location(&mut self) -> &mut Vector3<f32>{
         &mut self.location
     }
 
     ///Returns the location reference
+    #[inline]
     pub fn set_location(&mut self, new_location: Vector3<f32>){
         self.location = new_location
     }
 
     ///set intensity
+    #[inline]
     pub fn set_intensity(&mut self, new_itensity: f32){
         self.intensity = new_itensity;
     }
 
     ///returns the refernce to the intensity
+    #[inline]
     pub fn get_intensity(&mut self) -> &mut f32{
         &mut self.intensity
     }
 
     ///Sets its color, the value gets normalized, set the intensity via `set_intensity`
+    #[inline]
     pub fn set_color(&mut self, new_color: Vector3<f32>){
         self.color = new_color;
     }
 
     ///Returns the reference to its color
+    #[inline]
     pub fn get_color(&mut self) -> &mut Vector3<f32>{
         &mut self.color
     }
 
     ///Sets the outer radius (point where the fallof ends) of this spot light
+    #[inline]
     pub fn set_outer_radius(&mut self, new_radius: f32){
         self.outer_radius = new_radius;
     }
 
     ///Returns the reference to the outer radius
+    #[inline]
     pub fn get_outer_radius(&mut self) -> &mut f32{
         &mut self.outer_radius
     }
 
     ///Sets the inner radius (point where the fallof starts) of this spot light
+    #[inline]
     pub fn set_inner_radius(&mut self, new_radius: f32){
         self.inner_radius = new_radius;
     }
 
     ///Returns the reference to the inner radius
+    #[inline]
     pub fn get_inner_radius(&mut self) -> &mut f32{
         &mut self.inner_radius
     }
@@ -424,10 +454,12 @@ impl LightSpot{
 
 impl ReturnBoundInfo for LightSpot{
     ///return the max size of its bound
+    #[inline]
     fn get_bound_max(&self)-> Point3<f32>{
         self.bound.max.clone()
     }
     ///return the min size of its bound
+    #[inline]
     fn get_bound_min(&self)-> Point3<f32>{
         self.bound.min.clone()
     }
@@ -449,6 +481,7 @@ impl ReturnBoundInfo for LightSpot{
     }
 
     ///Returns it' bound
+    #[inline]
     fn get_bound(&self) -> collision::Aabb3<f32>{
         self.bound.clone()
     }
@@ -460,7 +493,7 @@ impl ReturnBoundInfo for LightSpot{
         let b_min = self.bound.min.clone();
         let b_max = self.bound.max.clone();
 
-        ///low
+        //low
         return_vector.push(Vector3::new(b_min[0], b_min[1], b_min[2])); //Low
         return_vector.push(Vector3::new(b_min[0] + b_max[0], b_min[1], b_min[2])); //+x
         return_vector.push(Vector3::new(b_min[0], b_min[1] + b_max[1], b_min[2])); //+y
@@ -475,6 +508,7 @@ impl ReturnBoundInfo for LightSpot{
 
 }
 //Helper function for calculating the view
+#[inline]
 fn to_radians(degree: f32) -> f32 {
     degree * (consts::PI / 180.0) as f32
 }

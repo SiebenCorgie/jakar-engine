@@ -189,6 +189,7 @@ impl TextureBuilder {
     }
 
     ///Sets new filtering technic for the sampler
+    #[inline]
     pub fn with_sampling_filter(mut self, mag_filter: Filter, min_filter: Filter) -> Self{
         self.mag_filter = mag_filter;
         self.min_filter = min_filter;
@@ -196,12 +197,14 @@ impl TextureBuilder {
     }
 
     ///Sets new mipmapping mode for the sampler
+    #[inline]
     pub fn with_mip_map_moe(mut self, new_mode: MipmapMode) -> Self{
         self.mip_map_mode = new_mode;
         self
     }
 
     ///Sets new tiling mode for the sampler
+    #[inline]
     pub fn with_tiling_mode(
         mut self, u: SamplerAddressMode, v: SamplerAddressMode, w: SamplerAddressMode
     ) -> Self{
@@ -211,6 +214,7 @@ impl TextureBuilder {
         self
     }
     ///Sets new mip lod bias for the sampler
+    #[inline]
     pub fn with_lod_bias(mut self, bias: f32) -> Self{
         self.mip_lod_bias = bias;
         self
@@ -218,7 +222,8 @@ impl TextureBuilder {
 
     ///Sets new max anisotropic level for the sampler
     ///#panic This will panic if max < 1.0
-    pub fn wit_max_anisotropy(mut self, max: f32) -> Self{
+    #[inline]
+    pub fn with_max_anisotropy(mut self, max: f32) -> Self{
         //have to test that it is => 1.0 otherwise this will create a runtime error
         if max < 1.0 {
             panic!("The anisotropic max has to be equal ot larger than 1.0");
@@ -229,6 +234,7 @@ impl TextureBuilder {
 
     ///Sets new min and max mip map level for the sampler
     ///#panic this will panic if min is greater than max
+    #[inline]
     pub fn with_min_and_max_mip_level(mut self, min: f32, max: f32) -> Self{
         //test min and max
         if min > max {
@@ -241,6 +247,7 @@ impl TextureBuilder {
     }
 
     ///The imported image will be blured by `factor` after importing
+    #[inline]
     pub fn with_blur(mut self, factor: f32) -> Self{
         self.b_blur = true;
         self.blur_factor = factor;
@@ -248,6 +255,7 @@ impl TextureBuilder {
     }
 
     ///The imported image get a unsharpen masked applied with the blur of `factor` and the sharpening of `thresold` after importing
+    #[inline]
     pub fn with_unsharpening(mut self, factor: f32, thresold: i32) -> Self{
         self.b_unsharpen = true;
         self.sharp_factor = factor;
@@ -257,6 +265,7 @@ impl TextureBuilder {
 
     ///The imported image will be brightened by `factor` after importing (tip the value can be)
     ///negative to darken the image
+    #[inline]
     pub fn with_brightening(mut self, factor: i32) -> Self{
         self.b_brighten = true;
         self.brighten_factor = factor;
@@ -264,26 +273,35 @@ impl TextureBuilder {
     }
 
     ///this will flip the image vertically
+    #[inline]
     pub fn with_flipped_v(mut self) -> Self{
         self.b_flipv = true;
         self
     }
+
     ///this will flip the image horizontally
+    #[inline]
     pub fn with_flipped_h(mut self) -> Self{
         self.b_fliph = true;
         self
     }
+
     ///this will rotate the image 90 degree
+    #[inline]
     pub fn with_rotation_90(mut self) -> Self{
         self.b_rotate90 = true;
         self
     }
+
     ///this will rotate the image 180 degree
+    #[inline]
     pub fn with_rotation_180(mut self) -> Self{
         self.b_rotate180 = true;
         self
     }
+
     ///this will rotate the image 270 degree
+    #[inline]
     pub fn with_rotation_270(mut self) -> Self{
         self.b_rotate270 = true;
         self
@@ -456,13 +474,16 @@ pub struct Texture {
 
 ///The implementation doesn't change anything on this texture
 impl Texture{
+
     ///Returns the raw `Arc<ImmutableImage<T>>`
+    #[inline]
     pub fn get_raw_texture(&self) -> Arc<ImmutableImage<vulkano::format::Format>>
     {
         self.texture.clone()
     }
 
     ///Returns the raw `Arc<vulkano::sampler::Sampler>`
+    #[inline]
     pub fn get_raw_sampler(&self) -> Arc<vulkano::sampler::Sampler>{
         self.sampler.clone()
     }
