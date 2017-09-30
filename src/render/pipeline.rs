@@ -35,39 +35,48 @@ pub enum ViewportScissorsBehavoir {
 
 ///Describes the cullmode of this pipeline
 pub enum CullMode {
+    /// All faces are drawn
     Disabled,
+    /// The front of a face will be discarded
     Front,
+    /// The back of a face will be discarded
     Back,
+    /// Both sides are discarded (no known practical value of this settings though)
     FrontAndBack
 }
 
 ///Describes how polygones are drawn
 pub enum PolygoneMode {
-    ///Polygones are drawn as filled faces (usually used)
+    /// Polygones are drawn as filled faces (usually used)
     Fill,
-    ///Are drawn as lines with an width defined by the u32. If the width is 0.0, the line width is set
-    ///dynamicly at render time.
-    Line(u32),
-    ///Polygones are drawn as points (at each vertice)
+    /// Are drawn as lines with an width defined by the u32. If the width is 0.0, the line width is set
+    /// dynamicly at render time.
+    Line(f32),
+    /// Polygones are drawn as points (at each vertice)
     Point
 }
 
 ///Descibes all possible blend types for a fragment
 pub enum BlendTypes {
-    ///Describes every tiny bit about how blending should be done
+    /// Describes every tiny bit about how blending should be done
     BlendCollective(AttachmentBlend),
-    ///The output gets directly written to the frame buffer (default)
+    /// The output gets directly written to the frame buffer (default)
     BlendPassThrough,
-    ///Blends based on the alpha value
+    /// Blends based on the alpha value
     BlendAlphaBlending,
-    ///Blends based on a logic operator
+    /// Blends based on a logic operator
     BlendLogicOp(LogicOp),
 }
 
 ///Describes how the depth and stencil test should be handled
 pub enum DepthStencilConfig {
+    /// Only the depth pass will be written and performed.
+    /// This setting is a shortcut if you want to: Write Depth, no Stencil and perform the depth
+    /// test with the `Less` setting.
     SimpleDepthNoStencil,
+    /// There won't be a depth or stencil pass, hence there will be no information written.
     NoDepthNoStencil,
+    /// Depth and stencil (depending on the configuration) will be performed and written.
     CustomDepthAndStencil(pipeline::depth_stencil::DepthStencil),
 }
 
@@ -262,6 +271,12 @@ impl PipelineConfig{
         self
     }
 
+    ///Can return a clone of the renderpass
+    #[inline]
+    fn get_renderpass_copy(&self) -> Arc<vulkano::framebuffer::RenderPassAbstract + Send + Sync>{
+        self.render_pass.clone()
+    }
+
 
 }
 
@@ -352,7 +367,7 @@ impl Pipeline{
         //     - tesselation evaluation shader
         // - shader inputs struct (describes which inputs are needed for this pipeline later)
         // - shader sets (describes which shaders are used for pipeline creation)
-        let (shader, shader_type, shader_inputs, used_shader_sets) = {
+        let (shader, shader_type, shader_inputs) = {
             //now return stuff depending on the loaded shader
             match pipeline_configuration.shader_set{
                 shader_impls::ShaderTypes::PbrOpaque => {
@@ -360,27 +375,27 @@ impl Pipeline{
                     //load the shader based on the type the use wants to load
                     let shader = shader_impls::load_shader(device.clone(), shader_impls::ShaderTypes::PbrOpaque);
                     //extract some infos which doesnt need to be stored in an enum for the compiler
-                    let (inputs, sets) = match shader{
-                        shader_impls::JakarShaders::PbrOpaque((_, _, inputs, sets)) =>{
-                            (inputs, sets)
+                    let inputs = match shader{
+                        shader_impls::JakarShaders::PbrOpaque((_, _, inputs)) =>{
+                            inputs
                         },
                         _ => panic!("could not match shaders for inputs and shader set type"),
                     };
 
                     //build the return tubel
-                    (shader, shader_impls::ShaderTypes::PbrOpaque, inputs, sets)
+                    (shader, shader_impls::ShaderTypes::PbrOpaque, inputs)
                 }
 
                 shader_impls::ShaderTypes::Wireframe => {
                     let shader = shader_impls::load_shader(device.clone(), shader_impls::ShaderTypes::Wireframe);
-                    let (inputs, sets) = match shader{
-                        shader_impls::JakarShaders::Wireframe((_, _, inputs, sets)) =>{
-                            (inputs, sets)
+                    let inputs = match shader{
+                        shader_impls::JakarShaders::Wireframe((_, _, inputs)) =>{
+                            inputs
                         },
                         _ => panic!("could not match shaders for inputs and shader set type"),
                     };
                     //build the return tubel
-                    (shader, shader_impls::ShaderTypes::Wireframe, inputs, sets)
+                    (shader, shader_impls::ShaderTypes::Wireframe, inputs)
                 }
             }
         };
@@ -392,7 +407,7 @@ impl Pipeline{
         let fs = pbr_fragment::Shader::load(device.clone()).expect("failed to create shader module");
 
 
-        //get the renderpass
+        //get the renderpass for later
         let render_pass = pipeline_configuration.render_pass;
 
         //Create a pipeline vertex buffer definition
@@ -503,36 +518,214 @@ impl Pipeline{
                 //if not inverted just go on with the old one
                 depth_clamp_pipeline
             }
-
         };
 
-        /*
-        //Set vertex_shader, fragment shader, geometry shader and tesselation shader at once
-        //and build the pipeline to an Arc<GraphicsPipelineAbstract> for easy storage
-        let mut vertex_shader_pipeline = {
-            //sort the shaders and return the fragment one
-            let vertex_shader_tmp_pipe = {
-                match shader{
-                    shader_impls::JakarShaders::PbrOpaque((vs, _, _, _)) => {
-                        pipeline
+        //setup cull mode of the vertices
+        let mut cull_pipeline = {
+            match pipeline_configuration.cull_mode{
+                CullMode::Disabled =>{
+                    Some(
+                        face_rot_pipeline
                         .take()
-                        .expect("failed to get pipeline #2")
-                        .vertex_shader(vs, ())
-                    },
-                    shader_impls::JakarShaders::Wireframe((vs, fs, _, _)) => {
-                        pipeline
+                        .expect("failed to get pipeline #1")
+                        .cull_mode_disabled()
+                    )
+                },
+                CullMode::Back => {
+                    Some(
+                        face_rot_pipeline
                         .take()
-                        .expect("failed to get pipeline #2")
-                        .vertex_shader(vs, ())
+                        .expect("failed to get pipeline #1")
+                        .cull_mode_back()
+                    )
+                },
+                CullMode::Front => {
+                    Some(
+                        face_rot_pipeline
+                        .take()
+                        .expect("failed to get pipeline #1")
+                        .cull_mode_front()
+                    )
+                },
+                CullMode::FrontAndBack => {
+                    Some(
+                        face_rot_pipeline
+                        .take()
+                        .expect("failed to get pipeline #1")
+                        .cull_mode_front_and_back()
+                    )
+                }
+            }
+        };
+
+        //Set the polyfone drawing mode
+        let mut poly_mode_pipeline = {
+            match pipeline_configuration.polygone_mode{
+                PolygoneMode::Fill => {
+                    Some(
+                        cull_pipeline
+                        .take()
+                        .expect("failed to get pipeline #1")
+                        .polygon_mode_fill()
+                    )
+                },
+                PolygoneMode::Line(line_width) => {
+                    Some(
+                        cull_pipeline
+                        .take()
+                        .expect("failed to get pipeline #1")
+                        .polygon_mode_line()
+                        .line_width(line_width)
+                    )
+                },
+                PolygoneMode::Point => {
+                    Some(
+                        cull_pipeline
+                        .take()
+                        .expect("failed to get pipeline #1")
+                        .polygon_mode_point()
+                    )
+                }
+            }
+        };
+
+        //Setup depth and stencil properties
+        let mut depth_stencil_pipeline = {
+            match pipeline_configuration.depth_stencil{
+                DepthStencilConfig::SimpleDepthNoStencil => {
+                    Some(
+                        poly_mode_pipeline
+                        .take()
+                        .expect("failed to get pipeline #1")
+                        .depth_stencil_simple_depth()
+                    )
+                },
+                DepthStencilConfig::NoDepthNoStencil => {
+                    Some(
+                        poly_mode_pipeline
+                        .take()
+                        .expect("failed to get pipeline #1")
+                        .depth_stencil_disabled()
+                    )
+                },
+                DepthStencilConfig::CustomDepthAndStencil(config) => {
+                    Some(
+                        poly_mode_pipeline
+                        .take()
+                        .expect("failed to get pipeline #1")
+                        .depth_stencil(config)
+                    )
+                },
+            }
+        };
+
+        //Setup the blending operation
+        let mut blending_pipeline = {
+
+            let mut tmp_bl_pipe = {
+                match pipeline_configuration.blending_operation{
+                    BlendTypes::BlendCollective(attachment) => {
+                        depth_stencil_pipeline
+                        .take()
+                        .expect("failed to get pipeline #1")
+                        .blend_collective(attachment)
                     },
+                    BlendTypes::BlendPassThrough => {
+                        depth_stencil_pipeline
+                        .take()
+                        .expect("failed to get pipeline #1")
+                        .blend_pass_through()
+                    },
+                    BlendTypes::BlendAlphaBlending => {
+                        depth_stencil_pipeline
+                        .take()
+                        .expect("failed to get pipeline #1")
+                        .blend_alpha_blending()
+                    }
+                    BlendTypes::BlendLogicOp(op) => {
+                        depth_stencil_pipeline
+                        .take()
+                        .expect("failed to get pipeline #1")
+                        .blend_logic_op(op)
+                    }
                 }
             };
 
+            //have a look if we have to diable the blend op and if we have to set the blend const
+            if pipeline_configuration.disabled_logic_op{
+                tmp_bl_pipe = tmp_bl_pipe.blend_logic_op_disabled();
+            }
 
+            match pipeline_configuration.blending_constant{
+                Some(b_const) => {
+                    tmp_bl_pipe = tmp_bl_pipe.blend_constants(b_const)
+                },
+                None => {}, //don't change
+            }
+
+            //now return the Option
+            Some(tmp_bl_pipe)
         };
-        */
+
+        //nearly done :)
+        //setup renderpass from the stored renderpass and the id
+        let mut renderpass_pipeline = {
+            Some(
+                blending_pipeline
+                .take()
+                .expect("failed to get pipeline #1")
+                .render_pass(
+                    vulkano::framebuffer::Subpass::from(
+                        render_pass, //extracted this one at the top of this function //TODO after deleting the old approach this can move here
+                        pipeline_configuration.sub_pass_id
+                    )
+                    .expect("failed to set supass for renderpass ")
+                )
+            )
+        };
 
 
+        //Set vertex_shader, fragment shader, geometry shader and tesselation shader at once
+        //and build the pipeline to an Arc<GraphicsPipelineAbstract> for easy storage
+        let (final_pipeline, pipeline_inputs) = {
+            //sort the shaders and return generated Arc<GraphicsPipelineAbstract>
+            match shader{
+                shader_impls::JakarShaders::PbrOpaque((vs, fs, inputs)) => {
+
+                    //take the current pipeline builder
+                    let pipeline = renderpass_pipeline
+                    .take()
+                    .expect("failed to get pipeline #1")
+                    //now add the vertex and fragment shader, then return the new created pipeline and the inputs
+                    .vertex_shader(vs.main_entry_point(), ())
+                    .fragment_shader(fs.main_entry_point(), ())
+                    //now build
+                    .build(device)
+                    .expect("failed to build pipeline for PBR-Opaque shader set!");
+
+                    //Finally put this in an arc and return along the inputs
+                    (Arc::new(pipeline), inputs)
+                },
+                shader_impls::JakarShaders::Wireframe((vs, fs, inputs)) => {
+                    //take the current pipeline builder
+                    let mut pipeline = renderpass_pipeline
+                    .take()
+                    .expect("failed to get pipeline #1")
+                    //now add the vertex and fragment shader, then return the new created pipeline and the inputs
+                    .vertex_shader(vs.main_entry_point(), ())
+                    .fragment_shader(fs.main_entry_point(), ())
+                    //now build
+                    .build(device)
+                    .expect("failed to build pipeline for PBR-Opaque shader set!");
+
+                    //Finally put this in an arc and return along the inputs
+                    (Arc::new(pipeline), inputs)
+                },
+            }
+        };
+
+
+        /*
         let tmp_pipeline: Arc<pipeline::GraphicsPipelineAbstract + Send + Sync> = Arc::new(vulkano::pipeline::GraphicsPipeline::start()
             .vertex_input(vertex_buffer_definition)
             .vertex_shader(vs.main_entry_point(), ())
@@ -543,11 +736,11 @@ impl Pipeline{
             .render_pass(vulkano::framebuffer::Subpass::from(render_pass, 0).expect("failed to set render pass at pipe 01!"))
             .build(device.clone())
             .expect("failed to make pipe 01!"));
-
+        */
         //Create the Struct
         Pipeline{
-            pipeline: tmp_pipeline,
-            inputs: shader_inputs
+            pipeline: final_pipeline,
+            inputs: pipeline_inputs
         }
     }
 

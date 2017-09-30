@@ -16,8 +16,6 @@ pub mod wireframe_vertex;
 pub mod wireframe_fragment;
 
 
-use vulkano::pipeline::shader::GraphicsEntryPointAbstract;
-
 ///Defines some properties of an shader which are used at pipeline creation time to
 ///define the pipeline corectly.
 pub struct Shader<V, F, G, TC, TE> {
@@ -31,15 +29,6 @@ pub struct Shader<V, F, G, TC, TE> {
     pub tesselation: Option<(TC,TE)>,
 }
 
-///Defines all possible shader constructs which are supported by the engine
-#[derive(Copy, Clone)]
-pub enum ShaderSetTypes {
-    VertFrag,
-    VertFragGeo,
-    VertFragGeoTess,
-    VertFragTess,
-}
-
 ///Holds a list of all available shader types which can be loaded
 pub enum JakarShaders {
     ///Defines the default opaque shader (3 dummys)
@@ -48,7 +37,6 @@ pub enum JakarShaders {
             pbr_vertex::Shader,
             pbr_fragment::Shader,
             render::pipeline::PipelineInput,
-            ShaderSetTypes
         )
     ),
     ///Defines the default Wireframe shader (3 dummys)
@@ -57,7 +45,6 @@ pub enum JakarShaders {
             wireframe_vertex::Shader,
             wireframe_fragment::Shader,
             render::pipeline::PipelineInput,
-            ShaderSetTypes
         )
     ),
 }
@@ -84,18 +71,15 @@ pub fn load_shader(device: Arc<vulkano::device::Device>, shader_type: ShaderType
 
             //Create needed inputs
             let inputs = render::pipeline::PipelineInput::new_all();
-            //Sets which sets are used for the shader
-            let sets = ShaderSetTypes::VertFrag;
             //now return them
-            JakarShaders::PbrOpaque((vs, fs, inputs, sets))
+            JakarShaders::PbrOpaque((vs, fs, inputs))
         }
         Wireframe => {
             let vs = wireframe_vertex::Shader::load(device.clone()).expect("failed to load vertex pbr shader");
             let fs = wireframe_fragment::Shader::load(device).expect("failed to load fragment pbr shader");
             let inputs = render::pipeline::PipelineInput::with_none();
-            let sets = ShaderSetTypes::VertFrag;
 
-            JakarShaders::Wireframe((vs, fs, inputs, sets))
+            JakarShaders::Wireframe((vs, fs, inputs))
         }
     }
 }
