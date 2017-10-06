@@ -1,4 +1,4 @@
 #[derive(VulkanoShader)]
 #[ty = "fragment"]
-#[path = "data/shader/wireframe_simple.fs"]
+#[path = "data/shader/default_data.glsl"]
 struct Dummy;
