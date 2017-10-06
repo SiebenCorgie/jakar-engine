@@ -1,4 +1,7 @@
-//TEXTURE_USAGE
+#version 450
+
+
+//PBR_TEXTURE_USAGE
 //Texture usage infos (!= 1 is "not used" for now)
 layout(set = 2, binding = 0) uniform TextureUsageInfo {
   uint b_albedo;
@@ -8,3 +11,6 @@ layout(set = 2, binding = 0) uniform TextureUsageInfo {
   uint b_occlusion;
   uint b_emissive;
 } u_tex_usage_info;
+
+
+void main(){}

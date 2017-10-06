@@ -15,23 +15,29 @@ pub mod wireframe_vertex;
 ///A wireframe shader for debuging
 pub mod wireframe_fragment;
 
+///Defines the default data struct for an shader containing:
+/// - Camera Position (vec3)
+/// - Model Transform (mat4)
+/// - View Matrix (mat4)
+/// - Projection Matrix (mat4)
+pub mod default_data;
 
-///Defines some properties of an shader which are used at pipeline creation time to
-///define the pipeline corectly.
-pub struct Shader<V, F, G, TC, TE> {
-    ///holds the vertex shader (always needed).
-    pub vertex: V,
-    ///holds the fragment shader (always needed).
-    pub framgent: F,
-    ///Can hold a geometry shader if provided
-    pub geometry: Option<G>,
-    ///Can hold an tesselation control and evaluation shader
-    pub tesselation: Option<(TC,TE)>,
-}
+///Defines light types
+pub mod lights;
+
+///Defines the PBR Texture Factors
+pub mod pbr_texture_factors;
+
+///Defines the usage flags used to determin where to use textures as color base and where to use the linear factors.
+pub mod pbr_texture_usage;
+
+///Defines the texture sets usable in a pbr material
+pub mod pbr_texture_sets;
+
 
 ///Holds a list of all available shader types which can be loaded
 pub enum JakarShaders {
-    ///Defines the default opaque shader (3 dummys)
+    ///Defines the default opaque shader
     PbrOpaque(
         (
             pbr_vertex::Shader,
@@ -39,7 +45,7 @@ pub enum JakarShaders {
             render::pipeline::PipelineInput,
         )
     ),
-    ///Defines the default Wireframe shader (3 dummys)
+    ///Defines the default Wireframe shader
     Wireframe(
         (
             wireframe_vertex::Shader,

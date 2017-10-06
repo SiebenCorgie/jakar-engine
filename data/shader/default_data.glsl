@@ -1,3 +1,4 @@
+#version 450
 
 
 //Global uniforms describing
@@ -11,3 +12,6 @@ layout(set = 0, binding = 0) uniform Data {
   mat4 view;
   mat4 proj;
 } u_main;
+
+
+void main(){}

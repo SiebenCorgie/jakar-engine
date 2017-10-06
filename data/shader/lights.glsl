@@ -1,3 +1,6 @@
+#version 450
+
+
 //contains all light definitions
 
 //General definition (might be moved to specialisation constants later)
@@ -52,3 +55,5 @@ layout(set = 3, binding = 3) uniform LightCount{
   uint directionals;
   uint spots;
 }u_light_count;
+
+void main(){}
