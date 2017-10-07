@@ -5,8 +5,6 @@ use render::window;
 use core::engine_settings;
 use input::KeyMap;
 
-use rt_error;
-
 use vulkano;
 use vulkano::framebuffer::FramebufferAbstract;
 use vulkano::framebuffer::RenderPassAbstract;
@@ -20,9 +18,8 @@ use vulkano::pipeline::GraphicsPipelineAbstract;
 
 use winit;
 
-use std::thread;
 use std::sync::{Arc,Mutex};
-use std::time::{Duration,Instant};
+use std::time::{Instant};
 use std::mem;
 
 ///An enum describing states of the renderer

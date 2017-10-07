@@ -207,10 +207,10 @@ impl Camera for DefaultCamera{
             if key_map_inst.d == true {
                 self.position += self.right * camera_speed;
             }
-            if (key_map_inst.q == true) {
+            if key_map_inst.q == true {
                 self.position = self.position - Vector3::new(0.0, camera_speed, 0.0);
             }
-            if (key_map_inst.e == true) {
+            if key_map_inst.e == true {
                 self.position = self.position + Vector3::new(0.0, camera_speed, 0.0);
             }
         }

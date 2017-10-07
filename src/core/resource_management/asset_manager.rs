@@ -1,15 +1,12 @@
 use std::sync::{Mutex, Arc, MutexGuard};
 use std::thread;
-use time;
 
 use core::simple_scene_system::node;
 use core::resource_management::texture_manager;
 use core::resource_management::material_manager;
-use core::resources::light;
 use core::resources::mesh;
 use core::resource_management::mesh_manager;
 //use tools::assimp_importer;
-use tools::Importer;
 use tools::gltf_importer;
 use core::resource_management::scene_manager;
 use core::resources::camera::Camera;
@@ -20,12 +17,10 @@ use core::resources::material;
 
 use rt_error;
 
-use render::renderer;
 use render::uniform_manager;
-use render::pipeline;
 use render::pipeline_manager;
-use render::shader_impls::pbr_vertex;
-use render::shader_impls::pbr_fragment;
+use render::shader_impls::default_data;
+use render::shader_impls::lights;
 
 use input::KeyMap;
 
@@ -102,6 +97,7 @@ impl AssetManager {
             fallback_phy,
             none_texture,
         );
+        
         let new_scene_manager = Arc::new(Mutex::new(scene_manager::SceneManager::new()));
 
         AssetManager{
@@ -132,7 +128,7 @@ impl AssetManager {
         let mat_4: Matrix4<f32> = Matrix4::identity();
 
 
-        let uniform_data = pbr_fragment::ty::Data {
+        let uniform_data = default_data::ty::Data {
             //Updating camera from camera transform
             camera_position: self.camera.position.clone().into(),
             _dummy0: [0; 4],
@@ -160,7 +156,7 @@ impl AssetManager {
                 return_vec.push(light.as_shader_info());
             }
 
-            let empty_light = pbr_fragment::ty::PointLight{
+            let empty_light = lights::ty::PointLight{
                 color: [0.0; 3],
                 location: [0.0; 3],
                 intensity: 0.0,
@@ -178,7 +174,7 @@ impl AssetManager {
             }
 
 
-            pbr_fragment::ty::point_lights{
+            lights::ty::point_lights{
                 p_light: add_array,
             }
 
@@ -195,7 +191,7 @@ impl AssetManager {
                 return_vec.push(light.as_shader_info());
             }
 
-            let empty_light = pbr_fragment::ty::DirectionalLight{
+            let empty_light = lights::ty::DirectionalLight{
                 color: [0.0; 3],
                 direction: [1.0; 3],
                 location: [0.0; 3],
@@ -214,7 +210,7 @@ impl AssetManager {
                 c_dir += 1;
             }
 
-            pbr_fragment::ty::directional_lights{
+            lights::ty::directional_lights{
                 d_light: add_array,
             }
         };
@@ -230,7 +226,7 @@ impl AssetManager {
                 return_vec.push(light.as_shader_info());
             }
 
-            let empty_light = pbr_fragment::ty::SpotLight{
+            let empty_light = lights::ty::SpotLight{
                 color: [0.0; 3],
                 direction: [1.0; 3],
                 location: [0.0; 3],
@@ -253,7 +249,7 @@ impl AssetManager {
                 c_spot +=1;
             }
 
-            pbr_fragment::ty::spot_lights{
+            lights::ty::spot_lights{
                 s_light: add_array,
             }
         };

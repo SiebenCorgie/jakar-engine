@@ -1,9 +1,6 @@
 use std::sync::{Mutex,Arc};
 use std::collections::BTreeMap;
 use core::resources::material;
-use render;
-use render::renderer;
-use render::pipeline;
 use render::uniform_manager;
 use core::engine_settings;
 use render::pipeline_manager;
@@ -105,7 +102,7 @@ impl MaterialManager {
 
     ///Returns a metarial-option with this name
     pub fn get_material_by_name(&mut self, name: &str)-> Option<Arc<Mutex<material::Material>>>{
-        let mut getter = self.material_vault.get(&String::from(name.clone()));
+        let getter = self.material_vault.get(&String::from(name.clone()));
         match getter{
             Some(material) => return Some(material.clone()),
             None => {
@@ -113,7 +110,7 @@ impl MaterialManager {
                 return None
             }
         }
-        None
+
     }
 
     ///Returns a material with this name, or the fallback if it not exists
@@ -159,7 +156,7 @@ impl MaterialManager {
     ///A debuging fuction to see all materials
     pub fn print_all_materials(&mut self){
         println!("All Materials:", );
-        for (k,i) in self.material_vault.iter(){
+        for (k,_) in self.material_vault.iter(){
             println!("\t{}", k.clone());
         }
     }

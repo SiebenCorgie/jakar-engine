@@ -1,7 +1,7 @@
 use vulkano;
 use std::sync::Arc;
 
-use render;
+use render::pipeline_builder;
 
 ///The normal PBR vertex shader
 pub mod pbr_vertex;
@@ -42,7 +42,7 @@ pub enum JakarShaders {
         (
             pbr_vertex::Shader,
             pbr_fragment::Shader,
-            render::pipeline::PipelineInput,
+            pipeline_builder::PipelineInput,
         )
     ),
     ///Defines the default Wireframe shader
@@ -50,7 +50,7 @@ pub enum JakarShaders {
         (
             wireframe_vertex::Shader,
             wireframe_fragment::Shader,
-            render::pipeline::PipelineInput,
+            pipeline_builder::PipelineInput,
         )
     ),
 }
@@ -76,14 +76,14 @@ pub fn load_shader(device: Arc<vulkano::device::Device>, shader_type: ShaderType
             let fs = pbr_fragment::Shader::load(device).expect("failed to load fragment pbr shader");
 
             //Create needed inputs
-            let inputs = render::pipeline::PipelineInput::new_all();
+            let inputs = pipeline_builder::PipelineInput::new_all();
             //now return them
             JakarShaders::PbrOpaque((vs, fs, inputs))
         }
         Wireframe => {
             let vs = wireframe_vertex::Shader::load(device.clone()).expect("failed to load vertex pbr shader");
             let fs = wireframe_fragment::Shader::load(device).expect("failed to load fragment pbr shader");
-            let inputs = render::pipeline::PipelineInput::with_none();
+            let inputs = pipeline_builder::PipelineInput::with_none();
 
             JakarShaders::Wireframe((vs, fs, inputs))
         }

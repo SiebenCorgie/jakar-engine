@@ -3,15 +3,11 @@ use cgmath::*;
 use collision;
 
 
-use render::shader_impls::pbr_vertex;
-use render::shader_impls::pbr_fragment;
+use render::shader_impls::lights;
 use core::ReturnBoundInfo;
-use core::simple_scene_system::node;
 
-use std::sync::{Arc,Mutex};
+//use std::sync::{Arc,Mutex};
 use std::f64::consts;
-
-use core::resources;
 
 ///A Generic Point Light
 #[derive(Clone)]
@@ -78,12 +74,12 @@ impl LightPoint{
         }
     }
     ///Returns this lught as its shader-useable instance
-    pub fn as_shader_info(&self) -> pbr_fragment::ty::PointLight{
+    pub fn as_shader_info(&self) -> lights::ty::PointLight{
         //convert to a Vec4 for 128 bit padding in the shader
         let color_type: [f32; 3] = self.color.into();
         let location_type: [f32; 3] = self.location.into();
         //Return a native vulkano struct
-        pbr_fragment::ty::PointLight{
+        lights::ty::PointLight{
             color: color_type,
             location: location_type,
             intensity: self.intensity,
@@ -209,14 +205,14 @@ impl LightDirectional{
     }
 
     ///Returns this lught as its shader-useable instance
-    pub fn as_shader_info(&self) -> pbr_fragment::ty::DirectionalLight{
+    pub fn as_shader_info(&self) -> lights::ty::DirectionalLight{
 
         let tmp_color: [f32;3] = self.color.into();
         let tmp_direction: [f32;3] = self.direction.into();
         let location_type: [f32; 3] = self.location.into();
 
         //Return a native vulkano struct
-        pbr_fragment::ty::DirectionalLight{
+        lights::ty::DirectionalLight{
             color: tmp_color,
             direction: tmp_direction,
             location: location_type,
@@ -358,13 +354,13 @@ impl LightSpot{
     }
 
     ///Returns this lught as its shader-useable instance
-    pub fn as_shader_info(&self) -> pbr_fragment::ty::SpotLight{
+    pub fn as_shader_info(&self) -> lights::ty::SpotLight{
 
         let tmp_color: [f32;3] = self.color.into();
         let tmp_direction: [f32;3] = self.direction.into();
         let location_type: [f32; 3] = self.location.into();
 
-        pbr_fragment::ty::SpotLight{
+        lights::ty::SpotLight{
             color: tmp_color,
             direction: tmp_direction,
             location: location_type,

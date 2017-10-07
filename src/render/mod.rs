@@ -5,6 +5,8 @@ pub mod renderer;
 pub mod pipeline_manager;
 ///Defines the pipeline an renderable object can have, must be stored in the pipeline_manager
 pub mod pipeline;
+///Describes some comfort types to create a pipeline
+pub mod pipeline_builder;
 ///Handles a window which was created for the renderer
 pub mod window;
 ///manages all universal accesible uniforms, like lights and world info

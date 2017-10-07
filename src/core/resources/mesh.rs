@@ -1,5 +1,5 @@
 //TODO Add command buffer creation per mesh
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc};
 use cgmath::*;
 use collision;
 

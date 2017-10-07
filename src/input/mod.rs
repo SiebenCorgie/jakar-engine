@@ -2,8 +2,6 @@ use std::sync::{Mutex, Arc};
 use std::thread;
 use std::time::Duration;
 
-use vulkano_win;
-use vulkano_win::VkSurfaceBuild;
 use winit;
 
 use core::engine_settings;

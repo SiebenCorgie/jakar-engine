@@ -2,7 +2,6 @@
 use std::sync::{Arc, Mutex};
 
 use cgmath;
-use cgmath::Transform;
 use cgmath::*;
 use collision::*;
 //use core::AABB3Intersection;

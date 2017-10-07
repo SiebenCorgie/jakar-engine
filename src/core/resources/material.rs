@@ -1,6 +1,5 @@
 use render::uniform_manager;
 use core::resources::texture;
-use core::resources::mesh;
 use render::shader_impls::pbr_fragment;
 
 use vulkano::descriptor::descriptor_set::PersistentDescriptorSet;

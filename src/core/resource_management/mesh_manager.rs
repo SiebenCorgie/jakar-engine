@@ -1,14 +1,12 @@
 
 use core::resources::mesh;
 use core::simple_scene_system::node;
-use tools::Importer;
 //use tools::assimp_importer;
 
 use vulkano;
 
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
-use std::thread;
 
 ///The structure containing all meshes and created scenes
 pub struct MeshManager {

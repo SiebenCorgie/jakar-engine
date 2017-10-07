@@ -2,14 +2,12 @@ use std::collections::BTreeMap;
 
 use rt_error;
 use render::pipeline;
+use render::pipeline_builder;
 
 use std::sync::Arc;
 
 use vulkano;
 use vulkano::pipeline::GraphicsPipelineAbstract;
-
-use render::shader_impls;
-
 
 ///Manages all available pipeline
 pub struct PipelineManager {
@@ -28,7 +26,7 @@ impl PipelineManager{
         //Creates a default pipeline from a default shader
 
         //the default inputs (all for the best visual graphics)
-        let default_pipeline = pipeline::PipelineConfig::default(renderpass.clone());
+        let default_pipeline = pipeline_builder::PipelineConfig::default(renderpass.clone());
 
         let default_pipeline = pipeline::Pipeline::new(device, default_pipeline);
         b_tree_map.insert(String::from("DefaultPipeline"), default_pipeline);
@@ -73,7 +71,7 @@ impl PipelineManager{
         renderpass: Arc<vulkano::framebuffer::RenderPassAbstract + Send + Sync>,
     )
     {
-        let pipeline_config = pipeline::PipelineConfig::default(renderpass);
+        let pipeline_config = pipeline_builder::PipelineConfig::default(renderpass);
 
         let tmp_pipeline = pipeline::Pipeline::new(device, pipeline_config);
         self.pipelines.insert(String::from(name), tmp_pipeline);

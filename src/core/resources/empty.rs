@@ -64,7 +64,7 @@ impl ReturnBoundInfo for Empty{
         let b_min = self.bound.min.clone();
         let b_max = self.bound.max.clone();
 
-        ///low
+        //low
         return_vector.push(Vector3::new(b_min[0], b_min[1], b_min[2])); //Low
         return_vector.push(Vector3::new(b_min[0] + b_max[0], b_min[1], b_min[2])); //+x
         return_vector.push(Vector3::new(b_min[0], b_min[1] + b_max[1], b_min[2])); //+y

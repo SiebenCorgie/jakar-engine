@@ -9,7 +9,6 @@ use vulkano::device::Queue;
 use vulkano::sampler::Sampler;
 use vulkano::image::Dimensions::Dim2d;
 use vulkano::format::FormatDesc;
-use vulkano::format::AcceptsPixels;
 use vulkano::sync::GpuFuture;
 use vulkano;
 
