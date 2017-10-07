@@ -656,8 +656,10 @@ impl Material {
     #[inline]
     pub fn update(&mut self){
         //println!("STATUS: MATERIAL: In material, updating now", );
-        //The first set is now recreted on request from a transform matrix
-        self.recreate_set_04();
+        //check if this pipeline actually needs light, if not don't do anything
+        if self.pipeline.get_inputs().has_light{
+            self.recreate_set_04();
+        }
         //if needed, update the static sets
     }
 
@@ -725,8 +727,6 @@ impl Material {
                 panic!("failed to allocate new sub buffer!")
             },
         }
-
-
     }
 
     ///Returns a subbuffer from the material_factor_pool to be used with the 3rd set
@@ -747,8 +747,10 @@ impl Material {
     ///global view and projection matrix
     #[inline]
     pub fn get_set_01(&mut self, transform_matrix: Matrix4<f32>) -> Arc<DescriptorSet + Send + Sync>{
-
-        self.recreate_set_01(transform_matrix);
+        //check if we need the data input, if not return the default one, else recreate it with the new data
+        if self.pipeline.get_inputs().data{
+            self.recreate_set_01(transform_matrix);
+        }
         self.set_01.clone()
     }
 
@@ -784,10 +786,61 @@ impl Material {
     }
 
     ///Returns a tubel with descriptor sets needed to feed the pipeline of this material
-    pub fn get_descriptor_sets<T: DescriptorSetsCollection>(&self) {
+    pub fn get_descriptor_sets<T>(&mut self, model_transform: Matrix4<f32>)
+     -> Box<DescriptorSetsCollection>
+    {
         //read the inputs of the pipeline
         let pipeline_inputs = self.pipeline.get_inputs();
+        //We'll store the different sets in options and compose the tubel out of it.
+        //the binding of each set is hard coded at the moment, so the tubel size doesn't matter.
 
+
+        //data set
+        let data_set = {
+            if pipeline_inputs.data{
+                let set = self.get_set_01(model_transform);
+                Some(set)
+            }else{
+                None
+            }
+        };
+
+        //texture set and its info
+        let (texture_set, tex_info_set) = {
+            if pipeline_inputs.has_textures{
+                let tex = self.get_set_02();
+                let info_set = self.get_set_03();
+                (Some(tex), Some(info_set))
+            }else{
+                (None, None)
+            }
+        };
+
+        let light_set = {
+            if pipeline_inputs.has_light{
+                let light_set = self.get_set_04();
+                Some(light_set)
+            }else{
+                None
+            }
+        };
+
+        match (data_set, texture_set, tex_info_set, light_set){
+            (Some(data), Some(tex_set), Some(tex_inf), Some(light_inf)) => {
+                return Box::new((data, tex_set, tex_inf, light_inf))
+            },
+            (Some(data), Some(tex), Some(tex_inf), None) => {
+                return Box::new((data, tex, tex_inf))
+            },
+            (Some(data), None, None, Some(light)) => {
+                return Box::new((data, light))
+            },
+            (Some(data), None, None, None) => {
+                return Box::new(data)
+            }
+
+            _ => panic!("could not find pipeline pattern!"),
+        }
 
     }
 }
