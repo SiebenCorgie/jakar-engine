@@ -23,7 +23,7 @@ pub struct Pipeline {
     inputs: PipelineInput,
 
     //defines several optional descriptor set pools, they depend on the `inputs` parameter
-    
+
 }
 
 impl Pipeline{
@@ -419,6 +419,11 @@ impl Pipeline{
     pub fn get_pipeline_ref(&self) -> Arc<pipeline::GraphicsPipelineAbstract + Send + Sync>
     {
         self.pipeline.clone()
+    }
+
+    ///Returns the inputs needed to feed the pipeline correctly
+    pub fn get_inputs(&self) -> PipelineInput{
+        self.inputs
     }
 
 }

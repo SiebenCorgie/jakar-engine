@@ -11,7 +11,7 @@ use vulkano::pipeline::GraphicsPipelineAbstract;
 
 ///Manages all available pipeline
 pub struct PipelineManager {
-    pipelines: BTreeMap<String, pipeline::Pipeline>,
+    pipelines: BTreeMap<String, Arc<pipeline::Pipeline>>,
 }
 
 impl PipelineManager{
@@ -28,7 +28,10 @@ impl PipelineManager{
         //the default inputs (all for the best visual graphics)
         let default_pipeline = pipeline_builder::PipelineConfig::default(renderpass.clone());
 
-        let default_pipeline = pipeline::Pipeline::new(device, default_pipeline);
+        let default_pipeline = Arc::new(
+            pipeline::Pipeline::new(device, default_pipeline)
+        );
+
         b_tree_map.insert(String::from("DefaultPipeline"), default_pipeline);
 
         PipelineManager{
@@ -46,19 +49,21 @@ impl PipelineManager{
     }
 
     ///Should always return the normal PBR pipeline, if it panics, please file a bug report, this should not happen
-    pub fn get_default_pipeline(&mut self) -> Arc<GraphicsPipelineAbstract + Send + Sync>{
+    pub fn get_default_pipeline(&mut self) -> Arc<pipeline::Pipeline>{
+
         match self.pipelines.get_mut(&String::from("DefaultPipeline")){
-            Some(ref mut pipe) => return pipe.get_pipeline_ref(),
+            Some(pipe) => return pipe.clone(),
+
             None =>rt_error("PIPELINE_MANAGER", "PIPELINE MANAGER: Could not find default pipe this should not happen"),
         }
         panic!("Crash could not get default pipeline!")
     }
 
     ///Returns a pipeline by name, if not existend, returns the default pipeline
-    pub fn get_pipeline_by_name(&mut self, name: &str) -> Arc<GraphicsPipelineAbstract + Send + Sync>{
+    pub fn get_pipeline_by_name(&mut self, name: &str) -> Arc<pipeline::Pipeline>{
         //println!("SEARCHING FOR PIPELINE: {}", name.clone() );
         match self.pipelines.get_mut(&String::from(name)){
-            Some(ref mut pipe) => return pipe.get_pipeline_ref(),
+            Some(ref mut pipe) => return pipe.clone(),
             None => rt_error("PIPELINE_MANAGER","Could not find pipe"),
         }
         self.get_default_pipeline()
@@ -73,7 +78,9 @@ impl PipelineManager{
     {
         let pipeline_config = pipeline_builder::PipelineConfig::default(renderpass);
 
-        let tmp_pipeline = pipeline::Pipeline::new(device, pipeline_config);
+        let tmp_pipeline = Arc::new(
+            pipeline::Pipeline::new(device, pipeline_config)
+        );
         self.pipelines.insert(String::from(name), tmp_pipeline);
     }
 

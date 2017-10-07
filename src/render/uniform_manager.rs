@@ -171,7 +171,7 @@ impl UniformManager{
     }
 
     ///Returns a subbuffer of the u_world item, can be used to create a u_world_set
-    pub fn get_subbuffer_01 (&mut self, transform_matrix: Matrix4<f32>) ->
+    pub fn get_subbuffer_data (&mut self, transform_matrix: Matrix4<f32>) ->
     CpuBufferPoolSubbuffer<default_data::ty::Data, Arc<vulkano::memory::pool::StdMemoryPool>>{
 
         //prepare the Data struct
@@ -189,7 +189,7 @@ impl UniformManager{
     }
 
     ///Returns a subbuffer of the u_point_light
-    pub fn get_subbuffer_02 (&mut self) ->
+    pub fn get_subbuffer_point_lights (&mut self) ->
     CpuBufferPoolSubbuffer<lights::ty::point_lights, Arc<vulkano::memory::pool::StdMemoryPool>>{
 
         match self.buffer_pool_02_point.next(self.u_point_lights.clone()){
@@ -202,7 +202,7 @@ impl UniformManager{
     }
 
     ///Returns a subbuffer of the u_directional_light
-    pub fn get_subbuffer_03 (&mut self) ->
+    pub fn get_subbuffer_directional_lights (&mut self) ->
     CpuBufferPoolSubbuffer<lights::ty::directional_lights, Arc<vulkano::memory::pool::StdMemoryPool>>{
 
         match self.buffer_pool_03_dir.next(self.u_directional_lights.clone()){
@@ -215,7 +215,7 @@ impl UniformManager{
     }
 
     ///Returns a subbuffer of the u_spot_light
-    pub fn get_subbuffer_04 (&mut self) ->
+    pub fn get_subbuffer_spot_lights (&mut self) ->
     CpuBufferPoolSubbuffer<lights::ty::spot_lights, Arc<vulkano::memory::pool::StdMemoryPool>>{
 
         match self.buffer_pool_04_spot.next(self.u_spot_lights.clone()){
@@ -227,8 +227,8 @@ impl UniformManager{
         }
     }
 
-    ///Returns a subbuffer of the u_spot_light
-    pub fn get_subbuffer_05 (&mut self) ->
+    ///Returns a subbuffer of the light counts
+    pub fn get_subbuffer_light_count (&mut self) ->
     CpuBufferPoolSubbuffer<lights::ty::LightCount, Arc<vulkano::memory::pool::StdMemoryPool>>{
 
         match self.buffer_pool_05_count.next(self.u_light_count.clone()){

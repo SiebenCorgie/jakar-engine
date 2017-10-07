@@ -510,7 +510,7 @@ impl Renderer {
                 //We have to create all the types in advance to prevent a lock
                 let pipeline_copy = {
                     //Returning pipeline
-                    (*unlocked_material).get_pipeline()
+                    (*unlocked_material).get_pipeline().get_pipeline_ref()
                 };
 
                 let set_01 = {
@@ -612,6 +612,7 @@ impl Renderer {
         self.queue.clone()
     }
 
+    /*
     ///A helper function which will create a tubel of
     ///(`pipeline_manager`, `uniform_manager`, `device`)
     ///This is needed for the material creation
@@ -635,6 +636,7 @@ impl Renderer {
 
         (pipe, uni_man, device)
     }
+    */
 
     ///Returns an instance of the engine settings
     ///This might be a dublicate, still helpful
