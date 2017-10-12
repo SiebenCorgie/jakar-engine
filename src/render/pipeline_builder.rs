@@ -8,6 +8,7 @@ use std::sync::Arc;
 use render::shader_impls;
 
 ///Descibes all possible scissors / viewport behavoir
+#[derive(PartialEq, Clone)]
 pub enum ViewportScissorsBehavoir {
     ///When used, the scissors will always cover the whole viewport
     DefinedViewport(pipeline::viewport::Viewport),
@@ -24,6 +25,7 @@ pub enum ViewportScissorsBehavoir {
 }
 
 ///Describes the cullmode of this pipeline
+#[derive(PartialEq, Clone)]
 pub enum CullMode {
     /// All faces are drawn
     Disabled,
@@ -36,6 +38,7 @@ pub enum CullMode {
 }
 
 ///Describes how polygones are drawn
+#[derive(PartialEq, Clone)]
 pub enum PolygoneMode {
     /// Polygones are drawn as filled faces (usually used)
     Fill,
@@ -47,6 +50,7 @@ pub enum PolygoneMode {
 }
 
 ///Descibes all possible blend types for a fragment
+#[derive(PartialEq, Clone)]
 pub enum BlendTypes {
     /// Describes every tiny bit about how blending should be done
     BlendCollective(AttachmentBlend),
@@ -59,6 +63,7 @@ pub enum BlendTypes {
 }
 
 ///Describes how the depth and stencil test should be handled
+#[derive(Clone)]
 pub enum DepthStencilConfig {
     /// Only the depth pass will be written and performed.
     /// This setting is a shortcut if you want to: Write Depth, no Stencil and perform the depth

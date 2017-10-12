@@ -66,7 +66,7 @@ fn main() {
 
     */
 
-    engine.get_asset_manager().import_gltf("Grenade", "examples/simple_scene/futuristic_grenade/scene.gltf");
+    engine.get_asset_manager().import_gltf("Tree", "examples/simple_scene/comic_tree/scene.gltf");
 
 
     //SUN========================================================================
@@ -157,17 +157,17 @@ fn main() {
     let mut max_fps = 0.0;
 
     loop {
-        if !adding_status_plane && engine.get_asset_manager().has_scene("Grenade"){
+        if !adding_status_plane && engine.get_asset_manager().has_scene("Tree"){
 
             {
                 let mut a_man = engine.get_asset_manager();
                 let mut s_man = a_man.get_scene_manager();
-                let mut scene = s_man.get_scene("Grenade").unwrap();
+                let mut scene = s_man.get_scene("Tree").unwrap();
                 scene.scale(1.0);
             }
 
-            engine.get_asset_manager().add_scene_to_main_scene("Grenade");
-            println!("Adding Grenade", );
+            engine.get_asset_manager().add_scene_to_main_scene("Tree");
+            println!("Adding Tree", );
             adding_status_plane = true;
         }
 
@@ -205,7 +205,7 @@ fn main() {
             {
                 let mut a_man = engine.get_asset_manager();
                 let s_man = a_man.get_active_scene();
-                let node = s_man.get_node("Grenade");
+                let node = s_man.get_node("Tree");
 
                 //Get the reference in the current active scene
                 match node{
@@ -224,7 +224,7 @@ fn main() {
             {
                 let mut a_man = engine.get_asset_manager();
                 let s_man = a_man.get_active_scene();
-                let node = s_man.get_node("Grenade");
+                let node = s_man.get_node("Tree");
 
                 //Get the reference in the current active scene
                 match node{
@@ -242,7 +242,7 @@ fn main() {
             {
                 let mut a_man = engine.get_asset_manager();
                 let s_man = a_man.get_active_scene();
-                let node = s_man.get_node("Grenade");
+                let node = s_man.get_node("Tree");
 
                 //Get the reference in the current active scene
                 match node{
@@ -258,7 +258,7 @@ fn main() {
             {
                 let mut a_man = engine.get_asset_manager();
                 let s_man = a_man.get_active_scene();
-                let node = s_man.get_node("Grenade");
+                let node = s_man.get_node("Tree");
 
                 //Get the reference in the current active scene
                 match node{
@@ -274,7 +274,7 @@ fn main() {
             {
                 let mut a_man = engine.get_asset_manager();
                 let s_man = a_man.get_active_scene();
-                let node = s_man.get_node("Grenade");
+                let node = s_man.get_node("Tree");
 
                 //Get the reference in the current active scene
                 match node{

@@ -4,8 +4,7 @@ use vulkano::pipeline;
 use std::sync::Arc;
 use core::resources::mesh;
 
-use render::shader_impls::pbr_vertex;
-use render::shader_impls::pbr_fragment;
+
 use render::shader_impls;
 use render::pipeline_builder::*;
 
@@ -18,9 +17,11 @@ pub struct Pipeline {
     ///The main pipeline hold by this struct
     //TODO make this dynamic, or implement a different pipeline struct per type... maybe one graphic, one computing? (<- will do this)
     //TODO change to graphics_pipeline and add a compute_pipeline
-    pipeline: Arc<pipeline::GraphicsPipelineAbstract + Send + Sync>,
-    //defines the inputs this pipeline needs to pass to the shader
-    inputs: PipelineInput,
+    pub pipeline: Arc<pipeline::GraphicsPipelineAbstract + Send + Sync>,
+    ///defines the inputs this pipeline needs to pass to the shader
+    pub inputs: PipelineInput,
+    ///Stores the config this pipeline was created from
+    pub pipeline_config: PipelineConfig,
 
     //defines several optional descriptor set pools, they depend on the `inputs` parameter
 
@@ -50,7 +51,7 @@ impl Pipeline{
         //     - tesselation evaluation shader
         // - shader inputs struct (describes which inputs are needed for this pipeline later)
         // - shader sets (describes which shaders are used for pipeline creation)
-        let (shader, shader_type, shader_inputs) = {
+        let shader = {
             //now return stuff depending on the loaded shader
             match pipeline_configuration.shader_set{
                 shader_impls::ShaderTypes::PbrOpaque => {
@@ -58,40 +59,20 @@ impl Pipeline{
                     //load the shader based on the type the use wants to load
                     let shader = shader_impls::load_shader(device.clone(), shader_impls::ShaderTypes::PbrOpaque);
                     //extract some infos which doesnt need to be stored in an enum for the compiler
-                    let inputs = match shader{
-                        shader_impls::JakarShaders::PbrOpaque((_, _, inputs)) =>{
-                            inputs
-                        },
-                        _ => panic!("could not match shaders for inputs and shader set type"),
-                    };
 
-                    //build the return tubel
-                    (shader, shader_impls::ShaderTypes::PbrOpaque, inputs)
+                    //build the return
+                    shader
                 }
 
                 shader_impls::ShaderTypes::Wireframe => {
                     let shader = shader_impls::load_shader(device.clone(), shader_impls::ShaderTypes::Wireframe);
-                    let inputs = match shader{
-                        shader_impls::JakarShaders::Wireframe((_, _, inputs)) =>{
-                            inputs
-                        },
-                        _ => panic!("could not match shaders for inputs and shader set type"),
-                    };
-                    //build the return tubel
-                    (shader, shader_impls::ShaderTypes::Wireframe, inputs)
+                    //build the return
+                    shader
                 }
             }
         };
 
 
-
-        //Currently using a static shader from /data/test.vs/fs
-        let vs = pbr_vertex::Shader::load(device.clone()).expect("failed to create shader module");
-        let fs = pbr_fragment::Shader::load(device.clone()).expect("failed to create shader module");
-
-
-        //get the renderpass for later
-        let render_pass = pipeline_configuration.render_pass;
 
         //Create a pipeline vertex buffer definition
         let vertex_buffer_definition = vulkano::pipeline::vertex::SingleBufferDefinition::<mesh::Vertex>::new();
@@ -126,52 +107,52 @@ impl Pipeline{
         let mut view_scis_pipeline = {
 
             match pipeline_configuration.viewport_scissors{
-                ViewportScissorsBehavoir::DefinedViewport(viewport)=> {
+                ViewportScissorsBehavoir::DefinedViewport(ref viewport)=> {
                     Some(
                         topology_pipeline
                         .take()
                         .expect("failed to get pipeline #1")
-                        .viewports(vec![viewport])
+                        .viewports(vec![viewport.clone()])
                     )
                 },
-                ViewportScissorsBehavoir::DefinedViewportAndScissors((viewport, scissor))=> {
+                ViewportScissorsBehavoir::DefinedViewportAndScissors((ref viewport, ref scissor))=> {
                     Some(
                         topology_pipeline
                         .take()
                         .expect("failed to get pipeline #1")
-                        .viewports_scissors(vec![(viewport, scissor)])
+                        .viewports_scissors(vec![(viewport.clone(), scissor.clone())])
                     )
                 },
-                ViewportScissorsBehavoir::DynamicViewportFixedScissors(scissors)=> {
+                ViewportScissorsBehavoir::DynamicViewportFixedScissors(ref scissors)=> {
                     Some(
                         topology_pipeline
                         .take()
                         .expect("failed to get pipeline #1")
-                        .viewports_dynamic_scissors_fixed(vec![scissors])
+                        .viewports_dynamic_scissors_fixed(vec![scissors.clone()])
                     )
                 },
-                ViewportScissorsBehavoir::DynamicViewportScissorsIrrelevant(id)=> {
+                ViewportScissorsBehavoir::DynamicViewportScissorsIrrelevant(ref id)=> {
                     Some(
                         topology_pipeline
                         .take()
                         .expect("failed to get pipeline #1")
-                        .viewports_dynamic_scissors_irrelevant(id)
+                        .viewports_dynamic_scissors_irrelevant(id.clone())
                     )
                 },
-                ViewportScissorsBehavoir::FixedViewportDynamicScissors(viewport)=> {
+                ViewportScissorsBehavoir::FixedViewportDynamicScissors(ref viewport)=> {
                     Some(
                         topology_pipeline
                         .take()
                         .expect("failed to get pipeline #1")
-                        .viewports_fixed_scissors_dynamic(vec![viewport])
+                        .viewports_fixed_scissors_dynamic(vec![viewport.clone()])
                     )
                 },
-                ViewportScissorsBehavoir::ViewportScissorsDynamic(id)=> {
+                ViewportScissorsBehavoir::ViewportScissorsDynamic(ref id)=> {
                     Some(
                         topology_pipeline
                         .take()
                         .expect("failed to get pipeline #1")
-                        .viewports_scissors_dynamic(id)
+                        .viewports_scissors_dynamic(id.clone())
                     )
                 },
             }
@@ -291,12 +272,12 @@ impl Pipeline{
                         .depth_stencil_disabled()
                     )
                 },
-                DepthStencilConfig::CustomDepthAndStencil(config) => {
+                DepthStencilConfig::CustomDepthAndStencil(ref config) => {
                     Some(
                         poly_mode_pipeline
                         .take()
                         .expect("failed to get pipeline #1")
-                        .depth_stencil(config)
+                        .depth_stencil(config.clone())
                     )
                 },
             }
@@ -307,11 +288,11 @@ impl Pipeline{
 
             let mut tmp_bl_pipe = {
                 match pipeline_configuration.blending_operation{
-                    BlendTypes::BlendCollective(attachment) => {
+                    BlendTypes::BlendCollective(ref attachment) => {
                         depth_stencil_pipeline
                         .take()
                         .expect("failed to get pipeline #1")
-                        .blend_collective(attachment)
+                        .blend_collective(attachment.clone())
                     },
                     BlendTypes::BlendPassThrough => {
                         depth_stencil_pipeline
@@ -325,11 +306,11 @@ impl Pipeline{
                         .expect("failed to get pipeline #1")
                         .blend_alpha_blending()
                     }
-                    BlendTypes::BlendLogicOp(op) => {
+                    BlendTypes::BlendLogicOp(ref op) => {
                         depth_stencil_pipeline
                         .take()
                         .expect("failed to get pipeline #1")
-                        .blend_logic_op(op)
+                        .blend_logic_op(op.clone())
                     }
                 }
             };
@@ -359,7 +340,7 @@ impl Pipeline{
                 .expect("failed to get pipeline #1")
                 .render_pass(
                     vulkano::framebuffer::Subpass::from(
-                        render_pass, //extracted this one at the top of this function //TODO after deleting the old approach this can move here
+                        pipeline_configuration.render_pass.clone(), //extracted this one at the top of this function //TODO after deleting the old approach this can move here
                         pipeline_configuration.sub_pass_id
                     )
                     .expect("failed to set supass for renderpass ")
@@ -391,7 +372,7 @@ impl Pipeline{
                 },
                 shader_impls::JakarShaders::Wireframe((vs, fs, inputs)) => {
                     //take the current pipeline builder
-                    let mut pipeline = renderpass_pipeline
+                    let pipeline = renderpass_pipeline
                     .take()
                     .expect("failed to get pipeline #1")
                     //now add the vertex and fragment shader, then return the new created pipeline and the inputs
@@ -411,7 +392,8 @@ impl Pipeline{
         //Create the Struct
         Pipeline{
             pipeline: final_pipeline,
-            inputs: pipeline_inputs
+            inputs: pipeline_inputs,
+            pipeline_config: pipeline_configuration
         }
     }
 

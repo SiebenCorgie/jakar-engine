@@ -144,20 +144,17 @@ impl JakarEngine {
         let render_settings = engine_settings.clone();
         let render_thread = thread::spawn(move ||{
             //Now create the renderer
-            println!("Creating renderer", );
 
             //now read the maximum fps the engine should have
             let max_fps = {
                 let settings = render_settings.lock().expect("failed to lock render settings");
                 (*settings).max_fps
             };
-
             //Create a renderer with the input system
             let (render, mut gpu_future) = {
                 let mut input_sys = render_input_system
                 .lock()
                 .expect("failed to lock input system before start");
-
                 let render_build = render::renderer::Renderer::new(
                     (*input_sys).get_events_loop(),
                     render_settings.clone(),
@@ -179,12 +176,10 @@ impl JakarEngine {
             let asset_manager_inst: Arc<Mutex<core::resource_management::asset_manager::AssetManager>> = render_asset_reciver
             .recv()
             .expect("faield to recive asset manager in render thread");
-
             //Set the thread start time
             let mut last_time = Instant::now();
 
             let mut fps_time_start = Instant::now();
-
             //now start the rendering loop
             'render_thread: loop{
                 //lock the renderer and render an image
@@ -203,7 +198,6 @@ impl JakarEngine {
                 };
 
                 gpu_future = (*renderer_lck).render(&mut asset_copy, gpu_future);
-
                 let engine_is_running = {
                     let status = render_engine_status.lock().expect("failed to lock engine status");
                     match *status{
@@ -215,7 +209,6 @@ impl JakarEngine {
 
                 if !engine_is_running{
                     //engine is stoping, ending loop
-                    println!("Ending rendering thread", );
                     //wait a second for the gpu to finish its last work, then clean up the future
                     thread::sleep_ms(60);
                     //end frame on gpu
@@ -230,7 +223,7 @@ impl JakarEngine {
                 let fps_time = fps_time_start.elapsed().subsec_nanos();
 
                 let fps = 1.0/ (fps_time as f32 / 1_000_000_000.0);
-                println!("This Frame: {}", fps);
+                //println!("This Frame: {}", fps);
 
                 fps_time_start = Instant::now();
 
@@ -310,14 +303,13 @@ impl JakarEngine {
 
 
             'asset_loop: loop{
+
                 //now update the asset mananger
                 //in scope, because we want to be able to do other stuff while the thread is waiting
                 {
                     let mut asset_manager_lck = asset_manager.lock().expect("failed to lock asset manager while updating assets");
                     (*asset_manager_lck).update();
                 }
-
-
 
                 //now check for the engine status, if we should end, end the loop and therefore return the thread
                 let engine_is_running = {
@@ -334,14 +326,9 @@ impl JakarEngine {
                     println!("Ending asset thread", );
                     break;
                 }
-
                 //sleep for the rest time to be not too fast
                 last_time = sleep_rest_time(last_time, max_speed);
-
             }
-
-
-
         });
 
         //=========================================================================================

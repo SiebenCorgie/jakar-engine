@@ -25,7 +25,6 @@ impl Window{
         let mut available_monitors = winit::get_available_monitors();
 
         let engine_settings_lck = engine_settings.lock().expect("Failed to lock engine settings");
-
         let mut window_builder = winit::WindowBuilder::new();
 
         //do not specifiy screen dimensions when creating with fullscreen

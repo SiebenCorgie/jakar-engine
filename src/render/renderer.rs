@@ -66,7 +66,6 @@ impl Renderer {
             key_map: Arc<Mutex<KeyMap>>,
         ) -> (Self, Box<GpuFuture>){
         //Init Vulkan
-
         //Check for needed extensions
         let mut extensions = vulkano_win::required_extensions();
         //Add the debug extension
@@ -147,21 +146,22 @@ impl Renderer {
             };
             //println!("STATUS: RENDER: {} {}: {}", msg.layer_prefix, ty, msg.description);
         }).ok();
-
         //Get us a graphics card
         let physical = vulkano::instance::PhysicalDevice::enumerate(&instance)
                                 .next().expect("no device available");
         //println!("STATUS: RENDER: Using device: {} (type: {:?})", physical.name(), physical.ty());
         //copy the events loop for the window creation
-        let events_loop_unlck = events_loop
-        .lock()
-        .expect("Failed to hold lock on events loop");
 
         //and create a window for it
-        let mut window = window::Window::new(
-            &instance.clone(), &*events_loop_unlck, engine_settings.clone()
-        );
-
+        let mut window = {
+            let events_loop_unlck = events_loop
+            .lock()
+            .expect("Failed to hold lock on events loop");
+            println!("locked events loop", );
+            window::Window::new(
+                &instance.clone(), &*events_loop_unlck, engine_settings.clone()
+            )
+        };
         //Create a queue
         let queue = physical.queue_families().find(
             |&q| q.supports_graphics() &&
@@ -427,7 +427,7 @@ impl Renderer {
             None => {},
         }
         */
-        println!("Waiting for last frame", );
+        //println!("Waiting for last frame", );
         local_previous_frame.cleanup_finished();
 
 
@@ -487,7 +487,7 @@ impl Renderer {
                 //get all meshes, later in view frustum based on camera
             //let meshes_in_frustum = asset_manager.get_meshes_in_frustum();
             let meshes_in_frustum = asset_manager.get_all_meshes();
-            println!("Rendering {} meshes", meshes_in_frustum.len());
+            //println!("Rendering {} meshes", meshes_in_frustum.len());
 
             for mesh_transform in meshes_in_frustum.iter(){
 

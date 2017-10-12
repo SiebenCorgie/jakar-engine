@@ -97,7 +97,7 @@ impl AssetManager {
             fallback_phy,
             none_texture,
         );
-        
+
         let new_scene_manager = Arc::new(Mutex::new(scene_manager::SceneManager::new()));
 
         AssetManager{
@@ -126,8 +126,6 @@ impl AssetManager {
         //Debug stuff which will be handled by the application later
         //let rotation = Rotation3::from_axis_angle(&Vector3::unit_z(), time::precise_time_ns() as f32 * 0.000000001);
         let mat_4: Matrix4<f32> = Matrix4::identity();
-
-
         let uniform_data = default_data::ty::Data {
             //Updating camera from camera transform
             camera_position: self.camera.position.clone().into(),

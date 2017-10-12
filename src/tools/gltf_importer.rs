@@ -3,7 +3,8 @@ use core::resources::camera::Camera;
 use core::simple_scene_system::node;
 use core::resource_management::{material_manager, mesh_manager, scene_manager, texture_manager};
 use core;
-
+use render::pipeline_builder;
+use render::pipeline_manager;
 
 use vulkano;
 
@@ -263,27 +264,71 @@ pub fn load_gltf_material(
     //now configure the factors
     .with_factors(texture_factors);
 
+    //To decide the pipeline of this material we need to know which attributes it has, we'll read
+    // blending mode and culling from the material struct of the gltf model as well as the poly
+    // mode from the parent polygone
+    let blending_mode = {
+        match mat.alpha_mode(){
+            gltf::material::AlphaMode::Opaque =>{
+                println!("RENDING PASS THROUGH! ======================================================", );
+                pipeline_builder::BlendTypes::BlendPassThrough
+            },
+            gltf::material::AlphaMode::Mask =>{
+                println!("RENDING ALPHA BLENDING! ======================================================", );
+                pipeline_builder::BlendTypes::BlendAlphaBlending //TODO create a Shader for masking, this will come with the uber shading system
+            },
+            gltf::material::AlphaMode::Blend =>{
+                println!("RENDING ALPHA BLENDING! ======================================================", );
+                pipeline_builder::BlendTypes::BlendAlphaBlending
+            },
+
+        }
+    };
+
+    let cull_mode = {
+        if mat.double_sided(){
+            println!("RENDING DOUBLE SIDED! ======================================================", );
+            pipeline_builder::CullMode::Disabled
+        }else{
+            println!("RENDING SINGLE SIDED! ======================================================", );
+            pipeline_builder::CullMode::Back
+        }
+    };
+
+    //now create the requirements based on it
+    let requirements = pipeline_manager::PipelineRequirements{
+        blend_type: blending_mode,
+        culling: cull_mode,
+    };
 
 
     //Get the incredienses for building a material
     let (pipeline, uniform_manager, device) = {
+        //get the device we are on
+        let device = {
+            let managers_lck = managers.lock().expect("failed to lock managers struct");
+            (*managers_lck).device.clone()
+        };
+
         //get the manager
         let pipeline_manager = {
             let managers_lck = managers.lock().expect("failed to lock managers struct");
             (*managers_lck).pipeline_manager.clone()
         };
 
+        //Get the pipeline based on the needs of this material
         let mut pipeline_manager_lck = pipeline_manager.lock().expect("failed to lock pipe manager");
-        let pipeline = (*pipeline_manager_lck).get_default_pipeline();
+
+        let pipeline = (*pipeline_manager_lck).get_pipeline_by_requirements(
+            requirements, None, device.clone()
+        );
+
+        //currently using the default pipeline always
+        //let pipeline = (*pipeline_manager_lck).get_default_pipeline();
 
         let uniform_manager = {
             let managers_lck = managers.lock().expect("failed to lock managers struct");
             (*managers_lck).uniform_manager.clone()
-        };
-
-        let device = {
-            let managers_lck = managers.lock().expect("failed to lock managers struct");
-            (*managers_lck).device.clone()
         };
 
         (pipeline, uniform_manager, device)

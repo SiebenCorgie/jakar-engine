@@ -73,13 +73,16 @@ impl InputHandler{
             let mut current_keys = KeyMap::new();
 
             loop{
-                //Polling all events TODO make a variable input cap for polling
-                //Copy our selfs a settings instance to change settings which ... changed
-                let mut settings_instance = {
-                    let lck = settings_ins.lock().expect("failed to lock settings in input handler");
+                println!("Input handling", );
 
-                    (*lck).clone()
-                };
+                //Check if the thread should end alread, return
+                {
+                    let mut state_lck = state_instance.lock().expect("failed to lock thread state");
+                    if *state_lck == InputHandlerStates::ShouldEnd{
+                        println!("STATUS: INPUT HANDLER: ending input thread", );
+                        break;
+                    }
+                }
 
                 // And a small flag to prevent to much locking
                 let mut b_engine_settings_changed = false;
@@ -87,19 +90,9 @@ impl InputHandler{
                 //lock the events loop for polling
                 let mut events_loop = (*events_loop_inst).lock().expect("Failed to hold lock on eventsloop");
 
-                //Check if the thread should end alread, return
-                {
-                    let mut state_lck = state_instance.lock().expect("failed to lock thread state");
-                    if *state_lck == InputHandlerStates::ShouldEnd{
-                        //println!("STATUS: INPUT HANDLER: ending input thread", );
-                        break;
-                    }
-                }
-
                 //Kill the axis motion for now
                 current_keys.mouse_delta_x = 0.0;
                 current_keys.mouse_delta_y = 0.0;
-
 
                 //Now do the events polling
                 events_loop.poll_events(|ev| {
@@ -113,7 +106,12 @@ impl InputHandler{
                             match event{
                                 Resized(width , height) =>{
 
-                                    b_engine_settings_changed = true;
+                                    //Copy our selfs a settings instance to change settings which ... changed
+                                    let mut settings_instance = {
+                                        let lck = settings_ins.lock().expect("failed to lock settings in input handler");
+                                        (*lck).clone()
+                                    };
+
                                     settings_instance.set_dimensions(
                                         width.clone() as u32,
                                         height.clone() as u32
@@ -369,18 +367,6 @@ impl InputHandler{
                     .lock()
                     .expect("failed to hold key_map_inst lock while updating key info");
                     (*key_map_unlck) = current_keys;
-                }
-
-                // If some global settings changed, we can push them to the engine_settings instance
-                // of this engine run
-                if b_engine_settings_changed{
-                    //println!("STATUS: INPUT_HANDLER: Settings changed in Input handler", );
-                    let l_settings_ins = settings_ins.clone();
-                    let mut settings_lck = l_settings_ins
-                    .lock()
-                    .expect("failed to lock settings for overwrite");
-
-                    (*settings_lck) = settings_instance;
                 }
 
 
