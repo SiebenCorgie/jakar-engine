@@ -129,6 +129,7 @@ impl JakarEngine {
             //Start the input thread
             (*input_sys).start()
         };
+        println!("Started Input system!", );
 
         //=========================================================================================
 
@@ -180,6 +181,7 @@ impl JakarEngine {
             let mut last_time = Instant::now();
 
             let mut fps_time_start = Instant::now();
+            println!("Started renderer!", );
             //now start the rendering loop
             'render_thread: loop{
                 //lock the renderer and render an image
@@ -301,7 +303,7 @@ impl JakarEngine {
             //create a time stemp which will be used to calculate the waiting time for each tick
             let mut last_time = Instant::now();
 
-
+            println!("Started Asset Manager", );
             'asset_loop: loop{
 
                 //now update the asset mananger
@@ -340,7 +342,7 @@ impl JakarEngine {
         }
 
 
-        //Recive the renderer and asset manager and store them in the struct
+        //Recive asset manager and store them in the struct
         let asset_manager_inst = asset_t_reciver
         .recv()
         .expect("failed to recive asset manager for jakar struct");

@@ -65,6 +65,8 @@ impl Renderer {
             engine_settings: Arc<Mutex<engine_settings::EngineSettings>>,
             key_map: Arc<Mutex<KeyMap>>,
         ) -> (Self, Box<GpuFuture>){
+
+        println!("Starting Vulkan Renderer!", );
         //Init Vulkan
         //Check for needed extensions
         let mut extensions = vulkano_win::required_extensions();
@@ -97,10 +99,12 @@ impl Renderer {
                 engine_version: Some((*engine_settings_lck).engine_version.clone()),
             }
         };
+        println!("Created App Info", );
 
         //Create a vulkan instance from these extensions
         let instance = vulkano::instance::Instance::new(Some(&app_info), &extensions, layers)
         .expect("failed to create instance");
+        println!("Created Instance", );
 
         let engine_settings_wrk = {
             let engine_settings_lck = engine_settings
@@ -146,11 +150,14 @@ impl Renderer {
             };
             //println!("STATUS: RENDER: {} {}: {}", msg.layer_prefix, ty, msg.description);
         }).ok();
+        println!("Setuped Vulkan Error Handling", );
+
         //Get us a graphics card
         let physical = vulkano::instance::PhysicalDevice::enumerate(&instance)
                                 .next().expect("no device available");
         //println!("STATUS: RENDER: Using device: {} (type: {:?})", physical.name(), physical.ty());
         //copy the events loop for the window creation
+        println!("Selected first graphics card", );
 
         //and create a window for it
         let mut window = {
@@ -162,6 +169,8 @@ impl Renderer {
                 &instance.clone(), &*events_loop_unlck, engine_settings.clone()
             )
         };
+        println!("Opened Window", );
+
         //Create a queue
         let queue = physical.queue_families().find(
             |&q| q.supports_graphics() &&

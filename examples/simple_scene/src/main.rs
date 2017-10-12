@@ -66,7 +66,7 @@ fn main() {
 
     */
 
-    engine.get_asset_manager().import_gltf("Tree", "examples/simple_scene/comic_tree/scene.gltf");
+    engine.get_asset_manager().import_gltf("Room", "examples/simple_scene/VanGoghRoom/vanGogh.gltf");
 
 
     //SUN========================================================================
@@ -157,17 +157,17 @@ fn main() {
     let mut max_fps = 0.0;
 
     loop {
-        if !adding_status_plane && engine.get_asset_manager().has_scene("Tree"){
+        if !adding_status_plane && engine.get_asset_manager().has_scene("Room"){
 
             {
                 let mut a_man = engine.get_asset_manager();
                 let mut s_man = a_man.get_scene_manager();
-                let mut scene = s_man.get_scene("Tree").unwrap();
+                let mut scene = s_man.get_scene("Room").unwrap();
                 scene.scale(1.0);
             }
 
-            engine.get_asset_manager().add_scene_to_main_scene("Tree");
-            println!("Adding Tree", );
+            engine.get_asset_manager().add_scene_to_main_scene("Room");
+            println!("Adding Room", );
             adding_status_plane = true;
         }
 
@@ -205,7 +205,7 @@ fn main() {
             {
                 let mut a_man = engine.get_asset_manager();
                 let s_man = a_man.get_active_scene();
-                let node = s_man.get_node("Tree");
+                let node = s_man.get_node("Room");
 
                 //Get the reference in the current active scene
                 match node{
@@ -224,7 +224,7 @@ fn main() {
             {
                 let mut a_man = engine.get_asset_manager();
                 let s_man = a_man.get_active_scene();
-                let node = s_man.get_node("Tree");
+                let node = s_man.get_node("Room");
 
                 //Get the reference in the current active scene
                 match node{
@@ -242,7 +242,7 @@ fn main() {
             {
                 let mut a_man = engine.get_asset_manager();
                 let s_man = a_man.get_active_scene();
-                let node = s_man.get_node("Tree");
+                let node = s_man.get_node("Room");
 
                 //Get the reference in the current active scene
                 match node{
@@ -258,7 +258,7 @@ fn main() {
             {
                 let mut a_man = engine.get_asset_manager();
                 let s_man = a_man.get_active_scene();
-                let node = s_man.get_node("Tree");
+                let node = s_man.get_node("Room");
 
                 //Get the reference in the current active scene
                 match node{
@@ -274,7 +274,7 @@ fn main() {
             {
                 let mut a_man = engine.get_asset_manager();
                 let s_man = a_man.get_active_scene();
-                let node = s_man.get_node("Tree");
+                let node = s_man.get_node("Room");
 
                 //Get the reference in the current active scene
                 match node{
@@ -288,7 +288,7 @@ fn main() {
 
         //engine.get_asset_manager().get_material_manager().print_all_materials();
         //engine.get_asset_manager().get_scene_manager().print_all_scenes();
-        //Prints all materials and the scene tree
+        //Prints all materials and the scene Room
         //engine.get_asset_manager().get_active_scene().print_member(0);
 
         let fps_time = start_time.elapsed().subsec_nanos();
