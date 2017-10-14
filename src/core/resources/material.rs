@@ -27,7 +27,7 @@ pub struct TextureUsageFlags {
 }
 
 impl TextureUsageFlags{
-    ///Creates a new flag info where all textures are used
+    ///Creates a new flag info where all textures are unsed
     pub fn new() -> Self{
         TextureUsageFlags{
             albedo: 0,

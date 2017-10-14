@@ -487,7 +487,7 @@ impl Renderer {
             tmp_cmd_buffer = Some(build_start.begin_render_pass(
                 self.framebuffers[image_num].clone(), false,
                 vec![
-                    [0.01, 0.0, 0.1, 1.0].into(),
+                    [0.1, 0.1, 0.1, 1.0].into(),
                     1f32.into()
                 ]).expect("failed to clear"));
 

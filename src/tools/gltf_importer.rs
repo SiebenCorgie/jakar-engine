@@ -242,6 +242,14 @@ pub fn load_gltf_material(
         .with_factor_emissive(mat.emissive_factor())
     };
 
+    println!("DEBUG: Factors:", );
+    println!("\t Albedo: {:?}", pbr.base_color_factor());
+    println!("\t Normal: {:?}", mat.normal_texture().map_or(1.0, |t| t.scale()));
+    println!("\t Metal: {:?}", pbr.metallic_factor());
+    println!("\t Roughness: {:?}", pbr.roughness_factor());
+    println!("\t Occlusion: {:?}", mat.occlusion_texture().map_or(1.0, |t| t.strength()));
+    println!("\t emmisive: {:?}", mat.emissive_factor());
+
     //get the manager
     let texture_manager = {
         let managers_lck = managers.lock().expect("failed to lock managers struct");
@@ -252,8 +260,9 @@ pub fn load_gltf_material(
         let man_lck = texture_manager.lock().expect("failed to lock material manager");
         (*man_lck).get_none()
     };
+
     //Create a material builder from the info
-    let mut material_builder = material::MaterialBuilder::new(
+    let material_builder = material::MaterialBuilder::new(
         albedo,
         normal,
         metallic_roughness,
@@ -261,6 +270,7 @@ pub fn load_gltf_material(
         emissive,
         fallback_texture,
     )
+
     //now configure the factors
     .with_factors(texture_factors);
 
@@ -323,8 +333,6 @@ pub fn load_gltf_material(
             requirements, None, device.clone()
         );
 
-        //currently using the default pipeline always
-        //let pipeline = (*pipeline_manager_lck).get_default_pipeline();
 
         let uniform_manager = {
             let managers_lck = managers.lock().expect("failed to lock managers struct");

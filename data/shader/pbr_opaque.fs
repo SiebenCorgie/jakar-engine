@@ -328,7 +328,7 @@ void main()
   if (u_tex_usage_info.b_occlusion != 1) {
     ao = u_tex_fac.occlusion_factor;
   }else{
-    ao = texture(t_Occlusion, v_TexCoord).r * u_tex_fac.occlusion_factor;
+    ao = texture(t_Occlusion, v_TexCoord).b * u_tex_fac.occlusion_factor;
   }
 
   //TODO implemetn emmessive
