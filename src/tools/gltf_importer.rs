@@ -557,15 +557,26 @@ pub fn load_gltf_node(
     //get the transform of this node
     let node_transform = {
         let mut new_transform: Decomposed<Vector3<f32>, Quaternion<f32>> = Decomposed::one();
+
+
+
+
         let node_transform = node.transform().decomposed();
+
+        println!("GLTF Node Transfrom:", );
+        println!("\t Translation: {}, {}, {}", node_transform.0[0], node_transform.0[1], node_transform.0[2]);
+        println!("\t Rotation   : {}, {}, {}, {}", node_transform.1[0], node_transform.1[1], node_transform.1[2], node_transform.1[3]);
+        println!("\t Scale      : {}", node_transform.2[0]);
+
         //According to the gltf crate the decomposed is (translation, rotation, scale).
         //translation is the 0th field of decomposed with 3 elements
         let translation = Vector3::new(
             node_transform.0[0], node_transform.0[1], node_transform.0[2]
         );
         //The 1th element is rotation and rotation is in the format of [w,x,y,z]
+        //the rotation in gltf is saved as x,y,z,w while in cgmath its w,x,y,z, therefore we need to change
         let rotation = Quaternion::new(
-            node_transform.1[0], node_transform.1[1], node_transform.1[2], node_transform.1[3]
+            node_transform.1[3], node_transform.1[0], node_transform.1[1], node_transform.1[2]
         );
         //NOTE: Scale is currently only linear in one direction, this might be changed in future to
         //be comformant to the gltf2.0 rules
@@ -573,15 +584,18 @@ pub fn load_gltf_node(
             node_transform.2[0] //is currently only the x value
         };
 
+        println!("Node Transfrom:", );
+        println!("\t Translation: {}, {}, {}", translation.x, translation.y, translation.z);
+        println!("\t Rotation   : {}, {}, {}, {}", rotation.v.x, rotation.v.y, rotation.v.z, rotation.s);
+        println!("\t Scale      : {}", scale);
+
         //update the transform
         new_transform.scale = scale;
         new_transform.disp = translation;
         new_transform.rot = rotation;
         new_transform
+
     };
-    //Setup the nodes transform
-    //TODO might join with parents transform
-    this_node.set_transform_single(node_transform);
 
     //check for a mesh in the node
     match node.mesh(){
@@ -601,11 +615,16 @@ pub fn load_gltf_node(
             //create a node from every mesh and add it to the own Node
             for mesh in primitives{
                 let mesh_node = node::ContentType::Renderable(node::RenderableContent::Mesh(mesh));
+                //apply the transformation of this node
                 this_node.add_child(mesh_node);
             }
         }
         None => {}, //no mesh found for this node
     }
+    //Now apply this nodes transform to it and its meshes (not the child nodes, tejy have their own
+    // transform).
+    this_node.set_transform(node_transform);
+
     //check for Camera
     //TODO
 

@@ -1,8 +1,10 @@
 use render::pipeline_manager;
 use render::uniform_manager;
 use core::resource_management::asset_manager;
+use core::resources::mesh;
 use render::window;
 use core::engine_settings;
+use core::resources::camera::Camera;
 use input::KeyMap;
 
 use vulkano;
@@ -18,9 +20,12 @@ use vulkano::pipeline::GraphicsPipelineAbstract;
 
 use winit;
 
+use cgmath;
+
 use std::sync::{Arc,Mutex};
 use std::time::{Instant};
 use std::mem;
+use std::collections::BTreeMap;
 
 ///An enum describing states of the renderer
 #[derive(Eq, PartialEq)]
@@ -498,7 +503,33 @@ impl Renderer {
             let meshes_in_frustum = asset_manager.get_all_meshes();
             //println!("Rendering {} meshes", meshes_in_frustum.len());
 
-            for mesh_transform in meshes_in_frustum.iter(){
+            //Silly ordering
+            let mut ordered_meshes: BTreeMap<i64, (Arc<Mutex<mesh::Mesh>>, cgmath::Matrix4<f32>)> = BTreeMap::new();
+
+            let camera_location = asset_manager.get_camera().get_position();
+
+            for mesh in meshes_in_frustum.iter(){
+
+                use cgmath::InnerSpace;
+
+                let mesh_location = cgmath::Vector3::new(
+                    mesh.1[3][0], //is the last column of the Matrix4
+                    mesh.1[3][1],
+                    mesh.1[3][2],
+                );
+
+                //get distance between camera and position
+                let distance = mesh_location - camera_location;
+                //now transform to an int and multiply by 10_000 to have some comma for better sorting
+                let i_distance = (distance.magnitude().abs() * 10_000.0) as i64;
+
+                //now add the mesh to the map based on it
+                ordered_meshes.insert(i_distance, mesh.clone());
+
+            }
+            //Silly ordering end ==================================================================
+
+            for (_, mesh_transform) in ordered_meshes.iter().rev(){
 
                 let mesh_lck = mesh_transform.0
                 .lock()
@@ -521,6 +552,9 @@ impl Renderer {
                     //Returning pipeline
                     (*unlocked_material).get_pipeline().get_pipeline_ref()
                 };
+
+                println!("Rendering with transform: {:?}", mesh_transform.1);
+
 
                 let set_01 = {
                     //aquirre the tranform matrix and generate the new set_01

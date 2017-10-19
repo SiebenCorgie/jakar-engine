@@ -289,7 +289,7 @@ fn main() {
         //engine.get_asset_manager().get_material_manager().print_all_materials();
         //engine.get_asset_manager().get_scene_manager().print_all_scenes();
         //Prints all materials and the scene TestScene
-        //engine.get_asset_manager().get_active_scene().print_member(0);
+        engine.get_asset_manager().get_active_scene().print_member(0);
 
         let fps_time = start_time.elapsed().subsec_nanos();
 
@@ -308,5 +308,9 @@ fn main() {
 
 
         start_time = Instant::now();
+        {
+            use std::thread;
+            thread::sleep_ms(100)
+        }
     }
 }

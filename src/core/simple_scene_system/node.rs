@@ -273,6 +273,11 @@ impl GenericNode{
     ///Returns the transform matrix
     #[inline]
     pub fn get_transform_matrix(&self) -> Matrix4<f32>{
+        println!("Reading: ", );
+        println!("\tTranslation: {}, {}, {}", self.transform.disp.x, self.transform.disp.y, self.transform.disp.z);
+
+
+        println!("Got_Transform matrix: {:?}", Matrix4::from(self.transform));
         Matrix4::from(self.transform)
     }
 
@@ -280,6 +285,20 @@ impl GenericNode{
     #[inline]
     pub fn set_transform_single(&mut self, new_transform: Decomposed<Vector3<f32>, Quaternion<f32>>){
         self.transform = new_transform;
+    }
+
+    ///Sets `transform` to the transformation of `self` and its children.
+    /// NOTE: behind the scenes its just the `translate()` `rotate()` and `scale()` function constructed from
+    /// the `transform` fields.
+    pub fn set_transform(&mut self, transform: Decomposed<Vector3<f32>, Quaternion<f32>>){
+        //Apply fieldwise
+        self.transform.disp = transform.disp;
+        self.transform.rot = transform.rot;
+        self.transform.scale = transform.scale;
+        //for all children
+        for (_, child) in self.children.iter_mut(){
+            child.set_transform(transform);
+        }
     }
 
     ///Translates this node by `translation` and all its children
@@ -300,6 +319,12 @@ impl GenericNode{
 
         //Set it for self
         self.translate(difference);
+    }
+
+    ///Set the location for `self`, but not for the children, used many at import time or if you want
+    /// to offset this node relative to its children
+    pub fn offset_location(&mut self, offset: Vector3<f32>){
+        self.transform.disp += offset;
     }
 
     ///Rotates this node and all of its child by `rotation` around `point`
@@ -342,17 +367,33 @@ impl GenericNode{
         for (_, child) in self.children.iter_mut(){
             child.rotate_around_point(rotation, self.transform.disp);
         }
-
     }
 
-    ///Scales this node by `ammount`
+    ///Changes the rotation of `self`. Mostly used at import time, but can also be used if a node needs
+    /// to be rotated without rotating the childs
+    pub fn offset_rotation(&mut self, offset: Vector3<f32>){
+        let q_rotation = Quaternion::from(Euler {
+            x: Deg(offset.x),
+            y: Deg(offset.y),
+            z: Deg(offset.z),
+        });
+
+        self.transform.rot += q_rotation;
+    }
+
+    ///Scales this node by `ammount` as well as its children
     pub fn scale(&mut self, ammount: f32){
         self.transform.scale *= ammount;
 
         for (_, child) in self.children.iter_mut(){
             child.scale(ammount);
         }
+    }
 
+    ///Changes the scale of `self` but not the scale of this nodes children. Is mainly used while
+    /// importing, but can also be used to offset the scale of a node.
+    pub fn offset_scale(&mut self, offset: f32){
+        self.transform.scale += offset;
     }
 
     ///Returns a mesh from childs with this name
