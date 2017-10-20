@@ -46,6 +46,33 @@ pub enum OtherContent {
     Camera(camera::DefaultCamera),
 }
 
+///Flags an node can have
+#[derive(Clone)]
+pub struct NodeFlags {
+    /// Can be turned off to disable shadow casting, usefull for many small objects
+    pub cast_shadow: bool,
+    /// Is used to determin at which point this object is rendered.
+    /// There is the first pass for opaque objects, as wella s msked objects, and the second one for
+    /// transparent ones.
+    pub is_transparent: bool,
+    /// If true the object won't be rendered if the engine is in gmae mode.
+    pub hide_in_game: bool,
+}
+
+impl NodeFlags{
+    ///Creates new flags with:
+    /// - cast_shadows: true
+    /// - is_transparent: false,
+    /// - hide_in_game: false,
+    pub fn new() -> Self{
+        NodeFlags{
+            cast_shadow: true,
+            is_transparent: false,
+            hide_in_game: false,
+        }
+    }
+}
+
 ///Some implementations to make the programmers life easier
 impl ContentType{
     ///Returns the name of this node
@@ -129,7 +156,7 @@ impl ContentType{
 
 ///The normal Node of this Scene Tree
 ///
-/// *Why a BTreeMap and no HashMap?*
+/// **Why a BTreeMap and no HashMap?**
 /// I decided to use a BTreeMap of Structs where the name is in the struct and the tree mainly because of
 /// performance reasons. With small datasets (5-100 entries) the BTreeMap is faster and provides
 /// some comfort (you can store the name as a String as key value). However, if you have bigger
@@ -143,8 +170,6 @@ pub struct GenericNode {
     children: BTreeMap<String, GenericNode>,
     ///There is a difference between a `Node`'s name and its `content` name
     pub name: String,
-    ///And ID which needs to be unique TODO: Implement
-    pub id: u32,
     ///Transform of this node in local space
     pub transform: Decomposed<Vector3<f32>, Quaternion<f32>>,
     ///The bounds of this note, takes the own `content` bound as well as the max and min values of
@@ -153,6 +178,9 @@ pub struct GenericNode {
     ///The content is a contaier from the `ContentTypes` type which can hold any implemented
     ///Enum value
     content: ContentType,
+
+    ///The rendering flags of this objects
+    flags: NodeFlags,
 }
 
 ///Implementation of the Node trait for Generic node
@@ -165,12 +193,12 @@ impl GenericNode{
         GenericNode{
             children: BTreeMap::new(),
             name: String::from(name),
-            id: 1,
             transform: cgmath::Transform::one(),
 
             bound: tmp_bound,
 
             content: ContentType::Other(OtherContent::Empty(empty::Empty::new(name.clone()))),
+            flags: NodeFlags::new(),
         }
     }
 
@@ -184,12 +212,13 @@ impl GenericNode{
         GenericNode{
             children: BTreeMap::new(),
             name: String::from(name),
-            id: 1,
             transform: cgmath::Transform::one(),
 
             bound: bound,
 
             content: content,
+            flags: NodeFlags::new(),
+
         }
     }
 
@@ -214,6 +243,12 @@ impl GenericNode{
         }
         //then self
         drop(self);
+    }
+
+    ///Can be used to set rendering flags of `self`, NOT the children ones. Usally used at import time,
+    /// or when constructing the level.
+    pub fn set_flags(&mut self, new_flags: NodeFlags){
+        self.flags = new_flags;
     }
 
     ///Adds a child node to this node
