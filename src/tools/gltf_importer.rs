@@ -154,14 +154,14 @@ pub fn load_gltf_texture(
     new_texture
 }
 
-///Imports a gltf material, returns the name of the loaded materials
+///Imports a gltf material, returns the loaded material from the manager
 pub fn load_gltf_material(
     mat: &gltf::Material,
     material_name: String,
     buffers: &gltf_importer::Buffers,
     base: &Path,
     managers: &Arc<Mutex<core::resource_management::ManagerAndRenderInfo>>,
-) -> String{
+) -> Arc<Mutex<material::Material>>{
     println!("Loading material with name: {}", material_name.clone());
     //first load the pbr info
     let pbr = mat.pbr_metallic_roughness();
@@ -353,10 +353,14 @@ pub fn load_gltf_material(
     let mut material_manager_lck = material_manager.lock().expect("failed to lock material manager");
     //Add it and return its
     println!("Finished loading material with name: {}", material_name);
-    match (*material_manager_lck).add_material(final_material){
-        Ok(k) => k,
-        Err(e) => e,
-    }
+    let material_in_manager_name = {
+        match (*material_manager_lck).add_material(final_material){
+            Ok(k) => k,
+            Err(e) => e,
+        }
+    };
+
+    (*material_manager_lck).get_material(&material_in_manager_name)
 }
 
 ///Loads gltf primitves in an Vec<mesh::Mesh> and adds them to the managers as well as their textures
@@ -429,7 +433,25 @@ pub fn load_gltf_mesh(
 
             (device, queue)
         };
-        let mut add_mesh = mesh::Mesh::new(&mesh_name, device.clone(), queue.clone());
+
+        //get the fallback material for the mesh creation, if there is another materail set for
+        // this mesh it will be created further down and be set.
+        let fallback_material = {
+            let material_manager = {
+                let manager_lck = managers.lock().expect("failed to lock managers");
+                (*manager_lck).material_manager.clone()
+            };
+
+            let mut material_manager_lck = material_manager.lock().expect("failed to lock material manager");
+            (*material_manager_lck).get_default_material()
+        };
+
+        let mut add_mesh = mesh::Mesh::new(
+            &mesh_name,
+            device.clone(),
+            queue.clone(),
+            fallback_material
+        );
         //create a dummy and fill it
         let mut vertices = Vec::new();
 
@@ -488,37 +510,45 @@ pub fn load_gltf_mesh(
                 //create a material from this name
                 let material_name = String::from(scene_name.clone()) + "_material_" + &material_index.to_string();
                 println!("\tIs non default with name: {}", material_name.clone());
-                let has_material ={
+                //we need to lock the material manager twice seperatly because we otherwise get a memory lock
+                let is_in_manager = {
+                    //first check if there is already a material with this name, if not create one
                     let material_manager = {
                         let managers_lck = managers.lock().expect("failed to lock managers struct");
                         (*managers_lck).material_manager.clone()
                     };
 
                     //It has a material, check if its alread in the material manager by name
-                    let material_manager_lck = material_manager
+                    let mut material_manager_lck = material_manager
                     .lock()
                     .expect("could not look material manager");
+
                     (*material_manager_lck).is_available(&material_name)
                 };
-                //if the material is already there we can change the mesh material to this name
-                //iof not we have to create it first and change then
-                if has_material{
-                    println!("\tThe materal is available", );
-                    add_mesh.set_material(&material_name);
+                //if it has already the material, search for it and set it a s the meshes material
+                // else create a material with this name
+                if is_in_manager {
+                    //lock the material manager
+                    let material_manager = {
+                        let managers_lck = managers.lock().expect("failed to lock managers struct");
+                        (*managers_lck).material_manager.clone()
+                    };
+
+                    let mut material_manager_lck = material_manager
+                    .lock()
+                    .expect("could not look material manager");
+                    //now the the material
+                    add_mesh.set_material((*material_manager_lck).get_material(&material_name));
                 }else{
-                    println!("\tThe material is not available", );
-                    //load the material and save its final name
-                    let material_name_new = load_gltf_material(
+
+                    let new_material = load_gltf_material(
                             &mesh_material,
                             material_name,
                             &buffers,
                             &base,
                             managers,
-                        );
-                    //Damn has no such material will create one
-                    println!("Added material with name: {}", material_name_new);
-                    add_mesh.set_material(&material_name_new);
-                    println!("Set material", );
+                    );
+                    add_mesh.set_material(new_material);
                 }
             }
         }
@@ -614,7 +644,7 @@ pub fn load_gltf_node(
             //TODO
             //create a node from every mesh and add it to the own Node
             for mesh in primitives{
-                let mesh_node = node::ContentType::Renderable(node::RenderableContent::Mesh(mesh));
+                let mesh_node = node::ContentType::Mesh(mesh);
                 //apply the transformation of this node
                 this_node.add_child(mesh_node);
             }

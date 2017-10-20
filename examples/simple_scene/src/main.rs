@@ -76,7 +76,7 @@ fn main() {
     sun.set_color(Vector3::new(1.0, 0.75, 0.75));
     sun.set_intensity(25.0);
 
-    let sun_node = node::ContentType::Light(node::LightsContent::DirectionalLight(sun));
+    let sun_node = node::ContentType::DirectionalLight(sun);
     engine.get_asset_manager().get_active_scene().add_child(sun_node);
     //SUN========================================================================
 

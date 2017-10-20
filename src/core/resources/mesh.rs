@@ -1,5 +1,5 @@
 //TODO Add command buffer creation per mesh
-use std::sync::{Arc};
+use std::sync::{Arc, Mutex};
 use cgmath::*;
 use collision;
 
@@ -7,7 +7,7 @@ use vulkano;
 
 
 use core::ReturnBoundInfo;
-
+use core::resources::material;
 
 ///Defines the information a Vertex should have
 #[derive(Clone,Copy)]
@@ -57,15 +57,19 @@ pub struct Mesh {
 
     indices: Vec<u32>,
 
-    material: String,
+    material: Arc<Mutex<material::Material>>,
 
     bound: collision::Aabb3<f32>,
 }
 
 impl Mesh {
     ///Returns the Member with the passed `name`
-    pub fn new(name: &str, device: Arc<vulkano::device::Device>,
-        queue: Arc<vulkano::device::Queue>)
+    pub fn new(
+        name: &str,
+        device: Arc<vulkano::device::Device>,
+        queue: Arc<vulkano::device::Queue>,
+        material: Arc<Mutex<material::Material>>
+        )
         ->Self{
         //Creating the box extend from the location, there might be a better way
         let min = Point3::new(0.5, 0.5, 0.5);
@@ -87,7 +91,7 @@ impl Mesh {
 
             indices: Vec::new(),
 
-            material: String::from("fallback"),
+            material: material,
 
             bound: collision::Aabb3::new(min, max),
         }
@@ -107,13 +111,21 @@ impl Mesh {
     ///Returns the name of the material this mesh uses
     #[inline]
     pub fn get_material_name(&self) -> String{
+
+        let mat_lck = self.material.lock().expect("failed to lock meshs material");
+        (mat_lck).get_name()
+    }
+
+    ///Returns the material in use by this mesh
+    #[inline]
+    pub fn get_material(&self) -> Arc<Mutex<material::Material>>{
         self.material.clone()
     }
 
-    ///Can be used to set to a new material
+    ///Can be used to set the mesh's material to a new one
     #[inline]
-    pub fn set_material(&mut self, new_mat: &str){
-        self.material = String::from(new_mat);
+    pub fn set_material(&mut self, new_mat: Arc<Mutex<material::Material>>){
+        self.material = new_mat;
     }
 
     ///Returns all indices

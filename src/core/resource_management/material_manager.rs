@@ -94,7 +94,7 @@ impl MaterialManager {
     }
 
     ///Returns the default material of the engine
-    fn get_default_material(&mut self) -> Arc<Mutex<material::Material>>{
+    pub fn get_default_material(&mut self) -> Arc<Mutex<material::Material>>{
         self.material_vault.get(&String::from("fallback"))
         .expect("Could not find fallback material, this shouldn't happen, please report this bug")
         .clone()

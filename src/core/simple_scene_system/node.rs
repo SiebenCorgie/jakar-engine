@@ -15,6 +15,7 @@ use core::resources::light;
 use core::resources::empty;
 use core::resources::camera;
 use core::resources::camera::Camera;
+use render::pipeline_builder;
 
 //used for sorting and searching the children
 use std::collections::BTreeMap;
@@ -23,26 +24,17 @@ use std::collections::BTreeMap;
 ///Changed in order to apply a new type
 #[derive(Clone)]
 pub enum ContentType {
-    Renderable(RenderableContent),
-    Light(LightsContent),
-    Other(OtherContent),
-}
-///All renderable types
-#[derive(Clone)]
-pub enum RenderableContent {
+    /// is a mesh with a vertex buffer as well as a material
     Mesh(Arc<Mutex<mesh::Mesh>>),
-}
-///All lights
-#[derive(Clone)]
-pub enum LightsContent {
+    /// is a light casting a 360° light
     PointLight(light::LightPoint),
+    /// cast light into one direction
     DirectionalLight(light::LightDirectional),
+    /// creates a spot light cone
     SpotLight(light::LightSpot),
-}
-///All Other components
-#[derive(Clone)]
-pub enum OtherContent {
+    /// an empty type, can be used as "folder" in an node hierachy
     Empty(empty::Empty),
+    /// a camera attached to the tree (TODO needs to be implemented correctly)
     Camera(camera::DefaultCamera),
 }
 
@@ -78,78 +70,57 @@ impl ContentType{
     ///Returns the name of this node
     pub fn get_name(&self) -> String{
         match self{
-            &ContentType::Renderable(ref c) =>{
-                match c{
-                    &RenderableContent::Mesh(ref m) => {
-                        let mesh_lock = m.lock().expect("failed to lock mesh");
-                        (*mesh_lock).name.clone()
-                    },
-                }
+            &ContentType::Mesh(ref c) =>{
+                let mesh_lock = c.lock().expect("failed to lock mesh");
+                (*mesh_lock).name.clone()
             },
-            &ContentType::Light(ref c) => {
-                match c {
-                    &LightsContent::PointLight(ref l) => {
-                        l.name.clone()
-                    },
-                    &LightsContent::DirectionalLight(ref l) => {
-                        l.name.clone()
-                    },
-                    &LightsContent::SpotLight(ref l) => {
-                        l.name.clone()
-                    },
-                }
+            &ContentType::PointLight(ref c) => {
+                c.name.clone()
             },
-            &ContentType::Other(ref c) => {
-                match c {
-                    &OtherContent::Empty(ref e) => {
-                        e.name.clone()
-                    },
-                    &OtherContent::Camera(ref c) =>{
-                        //c.name.clone() TODO add a camera name
-                        String::from("CameraName")
-                    }
-                }
-            }
+            &ContentType::DirectionalLight(ref c) => {
+                c.name.clone()
+            },
+            &ContentType::SpotLight(ref c) => {
+                c.name.clone()
+            },
+
+            &ContentType::Empty(ref c) => {
+                c.name.clone()
+            },
+            &ContentType::Camera(ref c) => {
+                //c.name.clone() TODO add a camera name
+                String::from("CameraName")
+            },
         }
     }
 
     ///Returns the bound of this object
     pub fn get_bound(&self) -> Aabb3<f32>{
         match self{
-            &ContentType::Renderable(ref c) =>{
-                match c{
-                    &RenderableContent::Mesh(ref m) => {
-                        let mesh_lock = m.lock().expect("failed to lock mesh");
-                        (*mesh_lock).get_bound()
-                    },
-                }
+            &ContentType::Mesh(ref c) =>{
+                let mesh_lock = c.lock().expect("failed to lock mesh");
+                (*mesh_lock).get_bound()
             },
-            &ContentType::Light(ref c) => {
-                match c {
-                    &LightsContent::PointLight(ref l) => {
-                        l.get_bound()
-                    },
-                    &LightsContent::DirectionalLight(ref l) => {
-                        l.get_bound()
-                    },
-                    &LightsContent::SpotLight(ref l) => {
-                        l.get_bound()
-                    },
-                }
+            &ContentType::PointLight(ref c) => {
+                c.get_bound()
             },
-            &ContentType::Other(ref c) => {
-                match c {
-                    &OtherContent::Empty(ref e) => {
-                        e.get_bound()
-                    },
-                    &OtherContent::Camera(ref c) =>{
-                        Aabb3::new(
-                            Point3::new(-1.0, -1.0, -1.0),
-                            Point3::new(1.0, 1.0, 1.0)
-                        )
-                    }
-                }
-            }
+            &ContentType::DirectionalLight(ref c) => {
+                c.get_bound()
+            },
+            &ContentType::SpotLight(ref c) => {
+                c.get_bound()
+            },
+
+            &ContentType::Empty(ref c) => {
+                c.get_bound()
+            },
+            &ContentType::Camera(ref c) => {
+                //c.name.clone() TODO add a camera name
+                Aabb3::new(
+                    Point3::new(-0.5, -0.5, -0.5),
+                    Point3::new(0.5, 0.5, 0.5)
+                )
+            },
         }
     }
 }
@@ -197,7 +168,7 @@ impl GenericNode{
 
             bound: tmp_bound,
 
-            content: ContentType::Other(OtherContent::Empty(empty::Empty::new(name.clone()))),
+            content: ContentType::Empty(empty::Empty::new(name.clone())),
             flags: NodeFlags::new(),
         }
     }
@@ -206,8 +177,8 @@ impl GenericNode{
     pub fn new(content: ContentType)->Self{
 
         //Create variables needed to fill the final struct but change them depending on the match
-        let mut name = content.get_name();
-        let mut bound = content.get_bound();
+        let name = content.get_name();
+        let bound = content.get_bound();
 
         GenericNode{
             children: BTreeMap::new(),
@@ -251,11 +222,43 @@ impl GenericNode{
         self.flags = new_flags;
     }
 
+    ///Returns the currently used node flags. Can be used to alter them.
+    pub fn get_flags(&mut self) -> &mut NodeFlags{
+        &mut self.flags
+    }
+
     ///Adds a child node to this node
     #[inline]
     pub fn add_child(&mut self, child: ContentType){
+
+        //match the content, if its a mesh, have a look if we need to change the transparency flag
+        let is_transparent = {
+            match child {
+                ContentType::Mesh(ref mesh) =>{
+                    //lock the mesh and have a look at the material properties/the pipeline
+                    let mesh_lck = mesh.lock().expect("failed to lock mesh");
+                    let material = (*mesh_lck).get_material();
+                    let material_lck = material.lock().expect("failed to lock material");
+                    let pipeline = (*material_lck).get_pipeline();
+                    if pipeline.pipeline_config.blending_operation == pipeline_builder::BlendTypes::BlendAlphaBlending{
+                        true
+                    }else{
+                        false
+                    }
+                },
+                //if it's no mesh don't do anything
+                _ => false,
+            }
+        };
+
         //create the new node from the type
-        let tmp_child = GenericNode::new(child);
+        let mut tmp_child = GenericNode::new(child);
+        if is_transparent{
+            tmp_child.get_flags().is_transparent = true;
+        }
+
+
+
         //and add it
         self.children.insert(tmp_child.name.clone(), tmp_child);
     }
@@ -437,7 +440,7 @@ impl GenericNode{
 
         //match self
         match self.content{
-            ContentType::Renderable(RenderableContent::Mesh(ref m)) => {
+            ContentType::Mesh(ref m) => {
                 let mesh_lock = m.lock().expect("failed to lock mesh");
                 if (*mesh_lock).name == String::from(name){
                     result_value = Some(m.clone());
@@ -474,7 +477,7 @@ impl GenericNode{
     pub fn get_light_point(&mut self, name: &str) -> Option<&mut light::LightPoint>{
         let mut result_value: Option<&mut light::LightPoint> = None;
         match self.content{
-            ContentType::Light(LightsContent::PointLight(ref mut sp)) => {
+            ContentType::PointLight(ref mut sp) => {
                 result_value = Some(sp);
             }
             _ => {}, //its not self
@@ -502,7 +505,7 @@ impl GenericNode{
     pub fn get_light_directional(&mut self, name: &str) -> Option<&mut light::LightDirectional>{
         let mut result_value: Option<&mut light::LightDirectional> = None;
         match self.content{
-            ContentType::Light(LightsContent::DirectionalLight(ref mut sp)) => {
+            ContentType::DirectionalLight(ref mut sp) => {
                 result_value = Some(sp);
             }
             _ => {}, //its not self
@@ -530,7 +533,7 @@ impl GenericNode{
     pub fn get_light_spot(&mut self, name: &str) -> Option<&mut light::LightSpot>{
         let mut result_value: Option<&mut light::LightSpot> = None;
         match self.content{
-            ContentType::Light(LightsContent::SpotLight(ref mut sp)) => {
+            ContentType::SpotLight(ref mut sp) => {
                 result_value = Some(sp);
             }
             _ => {}, //its not self
@@ -565,7 +568,7 @@ impl GenericNode{
         //FIXME also add the dynamic meshse
         match self.content{
             //if selfs content is a mesh, check the bound
-            ContentType::Renderable(RenderableContent::Mesh(ref mesh)) => {
+            ContentType::Mesh(ref mesh) => {
                 //check if self is in bound
 
                 let test = {
@@ -607,7 +610,7 @@ impl GenericNode{
         let mut return_vector = Vec::new();
         match self.content{
             //if selfs content is a mesh, check the bound
-            ContentType::Renderable(RenderableContent::Mesh(ref mesh)) => {
+            ContentType::Mesh(ref mesh) => {
                 //check if self is in bound
                 let test = {
                     volume.contains(&self.bound)
@@ -644,7 +647,7 @@ impl GenericNode{
         let mut return_vector = Vec::new();
 
         match self.content{
-            ContentType::Renderable(RenderableContent::Mesh(ref mesh)) => {
+            ContentType::Mesh(ref mesh) => {
                 return_vector.push((mesh.clone(), self.get_transform_matrix()));
             },
             _ => {},
@@ -664,7 +667,7 @@ impl GenericNode{
 
         //Check self
         match self.content{
-            ContentType::Light(LightsContent::PointLight(ref pl)) => return_vector.push(pl.clone()),
+            ContentType::PointLight(ref pl) => return_vector.push(pl.clone()),
             _ => {},
         }
 
@@ -681,7 +684,7 @@ impl GenericNode{
 
         //Check self
         match self.content{
-            ContentType::Light(LightsContent::DirectionalLight(ref pl)) => return_vector.push(pl.clone()),
+            ContentType::DirectionalLight(ref pl) => return_vector.push(pl.clone()),
             _ => {},
         }
 
@@ -698,7 +701,7 @@ impl GenericNode{
         //Check self
         //Check self
         match self.content{
-            ContentType::Light(LightsContent::SpotLight(ref pl)) => return_vector.push(pl.clone()),
+            ContentType::SpotLight(ref pl) => return_vector.push(pl.clone()),
             _ => {},
         }
         for (_, i) in self.children.iter_mut(){
