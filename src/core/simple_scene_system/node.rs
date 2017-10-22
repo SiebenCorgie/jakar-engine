@@ -10,6 +10,7 @@ use core::ReturnBoundInfo;
 
 use rt_error;
 use core;
+use core::simple_scene_system::node_helper;
 use core::resources::mesh;
 use core::resources::light;
 use core::resources::empty;
@@ -39,7 +40,7 @@ pub enum ContentType {
 }
 
 ///Flags an node can have
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct NodeFlags {
     /// Can be turned off to disable shadow casting, usefull for many small objects
     pub cast_shadow: bool,
@@ -64,6 +65,8 @@ impl NodeFlags{
         }
     }
 }
+
+
 
 ///Some implementations to make the programmers life easier
 impl ContentType{
@@ -133,7 +136,7 @@ impl ContentType{
 /// some comfort (you can store the name as a String as key value). However, if you have bigger
 /// datasets (over 1,000,000) the HashMap is faster, as specially in `--release` mode.
 /// However, this should not be relevant to this node tree because it should mostly consist of mid
-// sized BTreeMaps
+/// sized BTreeMaps.
 #[derive(Clone)]
 pub struct GenericNode {
 
@@ -642,21 +645,84 @@ impl GenericNode{
         return_vector
     }
 
-    ///Gets all meshes from this node down
-    pub fn get_all_meshes(&mut self) -> Vec<(Arc<Mutex<mesh::Mesh>>, Matrix4<f32>)>{
+    ///Gets all meshes from this node down, you can provide a set of settings for which can be sorted
+    /// or you provde `None`, then every mesh will be returned.
+    pub fn get_all_meshes(&mut self, mesh_parameter: Option<node_helper::SortAttributes>) -> Vec<(Arc<Mutex<mesh::Mesh>>, Matrix4<f32>)>{
         let mut return_vector = Vec::new();
 
         match self.content{
             ContentType::Mesh(ref mesh) => {
-                return_vector.push((mesh.clone(), self.get_transform_matrix()));
+                //This is a mesh, if needed sort for the parameter
+                match mesh_parameter.clone(){
+                    Some(param) => {
+
+                        //Tets each of the attributes whicuh are needed to comapre and change the
+                        // return flag accordingly
+                        let mut add_child = true;
+
+                        //shadow flag
+                        match param.casts_shadow{
+                            node_helper::AttributeState::Yes =>{
+                                if !self.flags.cast_shadow{
+                                    add_child = false; //should cast shadow, but doesn't
+                                }
+                            },
+                            node_helper::AttributeState::No =>{
+                                if self.flags.cast_shadow{
+                                    add_child = false;
+                                }
+                            },
+                            _ => {} //doenst matter
+                        }
+
+                        //translucency flag
+                        match param.is_translucent{
+                            node_helper::AttributeState::Yes =>{
+                                if !self.flags.is_transparent{
+                                    add_child = false; //should be translucent, but isn't
+                                }
+                            },
+                            node_helper::AttributeState::No =>{
+                                if self.flags.is_transparent{
+                                    add_child = false;
+                                }
+                            },
+                            _ => {} //doenst matter
+                        }
+
+                        //hidden in game
+                        match param.hide_in_game{
+                            node_helper::AttributeState::Yes =>{
+                                if !self.flags.hide_in_game{
+                                    add_child = false; //should be hidden, but isn't
+                                }
+                            },
+                            node_helper::AttributeState::No =>{
+                                if self.flags.hide_in_game{
+                                    add_child = false;
+                                }
+                            },
+                            _ => {} //doenst matter
+                        }
+
+                        if add_child{
+                            return_vector.push((mesh.clone(), self.get_transform_matrix()));
+                        }                        //if one or more values are not right, don't add the child
+
+                    },
+                    None =>{
+                        //No paramter needed, returning mesh
+                        return_vector.push((mesh.clone(), self.get_transform_matrix()));
+                    }
+                }
             },
-            _ => {},
+            _ => {}, //Is no mesh
         }
 
         //println!("Returning tanslation of: {:?}", self.get_transform_matrix());
         //Go down the tree
         for (_, i) in self.children.iter_mut(){
-            return_vector.append(&mut i.get_all_meshes());
+            return_vector.append(&mut i.get_all_meshes(mesh_parameter.clone()));
         }
         return_vector
     }

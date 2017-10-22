@@ -3,8 +3,10 @@ use render::uniform_manager;
 use core::resource_management::asset_manager;
 use core::resources::mesh;
 use render::window;
+use render::render_helper;
 use core::engine_settings;
 use core::resources::camera::Camera;
+use core::simple_scene_system::node_helper;
 use input::KeyMap;
 
 use vulkano;
@@ -425,24 +427,13 @@ impl Renderer {
     pub fn render(
         &mut self,
         asset_manager: &mut asset_manager::AssetManager,
-        previous_frame: Box<GpuFuture>,
+        mut previous_frame: Box<GpuFuture>,
     ) -> Box<GpuFuture>{
 
 
-        let mut local_previous_frame = previous_frame;
-
-        //println!("STATUS: RENDER CORE: Starting render ", );
-        //DEBUG
         let start_time = Instant::now();
-        /*
-        //Clean the last frame for starting a new one
-        match local_previous_frame{
-            Some(mut frame) => frame.cleanup_finished(),
-            None => {},
-        }
-        */
-        //println!("Waiting for last frame", );
-        local_previous_frame.cleanup_finished();
+
+        previous_frame.cleanup_finished();
 
 
         //If found out in last frame that images are out of sync, generate new ones
@@ -450,7 +441,7 @@ impl Renderer {
             if !self.recreate_swapchain(){
                 //If we got the UnsupportedDimensions Error (and therefor returned false)
                 //Abord the frame
-                return local_previous_frame;
+                return previous_frame;
             }
         }
 
@@ -463,32 +454,47 @@ impl Renderer {
             Ok(r) => r,
             Err(_) => {
                 self.recreate_swapchain = true;
-                return local_previous_frame;
+                return previous_frame;
             },
         };
+
+        //get all opaque meshes
+        let opaque_meshes = asset_manager.get_active_scene().get_all_meshes(
+            Some(node_helper::SortAttributes::new().is_not_translucent())
+        );
+        //get all translucent meshes
+        let translucent_meshes = asset_manager.get_active_scene().get_all_meshes(
+            Some(node_helper::SortAttributes::new().is_translucent())
+        );
+        //now start the sorting process on another thread, we recive the sorted
+        // meshes when done with adding the opaque meshes
+        let sorted_translucent_meshes = render_helper::order_by_distance(
+            translucent_meshes, asset_manager.get_camera().clone()
+        );
 
 
         //TODO have to find a nicer way of doing this... later
         let command_buffer = {
 
-
+            //Get the dimensions to fill the dynamic vieport setting per mesh.
             let dimensions = {
                 let engine_settings_lck = self.engine_settings
                 .lock()
-                .expect("Faield to lock settings");
+                .expect("Failed to lock settings");
                 (*engine_settings_lck).get_dimensions()
             };
 
+            //start the command buffer
             let mut tmp_cmd_buffer = Some(
                 vulkano::command_buffer::AutoCommandBufferBuilder::new(
                     self.device.clone(),
                     self.queue.family()).expect("failed to create tmp buffer!")
                 );
-
+            //take the command buffer
             let build_start = tmp_cmd_buffer
             .take()
             .expect("failed to take cmd buffer build for start");
-
+            //return it by adding the begin procedure
             tmp_cmd_buffer = Some(build_start.begin_render_pass(
                 self.framebuffers[image_num].clone(), false,
                 vec![
@@ -496,56 +502,27 @@ impl Renderer {
                     1f32.into()
                 ]).expect("failed to clear"));
 
-            //println!("Trying to get meshes in frustum", );
-            //Draw
-                //get all meshes, later in view frustum based on camera
-            //let meshes_in_frustum = asset_manager.get_meshes_in_frustum();
-            let meshes_in_frustum = asset_manager.get_all_meshes();
-            //println!("Rendering {} meshes", meshes_in_frustum.len());
 
-            //Silly ordering
-            let mut ordered_meshes: BTreeMap<i64, (Arc<Mutex<mesh::Mesh>>, cgmath::Matrix4<f32>)> = BTreeMap::new();
-
-            let camera_location = asset_manager.get_camera().get_position();
-
-            for mesh in meshes_in_frustum.iter(){
-
-                use cgmath::InnerSpace;
-
-                let mesh_location = cgmath::Vector3::new(
-                    mesh.1[3][0], //is the last column of the Matrix4
-                    mesh.1[3][1],
-                    mesh.1[3][2],
-                );
-
-                //get distance between camera and position
-                let distance = mesh_location - camera_location;
-                //now transform to an int and multiply by 10_000 to have some comma for better sorting
-                let i_distance = (distance.magnitude().abs() * 10_000.0) as i64;
-
-                //now add the mesh to the map based on it
-                ordered_meshes.insert(i_distance, mesh.clone());
-
-            }
-            //Silly ordering end ==================================================================
-
-            for (_, mesh_transform) in ordered_meshes.iter().rev(){
-
-                let mesh_lck = mesh_transform.0
+            //now render the opaque meshes
+            for mesh in opaque_meshes.iter(){
+                //get the mesh in the tubel
+                let mesh_lck = mesh.0
                 .lock()
                 .expect("could not lock mesh for building command buffer");
-
+                //take the command buffer
                 let cb = tmp_cmd_buffer
                 .take()
                 .expect("Failed to recive command buffer in loop!");
-
+                //get the material we are using at the moment
                 let material = asset_manager
                 .get_material_manager()
                 .get_material(&(*mesh_lck).get_material_name());
-
+                //lock it to work on it
                 let mut unlocked_material = material
                 .lock()
                 .expect("Failed to lock material");
+
+                //get the pipeline of the material as well as all descriptorsets based on it.
 
                 //We have to create all the types in advance to prevent a lock
                 let pipeline_copy = {
@@ -553,12 +530,9 @@ impl Renderer {
                     (*unlocked_material).get_pipeline().get_pipeline_ref()
                 };
 
-                println!("Rendering with transform: {:?}", mesh_transform.1);
-
-
                 let set_01 = {
                     //aquirre the tranform matrix and generate the new set_01
-                    (*unlocked_material).get_set_01(mesh_transform.1)
+                    (*unlocked_material).get_set_01(mesh.1)
                 };
 
                 let set_02 = {
@@ -573,7 +547,7 @@ impl Renderer {
                     (*unlocked_material).get_set_04()
                 };
                 //println!("STATUS: RENDER CORE: Adding to tmp cmd buffer", );
-
+                //add everything o the command buffer
                 tmp_cmd_buffer = Some(cb
                     .draw_indexed(
                         pipeline_copy,
@@ -601,7 +575,99 @@ impl Renderer {
                     ).expect("Failed to draw in command buffer!")
                 );
             }
-            //End renderpass
+
+            //After rendering the opaque meshes, continue with the translucent ones
+            //first recive them
+            let renderable_translucent_meshes = {
+                match sorted_translucent_meshes.recv(){
+                    Ok(k) => k, //everything went all right while ordering
+                    Err(e) =>{
+                        //something went wrong, but the render doesn't have to panic, we create a
+                        // empty vector and print out the error
+                        println!("Something went wrong while ordering the translucent meshes: {}", e);
+                        Vec::new()
+                    }
+                }
+            };
+
+
+
+            for mesh in renderable_translucent_meshes.iter(){
+                //get the mesh in the tubel
+                let mesh_lck = mesh.0
+                .lock()
+                .expect("could not lock mesh for building command buffer");
+                //take the command buffer
+                let cb = tmp_cmd_buffer
+                .take()
+                .expect("Failed to recive command buffer in loop!");
+                //get the material we are using at the moment
+                let material = asset_manager
+                .get_material_manager()
+                .get_material(&(*mesh_lck).get_material_name());
+                //lock it to work on it
+                let mut unlocked_material = material
+                .lock()
+                .expect("Failed to lock material");
+
+                //get the pipeline of the material as well as all descriptorsets based on it.
+
+                //We have to create all the types in advance to prevent a lock
+                let pipeline_copy = {
+                    //Returning pipeline
+                    (*unlocked_material).get_pipeline().get_pipeline_ref()
+                };
+
+                let set_01 = {
+                    //aquirre the tranform matrix and generate the new set_01
+                    (*unlocked_material).get_set_01(mesh.1)
+                };
+
+                let set_02 = {
+                    (*unlocked_material).get_set_02()
+                };
+
+                let set_03 = {
+                    (*unlocked_material).get_set_03()
+                };
+
+                let set_04 = {
+                    (*unlocked_material).get_set_04()
+                };
+                //println!("STATUS: RENDER CORE: Adding to tmp cmd buffer", );
+                //add everything o the command buffer
+                tmp_cmd_buffer = Some(cb
+                    .draw_indexed(
+                        pipeline_copy,
+
+                        vulkano::command_buffer::DynamicState{
+                            line_width: None,
+                            viewports: Some(vec![vulkano::pipeline::viewport::Viewport {
+                                origin: [0.0, 0.0],
+                                dimensions: [dimensions[0] as f32, dimensions[1] as f32],
+                                depth_range: 0.0 .. 1.0,
+                            }]),
+                            scissors: None,
+                        },
+                        (*mesh_lck)
+                        .get_vertex_buffer(),
+
+                        (*mesh_lck)
+                        .get_index_buffer(
+                            self.device.clone(), self.queue.clone()
+                        ).clone(),
+
+                        (set_01, set_02, set_03, set_04),
+
+                        ()
+                    ).expect("Failed to draw in command buffer!")
+                );
+            }
+
+
+
+            //Return the Command buffer back to the global variable
+            //Now it gets returned to the renderer to be executed
             tmp_cmd_buffer
             .take()
             .expect("failed to return command buffer to main buffer")
@@ -614,7 +680,7 @@ impl Renderer {
         //println!("STATUS: RENDER CORE: Trying flush", );
 
         //TODO find a better methode then Option<Box<GpuFuture>>
-        let future = local_previous_frame
+        let future = previous_frame
         .join(acquire_future)
         .then_execute(
             self.queue.clone(), command_buffer

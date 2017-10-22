@@ -15,3 +15,5 @@ pub mod uniform_manager;
 ///An module which collects all the shader implementations, these are usually derived from
 ///vulkano-shader-derive
 pub mod shader_impls;
+///Contains some helper functions and types for the main renderer
+pub mod render_helper;

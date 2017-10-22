@@ -2,6 +2,7 @@ use std::sync::{Mutex, Arc, MutexGuard};
 use std::thread;
 
 use core::simple_scene_system::node;
+use core::simple_scene_system::node_helper;
 use core::resource_management::texture_manager;
 use core::resource_management::material_manager;
 use core::resources::mesh;
@@ -316,10 +317,11 @@ impl AssetManager {
         self.mesh_manager.lock().expect("failed to hold mesh manager")
     }
 
-    //Returns a raw copy of the meshes in the current active scene tree
+    ///Returns a raw copy of the meshes in the current active scene tree. They can be sorted by
+    /// `Some(attributes)` or if no sorting is needed by `None`.
     #[inline]
-    pub fn get_all_meshes(&mut self) -> Vec<(Arc<Mutex<mesh::Mesh>>, Matrix4<f32>)>{
-        self.active_main_scene.get_all_meshes()
+    pub fn get_all_meshes(&mut self, mesh_parameter: Option<node_helper::SortAttributes>) -> Vec<(Arc<Mutex<mesh::Mesh>>, Matrix4<f32>)>{
+        self.active_main_scene.get_all_meshes(mesh_parameter)
     }
 
     ///Returns all meshes in the view frustum of the currently active camera
