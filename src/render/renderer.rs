@@ -458,12 +458,13 @@ impl Renderer {
             },
         };
 
+
         //get all opaque meshes
-        let opaque_meshes = asset_manager.get_active_scene().get_all_meshes(
+        let opaque_meshes = asset_manager.get_meshes_in_frustum(
             Some(node_helper::SortAttributes::new().is_not_translucent())
         );
         //get all translucent meshes
-        let translucent_meshes = asset_manager.get_active_scene().get_all_meshes(
+        let translucent_meshes = asset_manager.get_meshes_in_frustum(
             Some(node_helper::SortAttributes::new().is_translucent())
         );
         //now start the sorting process on another thread, we recive the sorted

@@ -146,9 +146,10 @@ pub struct GenericNode {
     pub name: String,
     ///Transform of this node in local space
     pub transform: Decomposed<Vector3<f32>, Quaternion<f32>>,
-    ///The bounds of this note, takes the own `content` bound as well as the max and min values of
-    ///all its children into consideration
+    ///The bounds of this note, takes the `content` bound as well as the max and min values of
+    ///all its children into consideration.
     bound: Aabb3<f32>,
+
     ///The content is a contaier from the `ContentTypes` type which can hold any implemented
     ///Enum value
     content: ContentType,
@@ -162,7 +163,7 @@ impl GenericNode{
     ///Creates a new, empty node
     pub fn new_empty(name: &str)-> Self{
 
-        let tmp_bound = Aabb3::new(Point3::new(0.0, 0.0, 0.0), Point3::new(1.0, 1.0, 1.0));
+        let tmp_bound = Aabb3::new(Point3::new(-0.5, -0.5, -0.5), Point3::new(0.5, 0.5, 0.5));
 
         GenericNode{
             children: BTreeMap::new(),
@@ -260,8 +261,6 @@ impl GenericNode{
             tmp_child.get_flags().is_transparent = true;
         }
 
-
-
         //and add it
         self.children.insert(tmp_child.name.clone(), tmp_child);
     }
@@ -314,11 +313,6 @@ impl GenericNode{
     ///Returns the transform matrix
     #[inline]
     pub fn get_transform_matrix(&self) -> Matrix4<f32>{
-        println!("Reading: ", );
-        println!("\tTranslation: {}, {}, {}", self.transform.disp.x, self.transform.disp.y, self.transform.disp.z);
-
-
-        println!("Got_Transform matrix: {:?}", Matrix4::from(self.transform));
         Matrix4::from(self.transform)
     }
 
@@ -562,26 +556,67 @@ impl GenericNode{
 
 
     ///Returns all meshes in view frustum as well as their transform
-    pub fn get_meshes_in_frustum(&mut self, camera: &camera::DefaultCamera) -> Vec<(Arc<Mutex<mesh::Mesh>>, Matrix4<f32>)>{
+    pub fn get_meshes_in_frustum(
+        &mut self, camera: &camera::DefaultCamera,
+        mesh_parameter: Option<node_helper::SortAttributes>
+    ) -> Vec<(Arc<Mutex<mesh::Mesh>>, Matrix4<f32>)>{
 
         let mut return_vector = Vec::new();
 
         let camera_frustum = camera.get_frustum_bound();
 
-        //FIXME also add the dynamic meshse
         match self.content{
             //if selfs content is a mesh, check the bound
             ContentType::Mesh(ref mesh) => {
-                //check if self is in bound
 
-                let test = {
-                    camera_frustum.contains(&self.bound)
-                };
+                //check if self is in the volume. If so we can have a look at the mesh's bound.
+                //if not, we can return early because this mesh, and all its children won't be in the
+                //volumen.
+                let test = camera_frustum.contains(&self.bound); //we don't need to transform thoose, because they are already in world-space
 
+                //If the bound is within the volume or crosses it, we can
+                //A: go through the children and
+                //B: check self's mesh if its in the volume (changes are that there are some childs
+                // within the bound and outide so it gets "Cross" but this mesh in particular is
+                // outside.)
+
+                //return if not in bound
                 match test{
-                    Relation::In => return_vector.push((mesh.clone(), self.get_transform_matrix())),
-                    Relation::Cross => return_vector.push((mesh.clone(), self.get_transform_matrix())),
                     Relation::Out => return return_vector,
+                    //else have a look at self's mesh:
+                    _ => {
+                        //Read the bound of this mesh
+                        let mesh_test = camera_frustum.contains(
+                            &self.content.get_bound().transform(&self.transform) //the bound transformed by the nodes transorm information
+                        );
+
+                        match mesh_test{
+                            //mesh is out, so don't add anything but continue with the children
+                            Relation::Out => {},
+                            //is at least crossing, so add the mesh
+                            _ =>  {
+
+                                //..but before adding, verfiy that the mesh has the right settings
+                                let should_add = {
+                                    match mesh_parameter.clone(){
+                                        Some(param) => {
+                                            should_be_added(&self.flags, param)
+                                        },
+                                        None =>{
+                                            //No paramter needed, adding mesh
+                                            true
+                                        }
+                                    }
+                                };
+                                if should_add{
+                                    return_vector.push(
+                                        (mesh.clone(), self.get_transform_matrix())
+                                    );
+                                }
+                                //else don't add the mesh but proceede with the other meshes
+                            }
+                        }
+                    },
                 }
             },
             //if self is no mesh, just check the bound
@@ -600,28 +635,71 @@ impl GenericNode{
 
         //if not already return because the bound is too small, check the children
         for (_, i) in self.children.iter_mut(){
-            return_vector.append(&mut i.get_meshes_in_volume(&camera_frustum, camera.get_position()));
+            return_vector.append(&mut i.get_meshes_in_volume(
+                &camera_frustum, camera.get_position(), mesh_parameter.clone()
+            ));
         }
         return_vector
     }
 
     ///checks for bounds in a volume, view frustum or maybe for a locale collision check
     pub fn get_meshes_in_volume(
-        &mut self, volume: &Frustum<f32>, location: Vector3<f32>
+        &mut self, volume: &Frustum<f32>, location: Vector3<f32>,
+        mesh_parameter: Option<node_helper::SortAttributes>
     ) -> Vec<(Arc<Mutex<mesh::Mesh>>, Matrix4<f32>)>{
 
         let mut return_vector = Vec::new();
         match self.content{
             //if selfs content is a mesh, check the bound
             ContentType::Mesh(ref mesh) => {
-                //check if self is in bound
-                let test = {
-                    volume.contains(&self.bound)
-                };
+                //check if self is in the volume. If so we can have a look at the mesh's bound.
+                //if not, we can return early because this mesh, and all its children won't be in the
+                //volumen.
+                let test = volume.contains(&self.bound);
+
+
+                //If the bound is within the volume or crosses it, we can
+                //A: go through the children and
+                //B: check self's mesh if its in the volume (changes are that there are some childs
+                // within the bound and outide so it gets "Cross" but this mesh in particular is
+                // outside.)
+
+                //return if not in bound
                 match test{
-                    Relation::In => return_vector.push((mesh.clone(), self.get_transform_matrix())),
-                    Relation::Cross => return_vector.push((mesh.clone(), self.get_transform_matrix())),
                     Relation::Out => return return_vector,
+                    //else have a look at self's mesh:
+                    _ => {
+                        let mesh_test = volume.contains(
+                            &self.content.get_bound().transform(&self.transform)
+                        );
+
+                        match mesh_test{
+                            //mesh is out, so don't add anything but continue with the children
+                            Relation::Out => {},
+                            //is at least crossing, so add the mesh
+                            _ =>  {
+
+                                //..but before adding, verfiy that the mesh has the right settings
+                                let should_add = {
+                                    match mesh_parameter.clone(){
+                                        Some(param) => {
+                                            should_be_added(&self.flags, param)
+                                        },
+                                        None =>{
+                                            //No paramter needed, adding mesh
+                                            true
+                                        }
+                                    }
+                                };
+                                if should_add{
+                                    return_vector.push(
+                                        (mesh.clone(), self.get_transform_matrix())
+                                    );
+                                }
+                                //else don't add the mesh but proceede with the other meshes
+                            }
+                        }
+                    },
                 }
             },
             //if self is no mesh, just check the bound
@@ -636,17 +714,15 @@ impl GenericNode{
                 }
             }
         }
-
-
         //if not already return because the bound is too small, check the children
         for (_, i) in self.children.iter_mut(){
-            return_vector.append(&mut i.get_meshes_in_volume(&volume, location));
+            return_vector.append(&mut i.get_meshes_in_volume(&volume, location, mesh_parameter.clone()));
         }
         return_vector
     }
 
     ///Gets all meshes from this node down, you can provide a set of settings for which can be sorted
-    /// or you provde `None`, then every mesh will be returned.
+    /// or you provide `None`, then every mesh will be returned.
     pub fn get_all_meshes(&mut self, mesh_parameter: Option<node_helper::SortAttributes>) -> Vec<(Arc<Mutex<mesh::Mesh>>, Matrix4<f32>)>{
         let mut return_vector = Vec::new();
 
@@ -656,54 +732,7 @@ impl GenericNode{
                 match mesh_parameter.clone(){
                     Some(param) => {
 
-                        //Tets each of the attributes whicuh are needed to comapre and change the
-                        // return flag accordingly
-                        let mut add_child = true;
-
-                        //shadow flag
-                        match param.casts_shadow{
-                            node_helper::AttributeState::Yes =>{
-                                if !self.flags.cast_shadow{
-                                    add_child = false; //should cast shadow, but doesn't
-                                }
-                            },
-                            node_helper::AttributeState::No =>{
-                                if self.flags.cast_shadow{
-                                    add_child = false;
-                                }
-                            },
-                            _ => {} //doenst matter
-                        }
-
-                        //translucency flag
-                        match param.is_translucent{
-                            node_helper::AttributeState::Yes =>{
-                                if !self.flags.is_transparent{
-                                    add_child = false; //should be translucent, but isn't
-                                }
-                            },
-                            node_helper::AttributeState::No =>{
-                                if self.flags.is_transparent{
-                                    add_child = false;
-                                }
-                            },
-                            _ => {} //doenst matter
-                        }
-
-                        //hidden in game
-                        match param.hide_in_game{
-                            node_helper::AttributeState::Yes =>{
-                                if !self.flags.hide_in_game{
-                                    add_child = false; //should be hidden, but isn't
-                                }
-                            },
-                            node_helper::AttributeState::No =>{
-                                if self.flags.hide_in_game{
-                                    add_child = false;
-                                }
-                            },
-                            _ => {} //doenst matter
-                        }
+                        let add_child = should_be_added(&self.flags, param);
 
                         if add_child{
                             return_vector.push((mesh.clone(), self.get_transform_matrix()));
@@ -784,7 +813,7 @@ impl GenericNode{
     ///Returns the maximum bound values from this node down
     pub fn get_bound_max(&mut self) -> Point3<f32>{
 
-        let mut return_max = self.bound.max.clone();
+        let mut return_max = self.bound.transform(&self.transform).max.clone(); //transformed self intor worldspace to compare and build new bounds
 
         //Compare self with the children an their children etc.
         for (_, i) in self.children.iter_mut(){
@@ -814,7 +843,7 @@ impl GenericNode{
     ///Compares per axis
     pub fn get_bound_min(&mut self) -> Point3<f32>{
 
-        let mut return_min = self.bound.min.clone();
+        let mut return_min = self.bound.transform(&self.transform).min.clone();
 
         //Compare self with the children an their children etc.
         for (_, i) in self.children.iter_mut(){
@@ -880,4 +909,60 @@ impl GenericNode{
             i.print_member(depth + 1);
         }
     }
+}
+
+
+///A helper functions which returns true if a ContentType can be added based on the `requierments`
+/// or false if not
+fn should_be_added(flags: &NodeFlags, requirements: node_helper::SortAttributes) -> bool{
+    //Tets each of the attributes whicuh are needed to comapre and change the
+    // return flag accordingly
+    let mut should_be_added = true;
+
+    //shadow flag
+    match requirements.casts_shadow{
+        node_helper::AttributeState::Yes =>{
+            if !flags.cast_shadow{
+                should_be_added = false; //should cast shadow, but doesn't
+            }
+        },
+        node_helper::AttributeState::No =>{
+            if flags.cast_shadow{
+                should_be_added = false;
+            }
+        },
+        _ => {} //doenst matter
+    }
+
+    //translucency flag
+    match requirements.is_translucent{
+        node_helper::AttributeState::Yes =>{
+            if !flags.is_transparent{
+                should_be_added = false; //should be translucent, but isn't
+            }
+        },
+        node_helper::AttributeState::No =>{
+            if flags.is_transparent{
+                should_be_added = false;
+            }
+        },
+        _ => {} //doenst matter
+    }
+
+    //hidden in game
+    match requirements.hide_in_game{
+        node_helper::AttributeState::Yes =>{
+            if !flags.hide_in_game{
+                should_be_added = false; //should be hidden, but isn't
+            }
+        },
+        node_helper::AttributeState::No =>{
+            if flags.hide_in_game{
+                should_be_added = false;
+            }
+        },
+        _ => {} //doenst matter
+    }
+
+    should_be_added
 }

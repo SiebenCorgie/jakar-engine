@@ -159,13 +159,6 @@ fn main() {
     loop {
         if !adding_status_plane && engine.get_asset_manager().has_scene("TestScene"){
 
-            {
-                let mut a_man = engine.get_asset_manager();
-                let mut s_man = a_man.get_scene_manager();
-                let mut scene = s_man.get_scene("TestScene").unwrap();
-                scene.scale(1.0);
-            }
-
             engine.get_asset_manager().add_scene_to_main_scene("TestScene");
             println!("Adding TestScene", );
             adding_status_plane = true;

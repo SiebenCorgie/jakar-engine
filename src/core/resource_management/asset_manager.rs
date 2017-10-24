@@ -320,14 +320,18 @@ impl AssetManager {
     ///Returns a raw copy of the meshes in the current active scene tree. They can be sorted by
     /// `Some(attributes)` or if no sorting is needed by `None`.
     #[inline]
-    pub fn get_all_meshes(&mut self, mesh_parameter: Option<node_helper::SortAttributes>) -> Vec<(Arc<Mutex<mesh::Mesh>>, Matrix4<f32>)>{
+    pub fn get_all_meshes(
+        &mut self, mesh_parameter: Option<node_helper::SortAttributes>
+    ) -> Vec<(Arc<Mutex<mesh::Mesh>>, Matrix4<f32>)>{
         self.active_main_scene.get_all_meshes(mesh_parameter)
     }
 
     ///Returns all meshes in the view frustum of the currently active camera
     #[inline]
-    pub fn get_meshes_in_frustum(&mut self) -> Vec<(Arc<Mutex<mesh::Mesh>>, Matrix4<f32>)>{
-        self.active_main_scene.get_meshes_in_frustum(&self.camera)
+    pub fn get_meshes_in_frustum(
+        &mut self, sort_options: Option<node_helper::SortAttributes>
+    ) -> Vec<(Arc<Mutex<mesh::Mesh>>, Matrix4<f32>)>{
+        self.active_main_scene.get_meshes_in_frustum(&self.camera, sort_options)
     }
 
     ///Imports a new gltf scene file to a new scene with `name` as name from `path`
@@ -350,21 +354,21 @@ impl AssetManager {
 
         use core;
         let managers = Arc::new(Mutex::new(core::resource_management::ManagerAndRenderInfo{
-            ///The current pipeline manager
+            //The current pipeline manager
             pipeline_manager: pipeline_manager_inst,
-            ///The current uniform manager
+            //The current uniform manager
             uniform_manager: uniform_manager_inst,
-            ///The current device used for rendering
+            //The current device used for rendering
             device: device_inst,
-            ///The currently used queues
+            //The currently used queues
             queue: queue_inst,
-            ///The current texture manager
+            //The current texture manager
             texture_manager: self.texture_manager.clone(),
-            ///The current material manager
+            //The current material manager
             material_manager: self.material_manager.clone(),
-            ///The current mesh manager
+            //The current mesh manager
             mesh_manager: self.mesh_manager.clone(),
-            ///The current scene manager
+            //The current scene manager
             scene_manager: self.scene_manager.clone(),
         }));
 

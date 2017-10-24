@@ -26,7 +26,6 @@ impl SceneManager {
                 self.scenes.insert(new_name, Arc::new(Mutex::new(scene)));
             },
             //All is fine, we can add it normaly to the manager
-            
             false =>{
                 self.scenes.insert(scene.name.clone(), Arc::new(Mutex::new(scene)));
             },

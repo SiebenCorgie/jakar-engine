@@ -261,13 +261,6 @@ impl Camera for DefaultCamera{
     fn get_view_projection_matrix(&self) -> Matrix4<f32>{
         let view = self.get_view_matrix();
         let projection = self.get_perspective();
-        //a bias to undo the vulkan NDC
-        let bias = Matrix4::new(
-          1.0, 0.0, 0.0, 0.0,
-          0.0, -1.0, 0.0, 0.0,
-          0.0, 0.0, 0.5, 0.0,
-          0.0, 0.0, 0.5, 1.0
-        );
         projection * view
     }
 

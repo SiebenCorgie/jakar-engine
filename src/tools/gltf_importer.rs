@@ -3,6 +3,7 @@ use core::resources::camera::Camera;
 use core::simple_scene_system::node;
 use core::resource_management::{material_manager, mesh_manager, scene_manager, texture_manager};
 use core;
+use core::ReturnBoundInfo;
 use render::pipeline_builder;
 use render::pipeline_manager;
 
@@ -455,13 +456,6 @@ pub fn load_gltf_mesh(
         //create a dummy and fill it
         let mut vertices = Vec::new();
 
-        println!("Vec lengthes: ", );
-        println!("\t pos: {}", positions.len());
-        println!("\t tex: {}", tex_coords.len());
-        println!("\t normal: {}", normals.len());
-        println!("\t tang: {}", tangents.len());
-        println!("\t col: {}", vertex_colors.len());
-
         //Have to update vectors to be as long as the positions
         if positions.len() != tex_coords.len(){
             tex_coords = vec![[0.0, 0.0]; positions.len()];
@@ -476,12 +470,47 @@ pub fn load_gltf_mesh(
             vertex_colors = vec![[0.0, 0.0, 0.0, 1.0]; positions.len()];
         }
 
-        println!("Vec lengthes now: ", );
-        println!("\t pos: {}", positions.len());
-        println!("\t tex: {}", tex_coords.len());
-        println!("\t normal: {}", normals.len());
-        println!("\t tang: {}", tangents.len());
-        println!("\t col: {}", vertex_colors.len());
+        //after getting all the mesh informations, we have to find the mins and maxs of this mesh
+        //to construct a static bound for it.
+        let (mins, maxs) = {
+            let mut min: [f32; 3] = [0.0; 3];
+            let mut max: [f32; 3] = [0.0; 3];
+
+            for position in positions.iter(){
+                //X val
+                //min
+                if position[0] < min[0]{
+                    min[0] = position[0];
+                }
+                //max
+                if position[0] > max[0]{
+                    max[0] = position[0];
+                }
+
+
+                //Y val
+                //min
+                if position[1] < min[1]{
+                    min[1] = position[1];
+                }
+                //max
+                if position[1] > max[1]{
+                    max[1] = position[1];
+                }
+                //Z val
+                //min
+                if position[2] < min[2]{
+                    min[2] = position[2];
+                }
+                //max
+                if position[2] > max[2]{
+                    max[2] = position[2];
+                }
+            }
+
+            (min,max)
+        };
+
 
         for i in 0..positions.len(){
             let vertex = mesh::Vertex::new(
@@ -496,6 +525,12 @@ pub fn load_gltf_mesh(
         //write new vertices as well as indices to mesh
         add_mesh.set_vertices_and_indices(vertices, indices, device.clone(), queue.clone());
         //TODO SETUP BOUNDS
+        add_mesh.set_bound(
+            Point3::new(mins[0], mins[1], mins[2]),
+            Point3::new(maxs[0], maxs[1], maxs[2])
+        );
+
+
         //look for materials
         let mesh_material = primitive.material();
         //test if its the default material if not, test if this material si alread in the scene
