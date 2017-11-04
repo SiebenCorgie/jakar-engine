@@ -66,7 +66,7 @@ fn main() {
 
     */
 
-    engine.get_asset_manager().import_gltf("TestScene", "examples/simple_scene/TestScene/TestScene.gltf");
+    engine.get_asset_manager().import_gltf("Robot", "examples/simple_scene/behemoth_from_horizon_zero_dawn/scene.gltf");
 
 
     //SUN========================================================================
@@ -157,10 +157,10 @@ fn main() {
     let mut max_fps = 0.0;
 
     loop {
-        if !adding_status_plane && engine.get_asset_manager().has_scene("TestScene"){
+        if !adding_status_plane && engine.get_asset_manager().has_scene("Robot"){
 
-            engine.get_asset_manager().add_scene_to_main_scene("TestScene");
-            println!("Adding TestScene", );
+            engine.get_asset_manager().add_scene_to_main_scene("Robot");
+            println!("Adding Robot", );
             adding_status_plane = true;
         }
 
@@ -198,7 +198,7 @@ fn main() {
             {
                 let mut a_man = engine.get_asset_manager();
                 let s_man = a_man.get_active_scene();
-                let node = s_man.get_node("TestScene");
+                let node = s_man.get_node("Robot");
 
                 //Get the reference in the current active scene
                 match node{
@@ -217,7 +217,7 @@ fn main() {
             {
                 let mut a_man = engine.get_asset_manager();
                 let s_man = a_man.get_active_scene();
-                let node = s_man.get_node("TestScene");
+                let node = s_man.get_node("Robot");
 
                 //Get the reference in the current active scene
                 match node{
@@ -235,7 +235,7 @@ fn main() {
             {
                 let mut a_man = engine.get_asset_manager();
                 let s_man = a_man.get_active_scene();
-                let node = s_man.get_node("TestScene");
+                let node = s_man.get_node("Robot");
 
                 //Get the reference in the current active scene
                 match node{
@@ -251,7 +251,7 @@ fn main() {
             {
                 let mut a_man = engine.get_asset_manager();
                 let s_man = a_man.get_active_scene();
-                let node = s_man.get_node("TestScene");
+                let node = s_man.get_node("Robot");
 
                 //Get the reference in the current active scene
                 match node{
@@ -267,7 +267,7 @@ fn main() {
             {
                 let mut a_man = engine.get_asset_manager();
                 let s_man = a_man.get_active_scene();
-                let node = s_man.get_node("TestScene");
+                let node = s_man.get_node("Robot");
 
                 //Get the reference in the current active scene
                 match node{
@@ -279,27 +279,14 @@ fn main() {
             }
         }
 
+
         //engine.get_asset_manager().get_material_manager().print_all_materials();
         //engine.get_asset_manager().get_scene_manager().print_all_scenes();
-        //Prints all materials and the scene TestScene
+        //Prints all materials and the scene Robot
         engine.get_asset_manager().get_active_scene().print_member(0);
 
-        let fps_time = start_time.elapsed().subsec_nanos();
 
-        let fps = 1.0/ (fps_time as f32 / 1_000_000_000.0);
-        avg_fps = (avg_fps + fps) / 2.0;
-        //println!("STATUS: RENDER: AVG FPS IN GAME: {}", avg_fps);
-        //println!("This Frame: {}", fps);
-
-        if fps < min_fps{
-            min_fps = fps;
-        }
-
-        if fps > max_fps{
-            max_fps = fps;
-        }
-
-
+        //TODO Move the game thread into the engien and only expose a hooking / registering function;
         start_time = Instant::now();
         {
             use std::thread;

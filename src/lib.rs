@@ -17,6 +17,9 @@ extern crate image;
 extern crate gltf;
 extern crate gltf_importer;
 extern crate gltf_utils;
+//the new custom tree crate
+//extern crate jakar-tree;
+
 
 ///The engine core defines most functions and
 ///traits needed to feed the renderer and communicate with the physics.
