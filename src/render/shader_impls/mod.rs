@@ -3,11 +3,13 @@ use std::sync::Arc;
 
 use render::pipeline_builder;
 
-///The normal PBR vertex shader
-pub mod pbr_vertex;
+
 
 ///The normal PBR fragment shader
 pub mod pbr_fragment;
+
+///The normal PBR vertex shader
+pub mod pbr_vertex;
 
 ///A wireframe shader for debuging
 pub mod wireframe_vertex;

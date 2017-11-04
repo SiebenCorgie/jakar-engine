@@ -1,0 +1,3 @@
+[submodule "jakar-tree"]
+	path = jakar-tree
+	url = https://github.com/SiebenCorgie/jakar-tree.git

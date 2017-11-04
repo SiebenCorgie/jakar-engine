@@ -18,7 +18,7 @@ extern crate gltf;
 extern crate gltf_importer;
 extern crate gltf_utils;
 //the new custom tree crate
-//extern crate jakar-tree;
+extern crate jakar_tree;
 
 
 ///The engine core defines most functions and
