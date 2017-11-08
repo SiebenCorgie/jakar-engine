@@ -9,7 +9,8 @@ pub mod resource_management;
 ///Resources holds all loadable resources, they should ussually be managed though one
 ///of the management systems in `core::resource_management`.
 pub mod resources;
-
+///A new tree system which will replace the `simple_scene_system`.
+pub mod next_tree;
 
 //use std::sync::{Arc, Mutex};
 use cgmath::*;
