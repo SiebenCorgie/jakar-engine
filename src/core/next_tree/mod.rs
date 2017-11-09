@@ -9,6 +9,26 @@ pub mod attributes;
 ///Describes the jobs this tree can execute when updated
 pub mod jobs;
 
+use cgmath::*;
+use collision::*;
+
+///The comparer type used to comapre a SceneNode to attribtues.
+///You can use this for instance to get every node which is transparent.
+pub struct SceneComparer{
+        ///Some if the transform component should be compared
+        pub transform: Option<Decomposed<Vector3<f32>, Quaternion<f32>>>,
+        ///Some if the bound component should be compared
+        pub bound: Option<Aabb3<f32>>,
+
+
+        ///Some if the cast_shadow component should be compared
+        pub cast_shadow: Option<bool>,
+        ///Some if the is_transparent component should be compared
+        pub is_transparent: Option<bool>,
+        ///Some if the hide_in_game component should be compared
+        pub hide_in_game: Option<bool>,
+}
+
 
 ///The trait for special engine funtions1
 pub trait SceneNode<T: jakar_tree::node::NodeContent, J: Clone, A: jakar_tree::node::Attribute<J>> {
