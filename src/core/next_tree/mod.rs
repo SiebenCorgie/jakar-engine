@@ -1,5 +1,10 @@
 use jakar_tree;
 
+use std::sync::Arc;
+use std::sync::Mutex;
+use core::resources::*;
+
+
 ///Describes the Value bit of this tree
 pub mod content;
 
@@ -12,7 +17,7 @@ pub mod jobs;
 use cgmath::*;
 use collision::*;
 
-///The comparer type used to comapre a SceneNode to attribtues.
+///The comparer type used to comapre a SceneTree to attribtues.
 ///You can use this for instance to get every node which is transparent.
 pub struct SceneComparer{
         ///Some if the transform component should be compared
@@ -30,18 +35,128 @@ pub struct SceneComparer{
 }
 
 
-///The trait for special engine funtions1
-pub trait SceneNode<T: jakar_tree::node::NodeContent, J: Clone, A: jakar_tree::node::Attribute<J>> {
-    fn get_all_meshes() -> Vec<jakar_tree::node::Node<T, J, A>>;
+///The trait for special engine funtions
+pub trait SceneTree<
+T: jakar_tree::node::NodeContent + Clone,
+J: Clone, A: jakar_tree::node::Attribute<J> + Clone
+> {
+    ///Returns all meshes in the tree
+    fn get_all_meshes(&self, sorting: Option<SceneComparer>) -> Vec<jakar_tree::node::Node<T, J, A>>;
+    ///Returns all meshse in the view frustum of `camera`
+    fn get_all_meshes_in_frustum(&self, camera: &camera::DefaultCamera, sorting: Option<SceneComparer>) -> Vec<jakar_tree::node::Node<T, J, A>>;
+    ///Returns all point lights in the tree
+    fn get_all_point_lights(&self, sorting: Option<SceneComparer>) -> Vec<jakar_tree::node::Node<T, J, A>>;
+    ///Returns all directional lights
+    fn get_all_directional_lights(&self, sorting: Option<SceneComparer>) -> Vec<jakar_tree::node::Node<T, J, A>>;
+    ///Returns all spot lights
+    fn get_all_spot_lights(&self, sorting: Option<SceneComparer>) -> Vec<jakar_tree::node::Node<T, J, A>>;
+    ///Returns all empts
+    fn get_all_emptys(&self, sorting: Option<SceneComparer>) -> Vec<jakar_tree::node::Node<T, J, A>>;
+    ///Returns all cameras
+    fn get_all_cameras(&self, sorting: Option<SceneComparer>) -> Vec<jakar_tree::node::Node<T, J, A>>;
+    ///Rebuilds the bounds for the whole tree
+    fn rebuild_bounds(&mut self);
 }
 
-impl<T: jakar_tree::node::NodeContent, J: Clone, A: jakar_tree::node::Attribute<J>> SceneNode<T, J, A> for jakar_tree::tree::Tree<T, J, A>{
+impl<
+T: jakar_tree::node::NodeContent + Clone, J: Clone, A: jakar_tree::node::Attribute<J> + Clone
+> SceneTree<T, J, A> for jakar_tree::tree::Tree<T, J, A>{
+
     ///Returns all meshes in this tree.
     ///TODO actually implement
-    fn get_all_meshes() -> Vec<jakar_tree::node::Node<T, J, A>>{
+    fn get_all_meshes(&self, sorting: Option<SceneComparer>) -> Vec<jakar_tree::node::Node<T, J, A>>{
+        println!("Getting is currently not supported", );
+        Vec::new()
+    }
+    ///Returns all meshse in the view frustum of `camera`
+    fn get_all_meshes_in_frustum(&self, camera: &camera::DefaultCamera, sorting: Option<SceneComparer>) -> Vec<jakar_tree::node::Node<T, J, A>>{
+        println!("Getting is currently not supported", );
+        Vec::new()
+    }
+    ///Returns all point lights in the tree
+    fn get_all_point_lights(&self, sorting: Option<SceneComparer>) -> Vec<jakar_tree::node::Node<T, J, A>>{
+        println!("Getting is currently not supported", );
+        Vec::new()
+    }
+    ///Returns all directional lights
+    fn get_all_directional_lights(&self, sorting: Option<SceneComparer>) -> Vec<jakar_tree::node::Node<T, J, A>>{
+        println!("Getting is currently not supported", );
+        Vec::new()
+    }
+    ///Returns all spot lights
+    fn get_all_spot_lights(&self, sorting: Option<SceneComparer>) -> Vec<jakar_tree::node::Node<T, J, A>>{
+        println!("Getting is currently not supported", );
+        Vec::new()
+    }
+    ///Returns all empts
+    fn get_all_emptys(&self, sorting: Option<SceneComparer>) -> Vec<jakar_tree::node::Node<T, J, A>>{
+        println!("Getting is currently not supported", );
+        Vec::new()
+    }
+    ///Returns all cameras
+    fn get_all_cameras(&self, sorting: Option<SceneComparer>) -> Vec<jakar_tree::node::Node<T, J, A>>{
+        println!("Getting is currently not supported", );
+        Vec::new()
+    }
+    ///rebuilds the bounds for the whole tree
+    fn rebuild_bounds(&mut self){
+        println!("Rebuilding bounds currently not supported", );
+    }
+}
+
+///unwraps the vector into a vector of meshes
+pub trait SaveUnwrap{
+    ///turns self into a vector of mutex guarded meshes
+    fn into_meshes(&mut self) -> Vec<Arc<Mutex<mesh::Mesh>>>;
+    ///turns self into a vector of point lights
+    fn into_point_light(&mut self) -> Vec<light::LightPoint>;
+    ///turns self into a vector of directional lights
+    fn into_directional_light(&mut self) -> Vec<light::LightDirectional>;
+    ///turns self into a vector of spot lights
+    fn into_spot_light(&mut self) -> Vec<light::LightSpot>;
+    ///turns self into a vector of emptys
+    fn into_emptys(&mut self) -> Vec<empty::Empty>;
+    ///turns self into a vector of cameras
+    fn into_cameras(&mut self) -> Vec<camera::DefaultCamera>;
+}
+
+impl<
+T: jakar_tree::node::NodeContent + Clone, J: Clone, A: jakar_tree::node::Attribute<J> + Clone
+> SaveUnwrap for Vec<jakar_tree::node::Node<T, J, A>>{
+    ///turns self into a vector of mutex guarded meshes
+    fn into_meshes(&mut self) -> Vec<Arc<Mutex<mesh::Mesh>>>{
+        println!("Getting is currently not supported", );
+        Vec::new()
+    }
+    ///turns self into a vector of point lights
+    fn into_point_light(&mut self) -> Vec<light::LightPoint>{
+        println!("Getting is currently not supported", );
+        Vec::new()
+    }
+    ///turns self into a vector of point lights
+    fn into_directional_light(&mut self) -> Vec<light::LightDirectional>{
+        println!("Getting is currently not supported", );
+        Vec::new()
+    }
+    ///turns self into a vector of point lights
+    fn into_spot_light(&mut self) -> Vec<light::LightSpot>{
+        println!("Getting is currently not supported", );
+        Vec::new()
+    }
+    ///turns self into a vector of emptys
+    fn into_emptys(&mut self) -> Vec<empty::Empty>{
+        println!("Getting is currently not supported", );
+        Vec::new()
+    }
+    ///turns self into a vector of cameras
+    fn into_cameras(&mut self) -> Vec<camera::DefaultCamera>{
+        println!("Getting is currently not supported", );
         Vec::new()
     }
 }
+
+
+
 
 //TODO Custom impls on node for:
 /*

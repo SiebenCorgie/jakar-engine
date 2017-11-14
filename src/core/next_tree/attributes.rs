@@ -4,6 +4,7 @@ use jakar_tree::node::Attribute;
 use super::jobs::SceneJobs;
 
 ///A node can have this attributes
+#[derive(Clone)]
 pub struct NodeAttributes {
 
     ///Transform of this node in local space

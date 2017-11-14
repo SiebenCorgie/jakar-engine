@@ -1,6 +1,7 @@
 
 use core::resources::mesh;
-use core::simple_scene_system::node;
+use jakar_tree::node;
+use core::next_tree::*;
 //use tools::assimp_importer;
 
 use vulkano;
@@ -80,75 +81,5 @@ impl MeshManager {
             Some(mesh) => Some(mesh.clone()),
             None => None,
         }
-    }
-
-    ///Imports a mesh in a seperate thread.
-    ///This will do two things:
-    ///
-    /// 1st. Import all sub meshes of this file in seperate `Arc<Mutex<Mesh>>` objects
-    ///
-    /// 2nd. Create a scene with all meshes stack as children below the root node
-    ///
-    /// By doing this the sub.meshes can be reused to create new scene and a complex scene with
-    /// different objects stays in one sub-scene
-
-    //Deprecaed in favor of the gltf loader
-    pub fn import_mesh(&mut self, name: &str, path: &str, device: Arc<vulkano::device::Device>,
-        queue: Arc<vulkano::device::Queue>,
-        scene_manager_scenes: Arc<Mutex<node::GenericNode>>
-    )
-    {
-
-    /*
-        let mut meshes_instance = self.meshes.clone();
-        let mut scene_instance = scene_manager_scenes.clone();
-        let device_instance = device.clone();
-        let queue_instance = queue.clone();
-        let name_instance = name.to_owned();
-        let path_instance = path.to_owned();
-
-        let thread = thread::spawn(move ||{
-
-            //println!("STATUS: MESH_MANAGER: Spawned thread with id: {:?}", thread::current().id());
-
-            let mut importer = assimp_importer::AssimpImporter::new();
-            let new_meshes = importer.import(&path_instance, &name_instance, device_instance.clone(), queue_instance.clone());
-
-
-            let mut arc_meshes: Vec<(String, Arc<Mutex<mesh::Mesh>>)> = Vec::new();
-            for mesh in new_meshes.iter(){
-                arc_meshes.push((String::from(mesh.name.clone()),Arc::new(Mutex::new(mesh.clone()))));
-            }
-
-
-            //Now add the mesh[s] to the meshes vector in self
-            //after that build a scene from it and add the scene to
-            //the scenes Vec
-            {
-                let mut meshes_editor = (*meshes_instance).lock().expect("failed to lock meshes vec");
-                for mesh in arc_meshes.iter(){
-                    meshes_editor.insert(mesh.0.clone() ,mesh.1.clone() );
-                }
-            }
-
-            //now lock the scene and add all meshes to it
-            //println!("STATUS: MESH_MANAGER: Adding scene with name: {}", &name_instance.clone());
-            let mut root_node = scene_instance.lock().expect("faield to lock scene while adding mehes");
-            for i in arc_meshes.iter(){
-                //create a node
-                let mesh_node = node::ContentType::Renderable(
-                    node::RenderableContent::Mesh(
-                        i.1.clone()
-                    )
-                );
-                println!("Adding mesh: {} ==================", i.0.clone());
-                //And add it to the scene
-                root_node.add_child(mesh_node);
-            }
-
-
-            //println!("STATUS: MESH_MANAGER: Finshed importing {}", name_instance.clone());
-        });
-    */
     }
 }

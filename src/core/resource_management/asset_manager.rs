@@ -1,8 +1,17 @@
 use std::sync::{Mutex, Arc, MutexGuard};
 use std::thread;
 
-use core::simple_scene_system::node;
-use core::simple_scene_system::node_helper;
+use jakar_tree::*;
+use jakar_tree::node::Attribute;
+use jakar_tree::node::NodeContent;
+use core::next_tree::content;
+use core::next_tree::attributes;
+use core::next_tree::jobs;
+use core::next_tree;
+use core::next_tree::SceneTree;
+use core::next_tree::SaveUnwrap;
+
+
 use core::resource_management::texture_manager;
 use core::resource_management::material_manager;
 use core::resources::mesh;
@@ -15,6 +24,7 @@ use core::resources::camera::DefaultCamera;
 use core::engine_settings;
 use core::resources::texture;
 use core::resources::material;
+use core::resources::empty;
 
 use rt_error;
 
@@ -33,7 +43,7 @@ use vulkano;
 #[derive(Clone)]
 pub struct AssetManager {
     //Holds the current active scene
-    active_main_scene: node::GenericNode,
+    active_main_scene: tree::Tree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>,
 
     //holds all textures
     texture_manager: Arc<Mutex<texture_manager::TextureManager>>,
@@ -67,6 +77,7 @@ pub struct AssetManager {
 }
 
 impl AssetManager {
+
     ///Creates a new idependend scene manager
     pub fn new(
         pipeline_manager: Arc<Mutex<pipeline_manager::PipelineManager>>,
@@ -80,14 +91,14 @@ impl AssetManager {
         //The camera will be moved to a camera manager
         let camera = DefaultCamera::new(settings.clone(), key_map.clone());
 
-
+        //Start up the texture manager
         let mut tmp_texture_manager = texture_manager::TextureManager::new(
             device.clone(), queue.clone(), settings.clone()
         );
-
+        //add the fallback textures
         let (fallback_alb, fallback_nrm, fallback_phy) = tmp_texture_manager.get_fallback_textures();
         let none_texture = tmp_texture_manager.get_none();
-
+        //create a fallback material
         let tmp_material_manager = material_manager::MaterialManager::new(
             &pipeline_manager,
             &device,
@@ -98,11 +109,17 @@ impl AssetManager {
             fallback_phy,
             none_texture,
         );
-
+        //create a empty scene manager
         let new_scene_manager = Arc::new(Mutex::new(scene_manager::SceneManager::new()));
 
+        //create an empty main scene
+        //the empty
+        let empty = empty::Empty::new("main_root");
+        let root_node = content::ContentType::Empty(empty);
+        let main_scene = tree::Tree::new(root_node, attributes::NodeAttributes::default());
+
         AssetManager{
-            active_main_scene: node::GenericNode::new_empty("Empty"),
+            active_main_scene: main_scene,
             texture_manager: Arc::new(Mutex::new(tmp_texture_manager)),
             material_manager: Arc::new(Mutex::new(tmp_material_manager)),
             mesh_manager: Arc::new(Mutex::new(mesh_manager::MeshManager::new())),
@@ -124,8 +141,7 @@ impl AssetManager {
     ///Updates all child components
     pub fn update(&mut self){
 
-        //Debug stuff which will be handled by the application later
-        //let rotation = Rotation3::from_axis_angle(&Vector3::unit_z(), time::precise_time_ns() as f32 * 0.000000001);
+        //figure out the main uniform matrix to be sent to the shaders
         let mat_4: Matrix4<f32> = Matrix4::identity();
         let uniform_data = default_data::ty::Data {
             //Updating camera from camera transform
@@ -139,13 +155,14 @@ impl AssetManager {
         };
 
         //in scope to prevent dead lock while updating material manager
-        //TODO get the lights from the light-pre-pass
+        //TODO get the lights from the light-pre-pass and make the info reciving nicer (see:
+        // https://github.com/SiebenCorgie/jakar-engine/issues/23)
         //light counter
         let (mut c_point, mut c_dir, mut c_spot): (u32, u32, u32) = (0,0,0);
         //after getting all lights, create the shader-usable shader infos
         let point_shader_info = {
 
-            let all_point_lights = self.active_main_scene.get_all_point_lights();
+            let all_point_lights = self.active_main_scene.get_all_point_lights(None).into_point_light();
 
             let mut return_vec = Vec::new();
             //transform into shader infos
@@ -180,7 +197,7 @@ impl AssetManager {
         };
 
         let directional_shader_info = {
-            let all_directional_lights = self.active_main_scene.get_all_directional_lights();
+            let all_directional_lights = self.active_main_scene.get_all_directional_lights(None).into_directional_light();
 
             let mut return_vec = Vec::new();
             //transform into shader infos
@@ -216,7 +233,7 @@ impl AssetManager {
 
         let spot_shader_info = {
             let mut return_vec = Vec::new();
-            let all_spot_lights = self.active_main_scene.get_all_spot_lights();
+            let all_spot_lights = self.active_main_scene.get_all_spot_lights(None).into_spot_light();
 
             //transform into shader infos
             for light in all_spot_lights.iter(){
@@ -289,13 +306,17 @@ impl AssetManager {
 
     ///Sets the root scene to a `new_scene_root`
     #[inline]
-    pub fn set_active_scene(&mut self, new_scene_root: node::GenericNode){
+    pub fn set_active_scene(
+        &mut self,
+        new_scene_root: tree::Tree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>
+    ){
         self.active_main_scene = new_scene_root;
     }
 
     ///Returns a reference to the active scene
     #[inline]
-    pub fn get_active_scene(&mut self) -> &mut node::GenericNode{
+    pub fn get_active_scene(&mut self)
+     -> &mut tree::Tree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>{
         &mut self.active_main_scene
     }
 
@@ -321,17 +342,17 @@ impl AssetManager {
     /// `Some(attributes)` or if no sorting is needed by `None`.
     #[inline]
     pub fn get_all_meshes(
-        &mut self, mesh_parameter: Option<node_helper::SortAttributes>
-    ) -> Vec<(Arc<Mutex<mesh::Mesh>>, Matrix4<f32>)>{
+        &mut self, mesh_parameter: Option<next_tree::SceneComparer>
+    ) -> Vec<node::Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>>{
         self.active_main_scene.get_all_meshes(mesh_parameter)
     }
 
     ///Returns all meshes in the view frustum of the currently active camera
     #[inline]
     pub fn get_meshes_in_frustum(
-        &mut self, sort_options: Option<node_helper::SortAttributes>
-    ) -> Vec<(Arc<Mutex<mesh::Mesh>>, Matrix4<f32>)>{
-        self.active_main_scene.get_meshes_in_frustum(&self.camera, sort_options)
+        &mut self, sort_options: Option<next_tree::SceneComparer>
+    ) -> Vec<node::Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>>{
+        self.active_main_scene.get_all_meshes_in_frustum(&self.camera, sort_options)
     }
 
     ///Imports a new gltf scene file to a new scene with `name` as name from `path`
@@ -384,37 +405,9 @@ impl AssetManager {
         });
     }
 
-    ///Imports a new scene from a file at `path` and saves the scene as `name`
-    ///The meshes are stored as Arc<Mutex<T>>'s in the mesh manager the scene Is stored in the scene manager
-    pub fn import_scene(&mut self, name: &str, path: &str){
-        //Lock in scope to prevent dead lock while importing
-
-        let device_inst = {
-            self.device.clone()
-        };
-        let queue_inst = {
-            self.queue.clone()
-        };
-
-        //Create the topy scene via an empty which will be used to add all the meshe-nodes
-        let new_scene = node::GenericNode::new_empty(name.clone());
-        //Add the new scene to the manager
-        self.get_scene_manager().add_scene(new_scene);
-        //Now get the scene in the manager (as Arc<T>) and pass it for adding new meshes
-        let scene_in_manager = self.get_scene_manager().get_scene_arc(
-            name.clone()
-        ).expect("could not find the just added scene, this should not happen");
-
-        //Pass the import params an a scene manager instance to the mesh manager
-        self.get_mesh_manager().import_mesh(
-            name, path,
-            device_inst, queue_inst,
-            scene_in_manager
-        );
-
-    }
-
     ///Adds a scene from the local scene manager (based on `name`) to the local main scene
+    /// at the `_root` node. If you want to add it at a specific node, do it like this:
+    /// `get_active_scene().join(tree, node_name);`
     pub fn add_scene_to_main_scene(&mut self, name: &str){
 
         //Get the scene
@@ -427,7 +420,7 @@ impl AssetManager {
                 //TODO make this to an Arc<GenericNode>
                 let scene_lck = sc.lock().expect("failed to hold scene lock while adding");
                 //Create a pass it to the main scene TODO make this reference the old scene
-                self.active_main_scene.add_node((*scene_lck).clone());
+                self.active_main_scene.join(&(*scene_lck).clone(), "_root".to_string());
             },
             None => rt_error("ASSET_MANAGER", &("Could not find scene with name".to_string() + name.clone()).to_string()),
         }
@@ -499,8 +492,3 @@ impl AssetManager {
     }
 
 }
-
-
-//Created a mesh manager holding all meshes as Arc<Mutex<T>>
-//a scenen manger who holdes sub scenes created form imports as well as user created scenes
-//The asset manager holds only a currently active scene, know as the player level

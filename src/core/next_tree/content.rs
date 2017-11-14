@@ -27,33 +27,40 @@ pub enum ContentType {
     Camera(camera::DefaultCamera),
 }
 
+impl ContentType{
+    ///Creates a transformation matrix based on position, rotation and scale
+    fn get_transform_matrix(&self) -> Matrix4<f32>{
+        println!("Transform matrix currently not supported", );
+        let mat: Matrix4<f32> = Matrix4::identity();
+        mat
+    }
+}
 
 impl jakar_tree::node::NodeContent for ContentType{
-        ///Should return the name of this content
-        fn get_name(&self) -> String{
-            match self{
-                &ContentType::Mesh(ref c) =>{
-                    let mesh_lock = c.lock().expect("failed to lock mesh");
-                    (*mesh_lock).name.clone()
-                },
-                &ContentType::PointLight(ref c) => {
-                    c.name.clone()
-                },
-                &ContentType::DirectionalLight(ref c) => {
-                    c.name.clone()
-                },
-                &ContentType::SpotLight(ref c) => {
-                    c.name.clone()
-                },
+    ///Should return the name of this content
+    fn get_name(&self) -> String{
+        match self{
+            &ContentType::Mesh(ref c) =>{
+                let mesh_lock = c.lock().expect("failed to lock mesh");
+                (*mesh_lock).name.clone()
+            },
+            &ContentType::PointLight(ref c) => {
+                c.name.clone()
+            },
+            &ContentType::DirectionalLight(ref c) => {
+                c.name.clone()
+            },
+            &ContentType::SpotLight(ref c) => {
+                c.name.clone()
+            },
 
-                &ContentType::Empty(ref c) => {
-                    c.name.clone()
-                },
-                &ContentType::Camera(ref c) => {
-                    //c.name.clone() TODO add a camera name
-                    String::from("Camera")
-                },
-            }
+            &ContentType::Empty(ref c) => {
+                c.name.clone()
+            },
+            &ContentType::Camera(ref c) => {
+                //c.name.clone() TODO add a camera name
+                String::from("Camera")
+            },
         }
-
+    }
 }
