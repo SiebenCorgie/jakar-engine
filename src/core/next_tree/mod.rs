@@ -34,6 +34,67 @@ pub struct SceneComparer{
         pub hide_in_game: Option<bool>,
 }
 
+impl SceneComparer{
+    ///Creates a new comparer with only `None`s
+    pub fn new() -> Self{
+        SceneComparer{
+            transform: None,
+            bound: None,
+            cast_shadow: None,
+            is_transparent: None,
+            hide_in_game: None,
+        }
+    }
+
+    ///Adds a `Some(transform)` component to the comparer
+    pub fn with_transform(mut self, transform: Decomposed<Vector3<f32>, Quaternion<f32>>) -> Self{
+        self.transform = Some(transform);
+        self
+    }
+
+    ///Adds a `Some(bound)`
+    pub fn with_bound(mut self, bound: Aabb3<f32>) -> Self{
+        self.bound = Some(bound);
+        self
+    }
+
+    ///sets shadow casting to Some(true)
+    pub fn with_shadows(mut self) -> Self{
+        self.cast_shadow = Some(true);
+        self
+    }
+
+    ///sets shadow casting to Some(false)
+    pub fn without_shadows(mut self) -> Self{
+        self.cast_shadow = Some(false);
+        self
+    }
+
+    ///adds transparency as parameter to Some(true)
+    pub fn with_transparency(mut self) -> Self{
+        self.is_transparent = Some(true);
+        self
+    }
+
+    ///adds transparency as parameter to Some(false)
+    pub fn without_transparency(mut self) -> Self{
+        self.is_transparent = Some(false);
+        self
+    }
+
+    ///Sets to "object is hidden in game"
+    pub fn with_is_hidden(mut self) -> Self{
+        self.hide_in_game = Some(true);
+        self
+    }
+
+    ///Sets to "object is not hidden in game"
+    pub fn without_is_hidden(mut self) -> Self{
+        self.hide_in_game = Some(false);
+        self
+    }
+}
+
 
 ///The trait for special engine funtions
 pub trait SceneTree<

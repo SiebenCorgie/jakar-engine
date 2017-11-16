@@ -6,7 +6,9 @@ use render::window;
 use render::render_helper;
 use core::engine_settings;
 use core::resources::camera::Camera;
-use core::simple_scene_system::node_helper;
+//use core::simple_scene_system::node_helper;
+use core::next_tree;
+use jakar_tree;
 use input::KeyMap;
 
 use vulkano;
@@ -461,17 +463,19 @@ impl Renderer {
 
         //get all opaque meshes
         let opaque_meshes = asset_manager.get_meshes_in_frustum(
-            Some(node_helper::SortAttributes::new().is_not_translucent())
+            Some(next_tree::SceneComparer::new().without_transparency())
         );
         //get all translucent meshes
         let translucent_meshes = asset_manager.get_meshes_in_frustum(
-            Some(node_helper::SortAttributes::new().is_translucent())
+            Some(next_tree::SceneComparer::new().with_transparency())
         );
+
+
         //now start the sorting process on another thread, we recive the sorted
         // meshes when done with adding the opaque meshes
         let sorted_translucent_meshes = render_helper::order_by_distance(
             translucent_meshes, asset_manager.get_camera().clone()
-        );
+        ); //this only returns the Receiver
 
 
         //TODO have to find a nicer way of doing this... later
@@ -507,7 +511,7 @@ impl Renderer {
             //now render the opaque meshes
             for mesh in opaque_meshes.iter(){
                 //get the mesh in the tubel
-                let mesh_lck = mesh.0
+                let mesh_lck = mesh
                 .lock()
                 .expect("could not lock mesh for building command buffer");
                 //take the command buffer

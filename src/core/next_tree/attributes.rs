@@ -11,7 +11,7 @@ pub struct NodeAttributes {
     pub transform: Decomposed<Vector3<f32>, Quaternion<f32>>,
     ///The bounds of this note, takes the `content` bound as well as the max and min values of
     ///all its children into consideration.
-    bound: Aabb3<f32>,
+    pub bound: Aabb3<f32>,
 
 
     /// Can be turned off to disable shadow casting, usefull for many small objects
@@ -24,7 +24,24 @@ pub struct NodeAttributes {
     pub hide_in_game: bool,
 }
 
+///A custom implementation
+impl NodeAttributes{
+    /// Returns a reference to the transform component. Can be used to determin 3d relation between
+    /// nodes.
+    pub fn get_transform(&self) -> &Decomposed<Vector3<f32>, Quaternion<f32>>{
+        &self.transform
+    }
 
+    /// Returns bound information of this node (**NOT THE MESH BOUND**)
+    pub fn get_bound(&self) -> &Aabb3<f32>{
+        &self.bound
+    }
+
+
+}
+
+
+///The jakar tree impementation
 impl Attribute<SceneJobs> for NodeAttributes{
     ///The type used to comapre nodes which a a `comaprer`
     type Comparer = super::SceneComparer;

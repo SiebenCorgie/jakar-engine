@@ -116,7 +116,7 @@ impl Mesh {
         (mat_lck).get_name()
     }
 
-    ///Returns the material in use by this mesh
+    ///Returns the material in use by this mesh as clone
     #[inline]
     pub fn get_material(&self) -> Arc<Mutex<material::Material>>{
         self.material.clone()
