@@ -437,28 +437,10 @@ impl Renderer {
 
         previous_frame.cleanup_finished();
 
-
-        //If found out in last frame that images are out of sync, generate new ones
-        if self.recreate_swapchain{
-            if !self.recreate_swapchain(){
-                //If we got the UnsupportedDimensions Error (and therefor returned false)
-                //Abord the frame
-                return previous_frame;
-            }
+        //check the pipeline if false is returned, we return the future of the previos frame
+        if !self.check_pipeline(){
+            return previous_frame;
         }
-
-        //Try to get a new image
-        //If not possible becuase outdated (result is Err)
-        //then return (abort frame)
-        //and recreate swapchain
-        let (image_num, acquire_future) =
-        match self.check_image_state(){
-            Ok(r) => r,
-            Err(_) => {
-                self.recreate_swapchain = true;
-                return previous_frame;
-            },
-        };
 
 
         //get all opaque meshes
@@ -706,6 +688,35 @@ impl Renderer {
         new_frame
     }
 
+    ///checks the pipeline. If not up to date, recreates it
+    fn check_pipeline(&mut self) -> bool{
+        //If found out in last frame that images are out of sync, generate new ones
+        if self.recreate_swapchain{
+            if !self.recreate_swapchain(){
+                //If we got the UnsupportedDimensions Error (and therefor returned false)
+                //Abord the frame
+                return false;
+            }
+        }
+
+        //Try to get a new image
+        //If not possible becuase outdated (result is Err)
+        //then return (abort frame)
+        //and recreate swapchain
+        let (image_num, acquire_future) =
+        match self.check_image_state(){
+            Ok(r) => r,
+            Err(_) => {
+                self.recreate_swapchain = true;
+                return false;
+            },
+        };
+        //the pipeline is okay, be can start to get all the info for this frame!
+        true
+    }
+
+
+
     ///Returns the uniform manager
     pub fn get_uniform_manager(&self) -> Arc<Mutex<uniform_manager::UniformManager>>{
         self.uniform_manager.clone()
@@ -725,32 +736,6 @@ impl Renderer {
     pub fn get_queue(&self) -> Arc<vulkano::device::Queue>{
         self.queue.clone()
     }
-
-    /*
-    ///A helper function which will create a tubel of
-    ///(`pipeline_manager`, `uniform_manager`, `device`)
-    ///This is needed for the material creation
-    pub fn get_material_instances(&self) -> (
-        Arc<GraphicsPipelineAbstract + Send + Sync>,
-        Arc<Mutex<uniform_manager::UniformManager>>,
-        Arc<vulkano::device::Device>,
-        )
-    {
-        //Copy a default pipeline currently there is no way to nicly create a pipeline from a
-        //shader file without doubling the pipeline code :/
-        let pipeline_copy = {
-            let pipe_man_inst = self.pipeline_manager.clone();
-            let mut pipe_man_lck = pipe_man_inst.lock().expect("failed to hold pipe man lock");
-            (*pipe_man_lck).get_default_pipeline()
-        };
-
-        let pipe = pipeline_copy;
-        let uni_man = self.uniform_manager.clone();
-        let device = self.device.clone();
-
-        (pipe, uni_man, device)
-    }
-    */
 
     ///Returns an instance of the engine settings
     ///This might be a dublicate, still helpful
