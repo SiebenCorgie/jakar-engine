@@ -1,4 +1,3 @@
-use core::simple_scene_system::node;
 use core::next_tree::*;
 use jakar_tree;
 
@@ -22,7 +21,7 @@ impl SceneManager {
         match self.scenes.contains_key(&scene.name.clone()){
             true => {
                 //the scene exist, going to generate an indice which doesnt exist
-                let indice = 0;
+                let mut indice = 0;
                 while self.scenes.contains_key(&(scene.name.clone() + "_" + &indice.to_string())){
                     indice +=1;
                 }

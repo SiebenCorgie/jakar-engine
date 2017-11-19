@@ -24,16 +24,13 @@ use vulkano::pipeline::GraphicsPipelineAbstract;
 
 use winit;
 
-use cgmath;
-
 use std::sync::{Arc,Mutex};
 use std::time::{Instant};
 use std::mem;
-use std::collections::BTreeMap;
 
 ///An enum describing states of the renderer
 #[derive(Eq, PartialEq)]
-enum RendererState {
+pub enum RendererState {
     RUNNING,
     WAITING,
     SHOULD_END,
@@ -42,7 +39,7 @@ enum RendererState {
 
 
 
-///The main renderer
+///The main renderer. Should be created through a RenderBuilder
 pub struct Renderer  {
     ///Holds the renderers pipeline_manager
     pipeline_manager: Arc<Mutex<pipeline_manager::PipelineManager>>,
@@ -68,7 +65,40 @@ pub struct Renderer  {
 }
 
 impl Renderer {
-    ///Creates a new renderer with all subsystems, returns the renderer and the GPUs future.
+    ///Creates a new renderer from all the systems. However, you should only use the builder to create
+    /// a renderer.
+    pub fn create_for_builder(
+        pipeline_manager: Arc<Mutex<pipeline_manager::PipelineManager>>,
+        window: window::Window,
+        device: Arc<vulkano::device::Device>,
+        queue: Arc<vulkano::device::Queue>,
+        swapchain: Arc<vulkano::swapchain::Swapchain>,
+        images: Vec<Arc<vulkano::image::SwapchainImage>>,
+        renderpass: Arc<RenderPassAbstract + Send + Sync>,
+        depth_buffer: Arc<vulkano::image::AttachmentImage<vulkano::format::D16Unorm>>,
+        framebuffers: Vec<Arc<FramebufferAbstract + Send + Sync>>,
+        recreate_swapchain: bool,
+        engine_settings: Arc<Mutex<engine_settings::EngineSettings>>,
+        uniform_manager: Arc<Mutex<uniform_manager::UniformManager>>,
+        state: Arc<Mutex<RendererState>>,
+    ) -> Renderer{
+        Renderer{
+            pipeline_manager: pipeline_manager,
+            window: window,
+            device: device,
+            queue: queue,
+            swapchain: swapchain,
+            images: images,
+            renderpass: renderpass,
+            depth_buffer: depth_buffer,
+            framebuffers: framebuffers,
+            recreate_swapchain: recreate_swapchain,
+            engine_settings: engine_settings,
+            uniform_manager: uniform_manager,
+            state: state,
+        }
+    }
+    /*
     pub fn new(
             events_loop: Arc<Mutex<winit::EventsLoop>>,
             engine_settings: Arc<Mutex<engine_settings::EngineSettings>>,
@@ -206,7 +236,7 @@ impl Renderer {
 
         //Create a artificial device and its queue
         let (device, mut queues) = vulkano::device::Device::new(
-            physical, physical.supported_features(),
+            physical, physical.supported_features(), //TODO test for needed features and only activate the needed ones
             &device_ext, [(queue, 0.5)].iter().cloned()
         )
         .expect("failed to create device");
@@ -345,8 +375,7 @@ impl Renderer {
 
         (renderer, previous_frame)
     }
-
-
+    */
 
     ///Recreates swapchain for the window size in `engine_settings`
     ///Returns true if successfully recreated chain
@@ -402,7 +431,6 @@ impl Renderer {
             store_framebuffer.push(i.clone());
         }
 
-
         mem::replace(&mut self.framebuffers, store_framebuffer);
 
         //Now when can mark the swapchain as "fine" again
@@ -426,6 +454,36 @@ impl Renderer {
     ///Renders the scene with the parameters supplied by the asset_manager
     ///and returns the future of this frame. The future can be joint to wait for the gpu
     ///or be supplied to the next update();
+    pub fn render(
+        &mut self,
+        asset_manager: &mut asset_manager::AssetManager,
+        mut previous_frame: Box<GpuFuture>,
+    ) -> Box<GpuFuture>{
+        //first of all we have to check our pipeline
+        if !self.check_pipeline(){
+            return previous_frame;
+        }
+
+        //now we can actually start the frame
+
+        //get all opaque meshes
+        let opaque_meshes = asset_manager.get_meshes_in_frustum(
+            Some(next_tree::SceneComparer::new().without_transparency())
+        );
+        //get all translucent meshes
+        let translucent_meshes = asset_manager.get_meshes_in_frustum(
+            Some(next_tree::SceneComparer::new().with_transparency())
+        );
+
+        //TODO create command buffers and render frame
+
+
+        //TODO remove
+        previous_frame
+    }
+
+
+    /*
     pub fn render(
         &mut self,
         asset_manager: &mut asset_manager::AssetManager,
@@ -687,8 +745,9 @@ impl Renderer {
         //println!("Ending frame with new future", );
         new_frame
     }
+    */
 
-    ///checks the pipeline. If not up to date, recreates it
+    ///checks the pipeline. If not up to date (return is false), recreates it.
     fn check_pipeline(&mut self) -> bool{
         //If found out in last frame that images are out of sync, generate new ones
         if self.recreate_swapchain{

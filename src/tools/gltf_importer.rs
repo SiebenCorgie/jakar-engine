@@ -671,7 +671,7 @@ pub fn load_gltf_node(
     // B: all sub gltf nodes
     let empty = empty::Empty::new(&new_name);
     let empty_value = content::ContentType::Empty(empty);
-    let node_attributes = attributes::NodeAttributes::default();
+    let mut node_attributes = attributes::NodeAttributes::default();
     node_attributes.transform = node_transform;
     //add the empty to the parent node in tree
     tree.add(empty_value, parent_node_name.clone(), Some(node_attributes));
@@ -692,7 +692,7 @@ pub fn load_gltf_node(
             //create a node from every mesh and add it to the own Node
             for prim in primitives{
                 //create the mesh node
-                let mesh_name = new_name + "_mesh_" + &mesh.index().to_string();
+                let mesh_name = new_name.clone() + "_mesh_" + &mesh.index().to_string();
                 //now we lock the mesh for a moment to decide:
                 // transparency
                 // bound
@@ -701,7 +701,7 @@ pub fn load_gltf_node(
                 let prim_attrib = {
                     //create a default set of values, first change the transform param to the same
                     // like the parent node
-                    let attrib = attributes::NodeAttributes::default();
+                    let mut attrib = attributes::NodeAttributes::default();
                     attrib.transform = node_transform;
                     //now we have to lock the mesh and then get its material, the the material
                     // transparency param and use it to set the transparency bool.
@@ -711,8 +711,9 @@ pub fn load_gltf_node(
                     let transparent = {
                         let mesh_lck = prim.lock().expect("failed to lock the mesh while importing");
 
-                        let material_lck = (*mesh_lck)
-                        .get_material()
+                        let material = (*mesh_lck)
+                        .get_material();
+                        let material_lck = material
                         .lock()
                         .expect("failed to lock mesh material while importing");
                         //well we have to get the pipeline now and match the transparency config.
@@ -737,7 +738,7 @@ pub fn load_gltf_node(
                 //create a content struct from the mesh
                 let mesh_node_value = content::ContentType::Mesh(prim);
                 //now add this mesh node to the current tree together with its forged attributes :D
-                tree.add(mesh_node_value, new_name, Some(prim_attrib));
+                tree.add(mesh_node_value, new_name.clone(), Some(prim_attrib));
             }
         }
         None => {}, //no mesh found for this node
@@ -786,7 +787,7 @@ pub fn import_gltf(
     let empty_node = content::ContentType::Empty(empty_object);
     //create a tree from it
     //TODO we might have to read the roots node location, rotation and scale
-    let scene_tree = tree::Tree::new(empty_node, attributes::NodeAttributes::default());
+    let mut scene_tree = tree::Tree::new(empty_node, attributes::NodeAttributes::default());
 
     for scene in gltf.scenes(){
         //create an empty scene node with the correct name
