@@ -14,17 +14,18 @@ use cgmath::*;
 /// `meshes` based on their distance to the `camera` (the furthest away is the first mesh, the neares is the last).
 pub fn order_by_distance(
     mehes: Vec<node::Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>>,
-    camera: camera::DefaultCamera,
+    camera: &camera::DefaultCamera,
 ) -> mpsc::Receiver<Vec<node::Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>>>{
     //Create the pipe
     let (sender, reciver) = mpsc::channel();
+    //extract the position of the camera needed for the calculation
+    let camera_location = camera.get_position();
+
     //spawn the thread
-    let thread_handle = thread::spawn(move ||{
+    let _ = thread::spawn(move ||{
 
         //Silly ordering
         let mut ordered_meshes: BTreeMap<i64, node::Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>> = BTreeMap::new();
-
-        let camera_location = camera.get_position();
 
         for mesh in mehes.iter(){
 

@@ -1,7 +1,6 @@
 use render::pipeline_manager;
 use render::uniform_manager;
 use core::resource_management::asset_manager;
-use core::resources::mesh;
 use render::window;
 use render::render_helper;
 use core::engine_settings;
@@ -9,20 +8,18 @@ use core::resources::camera::Camera;
 //use core::simple_scene_system::node_helper;
 use core::next_tree;
 use jakar_tree;
-use input::KeyMap;
 
 use vulkano;
+use vulkano::command_buffer::AutoCommandBufferBuilder;
+use vulkano::command_buffer::CommandBuffer;
 use vulkano::framebuffer::FramebufferAbstract;
 use vulkano::framebuffer::RenderPassAbstract;
 use vulkano::swapchain::SwapchainCreationError;
 use vulkano::swapchain::SwapchainAcquireFuture;
 use vulkano::swapchain::AcquireError;
 use vulkano::sync::GpuFuture;
-use vulkano_win;
 use vulkano::instance::debug::{DebugCallback, MessageTypes};
-use vulkano::pipeline::GraphicsPipelineAbstract;
 
-use winit;
 
 use std::sync::{Arc,Mutex};
 use std::time::{Instant};
@@ -457,12 +454,21 @@ impl Renderer {
     pub fn render(
         &mut self,
         asset_manager: &mut asset_manager::AssetManager,
-        mut previous_frame: Box<GpuFuture>,
+        previous_frame: Box<GpuFuture>,
     ) -> Box<GpuFuture>{
+
+
         //first of all we have to check our pipeline
-        if !self.check_pipeline(){
-            return previous_frame;
-        }
+        let (image_number,acquire_future) = {
+            match self.check_pipeline(){
+                Ok(k) => k,
+                Err(e) => {
+                    println!("Could not get next swapchain image: {}", e);
+                    //early return to restart the frame
+                    return previous_frame;
+                }
+            }
+        };
 
         //now we can actually start the frame
 
@@ -474,12 +480,147 @@ impl Renderer {
         let translucent_meshes = asset_manager.get_meshes_in_frustum(
             Some(next_tree::SceneComparer::new().with_transparency())
         );
+        //now send the translucent meshes to another thread for ordering
+        let trans_recv = render_helper::order_by_distance(
+            translucent_meshes, asset_manager.get_camera()
+        );
 
-        //TODO create command buffers and render frame
+
+        //While the cpu is gathering the the translucent meshes based on the distance to the
+        //camera, we start to build the command buffer for the opaque meshes, unordered actually.
+        //1st.:get the dimensions of the current image and start a command buffer builder for it
+        //Get the dimensions to fill the dynamic vieport setting per mesh.
+        let dimensions = {
+            let engine_settings_lck = self.engine_settings
+            .lock()
+            .expect("Failed to lock settings");
+            (*engine_settings_lck).get_dimensions()
+        };
+
+        //start the command buffer
+        let mut command_buffer: AutoCommandBufferBuilder =
+            vulkano::command_buffer::AutoCommandBufferBuilder::new(
+                self.device.clone(),
+                self.queue.family()
+            )
+            .expect("failed to create tmp buffer!")
+            .begin_render_pass(
+                self.framebuffers[image_number].clone(), false,
+                vec![
+                    [0.1, 0.1, 0.1, 1.0].into(),
+                    1f32.into()
+                ]
+            ).expect("failed to clear");
+
+        //we now have the start for a command buffer. In a later engine
+        //stage at this point a compute command is added for the forward+ early depth pass.
+        // we are currently rendering only in a normal forward manor.
+
+        //add all opaque meshes to the command buffer
+        for opaque_mesh in opaque_meshes.iter(){
+            command_buffer = self.add_node_to_command_buffer(opaque_mesh, command_buffer, dimensions);
+        }
+
+        //now try to get the ordered list of translucent meshes and add them as well
+        match trans_recv.recv(){
+            Ok(ord_tr) => {
+                for opaque_mesh in ord_tr.iter(){
+                    command_buffer = self.add_node_to_command_buffer(opaque_mesh, command_buffer, dimensions);
+                }
+            },
+            Err(er) => {
+                println!("Something went wrong while ordering the translucent meshes: {}", er);
+            }
+        }
+
+        //now we can end the frame. In the future this might be the time to add post processing
+        //etc. but not for now ;)
+
+        //thanks firewater
+        let real_cb = command_buffer
+        .end_render_pass().expect("failed to end command buffer")
+        .build().expect("failed to build command buffer");
 
 
-        //TODO remove
-        previous_frame
+        let after_prev_and_aq = previous_frame.join(acquire_future);
+        let after_frame = after_prev_and_aq.then_execute(self.queue.clone(), real_cb).unwrap();
+
+        Box::new(after_frame)
+
+
+    }
+
+    ///adds a `node` to the `command_buffer` if possible to be rendered.
+    fn add_node_to_command_buffer(
+        &self, node: &jakar_tree::node::Node<
+            next_tree::content::ContentType,
+            next_tree::jobs::SceneJobs,
+            next_tree::attributes::NodeAttributes>,
+        command_buffer: AutoCommandBufferBuilder,
+        dimensions: [u32; 2])
+    -> AutoCommandBufferBuilder
+    where AutoCommandBufferBuilder: Sized + 'static
+    {
+
+        //get the actual mesh as well as its pipeline an create the descriptor sets
+        let mesh_locked = match node.value{
+            next_tree::content::ContentType::Mesh(ref mesh) => mesh.clone(),
+            _ => return command_buffer, //is no mesh :(
+        };
+
+        let mesh = mesh_locked.lock().expect("failed to lock mesh in cb creation");
+
+        let mesh_transform = node.attributes.get_matrix();
+
+        let material_locked = mesh.get_material();
+        let mut material = material_locked
+        .lock()
+        .expect("failed to lock mesh for command buffer generation");
+
+        let pipeline = material.get_vulkano_pipeline();
+
+        let set_01 = {
+            //aquirre the tranform matrix and generate the new set_01
+            material.get_set_01(mesh_transform)
+        };
+
+        let set_02 = {
+            material.get_set_02()
+        };
+
+        let set_03 = {
+            material.get_set_03()
+        };
+
+        let set_04 = {
+            material.get_set_04()
+        };
+
+        //extend the current command buffer by this mesh
+        command_buffer
+            .draw_indexed(
+                pipeline,
+
+                vulkano::command_buffer::DynamicState{
+                    line_width: None,
+                    viewports: Some(vec![vulkano::pipeline::viewport::Viewport {
+                        origin: [0.0, 0.0],
+                        dimensions: [dimensions[0] as f32, dimensions[1] as f32],
+                        depth_range: 0.0 .. 1.0,
+                    }]),
+                    scissors: None,
+                },
+                mesh
+                .get_vertex_buffer(), //vertex buffer (static usually)
+
+                mesh
+                .get_index_buffer(
+                    self.device.clone(), self.queue.clone()
+                ).clone(), //index buffer
+                (set_01, set_02, set_03, set_04), //descriptor sets (currently static)
+                ()
+            )
+            .expect("Failed to draw in command buffer!")
     }
 
 
@@ -747,14 +888,14 @@ impl Renderer {
     }
     */
 
-    ///checks the pipeline. If not up to date (return is false), recreates it.
-    fn check_pipeline(&mut self) -> bool{
+    ///checks the pipeline. If not up to date (return is AcquireError), recreates it.
+    fn check_pipeline(&mut self) -> Result<(usize, SwapchainAcquireFuture), AcquireError>{
         //If found out in last frame that images are out of sync, generate new ones
         if self.recreate_swapchain{
             if !self.recreate_swapchain(){
                 //If we got the UnsupportedDimensions Error (and therefor returned false)
                 //Abord the frame
-                return false;
+                return Err(AcquireError::SurfaceLost);
             }
         }
 
@@ -762,16 +903,13 @@ impl Renderer {
         //If not possible becuase outdated (result is Err)
         //then return (abort frame)
         //and recreate swapchain
-        let (image_num, acquire_future) =
         match self.check_image_state(){
-            Ok(r) => r,
-            Err(_) => {
+            Ok(r) => return Ok(r),
+            Err(er) => {
                 self.recreate_swapchain = true;
-                return false;
+                return Err(er);
             },
         };
-        //the pipeline is okay, be can start to get all the info for this frame!
-        true
     }
 
 

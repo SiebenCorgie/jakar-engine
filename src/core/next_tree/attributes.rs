@@ -32,6 +32,11 @@ impl NodeAttributes{
         &self.transform
     }
 
+    ///Returns the model matrix of this node
+    pub fn get_matrix(&self) -> Matrix4<f32>{
+        Matrix4::from(self.transform)
+    }
+
     /// Returns bound information of this node (**NOT THE MESH BOUND**)
     pub fn get_bound(&self) -> &Aabb3<f32>{
         &self.bound
