@@ -3,7 +3,6 @@ use std::thread;
 
 use jakar_tree::*;
 use jakar_tree::node::Attribute;
-use jakar_tree::node::NodeContent;
 use core::next_tree::content;
 use core::next_tree::attributes;
 use core::next_tree::jobs;
@@ -14,9 +13,7 @@ use core::next_tree::SaveUnwrap;
 
 use core::resource_management::texture_manager;
 use core::resource_management::material_manager;
-use core::resources::mesh;
 use core::resource_management::mesh_manager;
-//use tools::assimp_importer;
 use tools::gltf_importer;
 use core::resource_management::scene_manager;
 use core::resources::camera::Camera;
@@ -162,7 +159,7 @@ impl AssetManager {
         //after getting all lights, create the shader-usable shader infos
         let point_shader_info = {
 
-            let all_point_lights = self.active_main_scene.get_all_point_lights(None).into_point_light();
+            let all_point_lights = self.active_main_scene.get_all_point_lights(&None).into_point_light();
 
             let mut return_vec = Vec::new();
             //transform into shader infos
@@ -197,7 +194,7 @@ impl AssetManager {
         };
 
         let directional_shader_info = {
-            let all_directional_lights = self.active_main_scene.get_all_directional_lights(None).into_directional_light();
+            let all_directional_lights = self.active_main_scene.get_all_directional_lights(&None).into_directional_light();
 
             let mut return_vec = Vec::new();
             //transform into shader infos
@@ -233,7 +230,7 @@ impl AssetManager {
 
         let spot_shader_info = {
             let mut return_vec = Vec::new();
-            let all_spot_lights = self.active_main_scene.get_all_spot_lights(None).into_spot_light();
+            let all_spot_lights = self.active_main_scene.get_all_spot_lights(&None).into_spot_light();
 
             //transform into shader infos
             for light in all_spot_lights.iter(){
@@ -344,7 +341,7 @@ impl AssetManager {
     pub fn get_all_meshes(
         &mut self, mesh_parameter: Option<next_tree::SceneComparer>
     ) -> Vec<node::Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>>{
-        self.active_main_scene.get_all_meshes(mesh_parameter)
+        self.active_main_scene.get_all_meshes(&mesh_parameter)
     }
 
     ///Returns all meshes in the view frustum of the currently active camera
@@ -352,7 +349,7 @@ impl AssetManager {
     pub fn get_meshes_in_frustum(
         &mut self, sort_options: Option<next_tree::SceneComparer>
     ) -> Vec<node::Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>>{
-        self.active_main_scene.get_all_meshes_in_frustum(&self.camera, sort_options)
+        self.active_main_scene.get_all_meshes_in_frustum(&self.camera, &sort_options)
     }
 
     ///Imports a new gltf scene file to a new scene with `name` as name from `path`
@@ -408,7 +405,9 @@ impl AssetManager {
     ///Adds a scene from the local scene manager (based on `name`) to the local main scene
     /// at the `_root` node. If you want to add it at a specific node, do it like this:
     /// `get_active_scene().join(tree, node_name);`
-    pub fn add_scene_to_main_scene(&mut self, name: &str){
+    pub fn add_scene_to_main_scene(&mut self, name: &str)
+     -> Result<(), tree::NodeErrors>
+     {
 
         //Get the scene
         let scene ={
@@ -420,13 +419,27 @@ impl AssetManager {
                 //TODO make this to an Arc<GenericNode>
                 let scene_lck = sc.lock().expect("failed to hold scene lock while adding");
                 //Create a pass it to the main scene TODO make this reference the old scene
-                self.active_main_scene.join(&(*scene_lck).clone(), "_root".to_string());
+                match self.active_main_scene.join_at_root(&(*scene_lck).clone()){
+                    Ok(_) => {},
+                    Err(r) => {
+
+                        println!("failed to add scene at main scene's root !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!", );
+                        return Err(r);
+                    },
+                }
             },
-            None => rt_error("ASSET_MANAGER", &("Could not find scene with name".to_string() + name.clone()).to_string()),
+            None => {
+                rt_error(
+                    "ASSET_MANAGER",
+                    &("Could not find scene with name: ".to_string() + name.clone()).to_string()
+                );
+                return Err(tree::NodeErrors::NoNodeFound("Could not find the parent node".to_string()));
+            },
         }
 
         //finally rebuild bounds
         self.get_active_scene().rebuild_bounds();
+        Ok(())
     }
 
     ///Returns true if a scene with `name` as name exists in the local scene manager
@@ -489,6 +502,12 @@ impl AssetManager {
     #[inline]
     pub fn get_settings(&self) -> Arc<Mutex<engine_settings::EngineSettings>>{
         self.settings.clone()
+    }
+
+    ///Returns a copy of the current keymap
+    #[inline]
+    pub fn get_keymap(&self) -> KeyMap{
+        self.key_map.lock().expect("failed to lock keymap").clone()
     }
 
 }

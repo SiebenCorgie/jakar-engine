@@ -438,9 +438,15 @@ impl Renderer {
     ///Returns the image if the image state is outdated
     ///Panics if another error occures while pulling a new image
     pub fn check_image_state(&self) -> Result<(usize, SwapchainAcquireFuture), AcquireError>{
+        use std::time::Duration;
+
+        let time_out = Duration::new(1, 0);
+
 
         match vulkano::swapchain::acquire_next_image(self.swapchain.clone(), None) {
-            Ok(r) => return Ok(r),
+            Ok(r) => {
+                return Ok(r);
+            },
             Err(vulkano::swapchain::AcquireError::OutOfDate) => {
                 return Err(vulkano::swapchain::AcquireError::OutOfDate);
             },
@@ -454,14 +460,18 @@ impl Renderer {
     pub fn render(
         &mut self,
         asset_manager: &mut asset_manager::AssetManager,
-        previous_frame: Box<GpuFuture>,
+        mut previous_frame: Box<GpuFuture>,
     ) -> Box<GpuFuture>{
 
+        //clean old frame
+        previous_frame.cleanup_finished();
 
         //first of all we have to check our pipeline
-        let (image_number,acquire_future) = {
+        let (image_number, acquire_future) = {
             match self.check_pipeline(){
-                Ok(k) => k,
+                Ok(k) => {
+                    k
+                },
                 Err(e) => {
                     println!("Could not get next swapchain image: {}", e);
                     //early return to restart the frame
@@ -471,20 +481,18 @@ impl Renderer {
         };
 
         //now we can actually start the frame
-
         //get all opaque meshes
-        let opaque_meshes = asset_manager.get_meshes_in_frustum(
+        let opaque_meshes = asset_manager.get_all_meshes(
             Some(next_tree::SceneComparer::new().without_transparency())
         );
         //get all translucent meshes
-        let translucent_meshes = asset_manager.get_meshes_in_frustum(
+        let translucent_meshes = asset_manager.get_all_meshes(
             Some(next_tree::SceneComparer::new().with_transparency())
         );
         //now send the translucent meshes to another thread for ordering
         let trans_recv = render_helper::order_by_distance(
             translucent_meshes, asset_manager.get_camera()
         );
-
 
         //While the cpu is gathering the the translucent meshes based on the distance to the
         //camera, we start to build the command buffer for the opaque meshes, unordered actually.
@@ -507,7 +515,7 @@ impl Renderer {
             .begin_render_pass(
                 self.framebuffers[image_number].clone(), false,
                 vec![
-                    [0.1, 0.1, 0.1, 1.0].into(),
+                    [1.0, 0.1, 0.1, 1.0].into(),
                     1f32.into()
                 ]
             ).expect("failed to clear");
@@ -517,9 +525,11 @@ impl Renderer {
         // we are currently rendering only in a normal forward manor.
 
         //add all opaque meshes to the command buffer
+
         for opaque_mesh in opaque_meshes.iter(){
             command_buffer = self.add_node_to_command_buffer(opaque_mesh, command_buffer, dimensions);
         }
+
 
         //now try to get the ordered list of translucent meshes and add them as well
         match trans_recv.recv(){
@@ -543,7 +553,20 @@ impl Renderer {
 
 
         let after_prev_and_aq = previous_frame.join(acquire_future);
-        let after_frame = after_prev_and_aq.then_execute(self.queue.clone(), real_cb).unwrap();
+
+        let before_present_frame = after_prev_and_aq.then_execute(self.queue.clone(), real_cb)
+        .unwrap();
+
+        //now present to the image
+        let after_present_frame = vulkano::swapchain::present(
+            self.swapchain.clone(),
+            before_present_frame, self.queue.clone(),
+            image_number
+        );
+        //now signal fences
+        let after_frame = after_present_frame.then_signal_fence_and_flush().unwrap();
+
+
 
         Box::new(after_frame)
 
@@ -895,6 +918,7 @@ impl Renderer {
             if !self.recreate_swapchain(){
                 //If we got the UnsupportedDimensions Error (and therefor returned false)
                 //Abord the frame
+                println!("Fucked up while recreating new swapchain", );
                 return Err(AcquireError::SurfaceLost);
             }
         }
@@ -904,12 +928,15 @@ impl Renderer {
         //then return (abort frame)
         //and recreate swapchain
         match self.check_image_state(){
-            Ok(r) => return Ok(r),
+            Ok(r) => {
+                return Ok(r)
+            },
             Err(er) => {
                 self.recreate_swapchain = true;
                 return Err(er);
             },
         };
+
     }
 
 

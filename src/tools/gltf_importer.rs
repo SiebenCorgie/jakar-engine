@@ -167,7 +167,7 @@ pub fn load_gltf_material(
     base: &Path,
     managers: &Arc<Mutex<core::resource_management::ManagerAndRenderInfo>>,
 ) -> Arc<Mutex<material::Material>>{
-    println!("Loading material with name: {}", material_name.clone());
+    //println!("Loading material with name: {}", material_name.clone());
     //first load the pbr info
     let pbr = mat.pbr_metallic_roughness();
     //now load all textures if there is none it returns none which will be respected at build time of the material
@@ -246,7 +246,7 @@ pub fn load_gltf_material(
         .with_factor_occlusion(mat.occlusion_texture().map_or(1.0, |t| t.strength()))
         .with_factor_emissive(mat.emissive_factor())
     };
-
+    /*
     println!("DEBUG: Factors:", );
     println!("\t Albedo: {:?}", pbr.base_color_factor());
     println!("\t Normal: {:?}", mat.normal_texture().map_or(1.0, |t| t.scale()));
@@ -254,7 +254,7 @@ pub fn load_gltf_material(
     println!("\t Roughness: {:?}", pbr.roughness_factor());
     println!("\t Occlusion: {:?}", mat.occlusion_texture().map_or(1.0, |t| t.strength()));
     println!("\t emmisive: {:?}", mat.emissive_factor());
-
+    */
     //get the manager
     let texture_manager = {
         let managers_lck = managers.lock().expect("failed to lock managers struct");
@@ -285,15 +285,15 @@ pub fn load_gltf_material(
     let blending_mode = {
         match mat.alpha_mode(){
             gltf::material::AlphaMode::Opaque =>{
-                println!("RENDING PASS THROUGH! ======================================================", );
+                //println!("RENDING PASS THROUGH! ======================================================", );
                 pipeline_builder::BlendTypes::BlendPassThrough
             },
             gltf::material::AlphaMode::Mask =>{
-                println!("RENDING ALPHA BLENDING! ======================================================", );
+                //println!("RENDING ALPHA BLENDING! ======================================================", );
                 pipeline_builder::BlendTypes::BlendAlphaBlending //TODO create a Shader for masking, this will come with the uber shading system
             },
             gltf::material::AlphaMode::Blend =>{
-                println!("RENDING ALPHA BLENDING! ======================================================", );
+                //println!("RENDING ALPHA BLENDING! ======================================================", );
                 pipeline_builder::BlendTypes::BlendAlphaBlending
             },
 
@@ -302,10 +302,10 @@ pub fn load_gltf_material(
 
     let cull_mode = {
         if mat.double_sided(){
-            println!("RENDING DOUBLE SIDED! ======================================================", );
+            //println!("RENDING DOUBLE SIDED! ======================================================", );
             pipeline_builder::CullMode::Disabled
         }else{
-            println!("RENDING SINGLE SIDED! ======================================================", );
+            //println!("RENDING SINGLE SIDED! ======================================================", );
             pipeline_builder::CullMode::Back
         }
     };
@@ -357,7 +357,7 @@ pub fn load_gltf_material(
     //now add a copy to the manager and return the name
     let mut material_manager_lck = material_manager.lock().expect("failed to lock material manager");
     //Add it and return its
-    println!("Finished loading material with name: {}", material_name);
+    //println!("Finished loading material with name: {}", material_name);
     let material_in_manager_name = {
         match (*material_manager_lck).add_material(final_material){
             Ok(k) => k,
@@ -542,13 +542,13 @@ pub fn load_gltf_mesh(
         match mesh_material.index(){
             None => {
                 //is the default material, we can leave the mesh material like it is
-                println!("\tIs using default material ... ", );
+                //println!("\tIs using default material ... ", );
             },
             Some(material_index) =>{
                 //create a String for the material name, then check for it, if it isn't in there
                 //create a material from this name
                 let material_name = String::from(scene_name.clone()) + "_material_" + &material_index.to_string();
-                println!("\tIs non default with name: {}", material_name.clone());
+                //println!("\tIs non default with name: {}", material_name.clone());
                 //we need to lock the material manager twice seperatly because we otherwise get a memory lock
                 let is_in_manager = {
                     //first check if there is already a material with this name, if not create one
@@ -631,12 +631,12 @@ pub fn load_gltf_node(
         let mut new_transform: Decomposed<Vector3<f32>, Quaternion<f32>> = Decomposed::one();
 
         let node_transform = gltf_node.transform().decomposed();
-
+        /*
         println!("GLTF Node Transfrom:", );
         println!("\t Translation: {}, {}, {}", node_transform.0[0], node_transform.0[1], node_transform.0[2]);
         println!("\t Rotation   : {}, {}, {}, {}", node_transform.1[0], node_transform.1[1], node_transform.1[2], node_transform.1[3]);
         println!("\t Scale      : {}", node_transform.2[0]);
-
+        */
         //According to the gltf crate the decomposed is (translation, rotation, scale).
         //translation is the 0th field of decomposed with 3 elements
         let translation = Vector3::new(
@@ -652,12 +652,12 @@ pub fn load_gltf_node(
         let scale = {
             node_transform.2[0] //is currently only the x value
         };
-
+        /*
         println!("Node Transfrom:", );
         println!("\t Translation: {}, {}, {}", translation.x, translation.y, translation.z);
         println!("\t Rotation   : {}, {}, {}, {}", rotation.v.x, rotation.v.y, rotation.v.z, rotation.s);
         println!("\t Scale      : {}", scale);
-
+        */
         //update the transform
         new_transform.scale = scale;
         new_transform.disp = translation;
@@ -679,7 +679,7 @@ pub fn load_gltf_node(
     //check for a mesh in the gltf_node
     match gltf_node.mesh(){
         Some(mesh) =>{
-            println!("Found mesh in node: {}", new_name.clone());
+            //println!("Found mesh in node: {}", new_name.clone());
             //load the primitves as an Vec<mesh::Mesh>
             let primitives = load_gltf_mesh(
                 scene_name.clone(),
@@ -688,7 +688,7 @@ pub fn load_gltf_node(
                 base,
                 managers,
             );
-            println!("Finished loading mesh from gltf, adding to node...", );
+            //println!("Finished loading mesh from gltf, adding to node...", );
             //create a node from every mesh and add it to the own Node
             for prim in primitives{
                 //create the mesh node
@@ -818,6 +818,9 @@ pub fn import_gltf(
     let manager_lck = managers.lock().expect("failed to lock managers");
     let scene_manager = (*manager_lck).scene_manager.clone();
     let mut scene_manager_inst = scene_manager.lock().expect("failed to lock scene manager");
+    println!("Adding tree: =================================================================", );
+    scene_tree.print_tree();
+
 
     (*scene_manager_inst).add_scene(scene_tree);
 }

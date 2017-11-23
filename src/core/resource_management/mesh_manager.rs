@@ -25,21 +25,42 @@ impl MeshManager {
     ///Adds a mesh to the manager
     pub fn add_mesh(&mut self, mut mesh: mesh::Mesh){
 
-        let mut mesh_lck = self.meshes.lock().expect("Failed to hold while adding mesh to mesh manager");
+
         //have a look for this mesh in self
-        let b_contains = (*mesh_lck).contains_key(&String::from(mesh.name.clone()));
+        let b_contains = {
+            let mut mesh_lck = self.meshes.lock().expect("Failed to hold while adding mesh to mesh manager");
+            (*mesh_lck).contains_key(&String::from(mesh.name.clone()))
+        };
+
         match b_contains{
             true => {
-                println!("The name: {} is already in the mesh manager, will add as {}_1", mesh.name.clone(), mesh.name.clone());
-                let new_name = mesh.name.clone() + "_1";
+                //generate a unque mesh name
+                let unique_name = self.get_unique_name(mesh.name.clone());
+                println!("The name: {} is already in the mesh manager, will add as {}", mesh.name.clone(), unique_name);
                 //change the name in mesh
-                mesh.name = new_name.clone();
-                (*mesh_lck).insert(new_name, Arc::new(Mutex::new(mesh)));
+                mesh.name = unique_name.clone();
+                let mut mesh_lck = self.meshes.lock().expect("Failed to hold while adding mesh to mesh manager");
+                (*mesh_lck).insert(unique_name, Arc::new(Mutex::new(mesh)));
             },
             false => {
+                let mut mesh_lck = self.meshes.lock().expect("Failed to hold while adding mesh to mesh manager");
                (*mesh_lck).insert(mesh.name.clone(), Arc::new(Mutex::new(mesh)));
             }
         }
+
+    }
+
+    ///helper function to get a not taken name, returns the name + _id
+    fn get_unique_name(&self, name: String) -> String{
+        //lock the meshes
+        let mesh_lck = self.meshes.lock().expect("failed to lock meshes for unique name");
+        let mut unique_id = 0;
+
+        while mesh_lck.contains_key(&(name.clone() + "_" + &unique_id.to_string())){
+            unique_id += 1;
+        }
+
+        name + "_" + &unique_id.to_string()
 
     }
 
@@ -50,24 +71,29 @@ impl MeshManager {
             let mesh_ref_lck = mesh.lock().expect("failed to lock mesh while adding to manager");
             (*mesh_ref_lck).name.clone()
         };
-        //now test the name
-        let mut mesh_lck = self.meshes.lock().expect("Failed to hold while adding mesh to mesh manager");
+
         //have a look for this mesh in self
-        let b_contains = (*mesh_lck).contains_key(&mesh_name);
+        let b_contains = {
+            //now test the name
+            let mesh_lck = self.meshes.lock().expect("Failed to hold while adding mesh to mesh manager");
+            (*mesh_lck).contains_key(&mesh_name)
+        };
 
         match b_contains {
             true => {
-                println!("The name: {} is already in the mesh manager, will add as {}_1", mesh_name, mesh_name);
-                let new_name = mesh_name + "_1";
+                let unique_name = self.get_unique_name(mesh_name.clone());
+                println!("The name: {} is already in the mesh manager, will add as {}", mesh_name, unique_name);
                 //change the name in mesh
                 {
                     let mut mesh_ref_lck = mesh.lock().expect("failed to lock mesh while adding to manager");
-                    (*mesh_ref_lck).name = new_name.clone();
+                    (*mesh_ref_lck).name = unique_name.clone();
                 }
+                let mut mesh_lck = self.meshes.lock().expect("Failed to hold while adding mesh to mesh manager");
                 //and add it to the manager finally
-                (*mesh_lck).insert(new_name, mesh);
+                (*mesh_lck).insert(unique_name, mesh);
             }
             false => {
+                let mut mesh_lck = self.meshes.lock().expect("Failed to hold while adding mesh to mesh manager");
                 //if all is right just add it
                 (*mesh_lck).insert(mesh_name, mesh);
             }

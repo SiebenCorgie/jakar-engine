@@ -220,7 +220,7 @@ impl JakarEngine {
                             .lock()
                             .expect("failed to lock render engine status")
                         )) = EngineStatus::Aboarding(msg.clone());
-                        println!("Failed to create renderer, returning!", );
+                        println!("Failed to create renderer: {}\n returning!", msg);
                         return;
                     }
                 }
@@ -290,6 +290,7 @@ impl JakarEngine {
             //now start the rendering loop
             'render_thread: loop{
                 //lock the renderer and render an image
+                //TODO loc in scope
                 let mut renderer_lck = render
                 .lock().expect("failed to lock renderer");
 
@@ -303,8 +304,9 @@ impl JakarEngine {
                     .lock().expect("failed to lock asset manager");
                     (*asset_manager_lck).clone()
                 };
-
                 gpu_future = (*renderer_lck).render(&mut asset_copy, gpu_future);
+
+                //Tet if the engine should still run
                 let engine_is_running = {
                     let status = render_engine_status.lock().expect("failed to lock engine status");
                     match *status{
@@ -315,6 +317,7 @@ impl JakarEngine {
                 };
 
                 if !engine_is_running{
+                    println!("Renderer should end", );
                     //engine is stoping, ending loop
                     //wait a second for the gpu to finish its last work, then clean up the future
                     thread::sleep_ms(60);
@@ -322,7 +325,6 @@ impl JakarEngine {
                     gpu_future.cleanup_finished();
                     break;
                 }
-
                 //now sleep the rest if needed
                 sleep_rest_time(last_time, max_fps);
 
@@ -350,6 +352,7 @@ impl JakarEngine {
                     //actually recived something, will overwrite now
                     renderer_isnt = Some(renderer);
                     //now we can break the loop
+                    println!("Got a Renderer in the asset waiting loop", );
                     break;
                 }
                 Err(r) =>{
@@ -628,7 +631,7 @@ fn sleep_rest_time(last_time: Instant, max_speed: u32) -> Instant{
         //calc a duration
         let sleep_duration = Duration::new(0, time_to_sleep as u32);
         //and sleep it
-        println!("Sleeping {:?} ...", sleep_duration);
+        //println!("Sleeping {:?} ...", sleep_duration);
         thread::sleep(sleep_duration);
     }
 

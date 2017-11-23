@@ -1,6 +1,6 @@
 ///The scene system mod responsible for handling the scene hirachie and handeling
 ///queries
-pub mod simple_scene_system;
+//pub mod simple_scene_system;
 ///Holds many useful information for different kinds of information
 pub mod engine_settings;
 ///the resource manager is a abstraction to group al management systems together, it is

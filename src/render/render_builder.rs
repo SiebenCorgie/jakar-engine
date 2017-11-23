@@ -117,7 +117,7 @@ impl RenderBuilder {
                     },
                     LayerLoading::NoLayer => {
                         let mut vec: Vec<String> = Vec::new();
-                        vec.push("".to_string());
+                        //vec.push("".to_string());
                         vec
                     },
                     LayerLoading::Load(try_list) => {
@@ -136,8 +136,8 @@ impl RenderBuilder {
                     }
                 }
             }else{
-                let mut vec: Vec<String> = Vec::new();
-                vec.push("".to_string());
+                let vec: Vec<String> = Vec::new();
+                //vec.push("".to_string());
                 vec
             }
         };
@@ -171,14 +171,17 @@ impl RenderBuilder {
         let try_instance = vulkano::instance::Instance::new(
             Some(&app_info),
             &self.physical_extensions_needed, //TODO verify
-            &debug_layers
+            None //&debug_layers
         );
 
         //now unwarp our new instance
         let instance = {
             match try_instance {
                 Ok(k) => k,
-                Err(_) => return Err("Failed to create instance!".to_string()),
+                Err(vkerr) => {
+                    println!("Vulkano_err: {}", vkerr);
+                    return Err("Failed to create instance!".to_string())
+                },
             }
         };
 
@@ -320,7 +323,7 @@ impl RenderBuilder {
             .capabilities(physical_device).expect("failed to get surface capabilities");
 
             //lock settings to read fallback settings
-            let mut engine_settings_lck = engine_settings
+            let engine_settings_lck = engine_settings
             .lock()
             .expect("Failed to lock settings");
 
@@ -347,6 +350,7 @@ impl RenderBuilder {
             )
             .expect("failed to create swapchain")
         };
+        
         for i in images.iter(){
             use vulkano::image::ImageAccess;
             println!("Images have samples: {}", i.samples());
