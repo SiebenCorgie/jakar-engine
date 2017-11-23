@@ -1,11 +1,12 @@
-use core::simple_scene_system::node;
+use core::next_tree::*;
+use jakar_tree;
 
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::collections::BTreeMap;
 
 ///has a list of all available scenes
 pub struct SceneManager {
-    scenes: BTreeMap<String, Arc<Mutex<node::GenericNode>>>,
+    scenes: BTreeMap<String, Arc<Mutex<jakar_tree::tree::Tree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>>>>,
 }
 
 impl SceneManager {
@@ -15,12 +16,24 @@ impl SceneManager {
         }
     }
 
-    //Adds a scene to the scene manager
-    pub fn add_scene(&mut self, mut scene: node::GenericNode){
+    //Adds a scene to the scene manager by
+    pub fn add_scene(&mut self, mut scene: jakar_tree::tree::Tree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>){
         match self.scenes.contains_key(&scene.name.clone()){
             true => {
-                println!("This scene({}) already exists, adding it as {}_1", scene.name.clone(), scene.name.clone());
-                let new_name = String::from(scene.name.clone()) + "_1";
+                //the scene exist, going to generate an indice which doesnt exist
+                let mut indice = 0;
+                while self.scenes.contains_key(&(scene.name.clone() + "_" + &indice.to_string())){
+                    indice +=1;
+                }
+
+                //printing out the debug message
+                println!(
+                    "The scene '{}' already exists, adding it as '{}_{}'",
+                    scene.name.clone(), scene.name.clone(), indice
+                );
+
+
+                let new_name = String::from(scene.name.clone()) + "_" + &indice.to_string();
                 //change the internal name of this scene
                 scene.name = new_name.clone();
                 self.scenes.insert(new_name, Arc::new(Mutex::new(scene)));
@@ -33,7 +46,9 @@ impl SceneManager {
     }
 
     ///Returns Some(scene) by name from the `scenes` Vector as a Mutex guard
-    pub fn get_scene(&mut self, name: &str) -> Option<MutexGuard<node::GenericNode>>{
+    pub fn get_scene(&mut self, name: &str) -> Option<
+        MutexGuard<jakar_tree::tree::Tree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>>
+    >{
         let has = self.scenes.get(&String::from(name));
         match has{
             None => None,
@@ -42,7 +57,9 @@ impl SceneManager {
     }
 
     ///Returns Some(scene) by name from the `scenes` Vector as an Arc<Mutex<T>>
-    pub fn get_scene_arc(&mut self, name: &str) -> Option<Arc<Mutex<node::GenericNode>>>{
+    pub fn get_scene_arc(&mut self, name: &str) -> Option<
+        Arc<Mutex<jakar_tree::tree::Tree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>>>
+    >{
         let has = self.scenes.get(&String::from(name));
         match has{
             None => None,
@@ -50,8 +67,10 @@ impl SceneManager {
         }
     }
 
-    ///Returns the scenes vector as a copy
-    pub fn get_scenes_copy(&self) -> Vec<Arc<Mutex<node::GenericNode>>>{
+    ///Returns the scenes as a copy within a vector
+    pub fn get_scenes_copy(&self) -> Vec<
+        Arc<Mutex<jakar_tree::tree::Tree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>>>
+    >{
         let mut return_vec = Vec::new();
         for (_,i) in self.scenes.iter(){
             return_vec.push(i.clone())

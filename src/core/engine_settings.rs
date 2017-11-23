@@ -2,6 +2,18 @@
 use winit;
 use vulkano;
 
+///Describes how the engine should handle debuging messages and vulkan settings
+#[derive(Clone, PartialEq)]
+pub enum BuildType {
+    ///all debuging code is used.
+    Debug,
+    ///No debuging code is used.
+    Release,
+    ///Some special debuging messages are printed.
+    ReleaseWithDebugMessages,
+}
+
+
 ///The struc with the information
 #[derive(Clone)]
 pub struct EngineSettings {
@@ -30,7 +42,7 @@ pub struct EngineSettings {
 
 
     ///Debug settings:
-    pub silent_vulkan: bool,
+    pub build_mode: BuildType,
 
     ///Graphics settings:
     ///filtering options, should be power of two between 1 and 16
@@ -65,9 +77,6 @@ impl EngineSettings{
     ///     ));
     ///  ```
     pub fn new() -> Self{
-
-
-
         EngineSettings{
             //main
             app_name: String::from("Jakar-Engine"),
@@ -95,7 +104,7 @@ impl EngineSettings{
             fullscreen: false,
             main_monitor: 0,
             //graphics debuging
-            silent_vulkan: false,
+            build_mode: BuildType::Debug,
             //Graphics settings
             anisotropic_filtering: 1.0,
             msaa: 1,
@@ -168,20 +177,6 @@ impl EngineSettings{
         self
     }
 
-
-    /// Sets vulkan silent, vulkan won't print any validation layer infos anymore
-    #[inline]
-    pub fn set_vulkan_silent(mut self) -> Self{
-        self.silent_vulkan = true;
-        self
-    }
-
-    ///returns the silent status of vulkan
-    #[inline]
-    pub fn vulkan_silence(&self) -> bool{
-        self.silent_vulkan.clone()
-    }
-
     ///Sets the dimensions of `self` to `width` and `height`
     #[inline]
     pub fn with_dimensions(mut self, width: u32, height: u32) -> Self{
@@ -194,6 +189,22 @@ impl EngineSettings{
     pub fn at_location(mut self, width: u32, height: u32) -> Self{
         self.window_location = [width, height];
         self
+    }
+
+    ///Sets the engine mode to "release"
+    #[inline]
+    pub fn in_release_mode(mut self) -> Self{
+        self.build_mode = BuildType::Release;
+        self
+    }
+
+    ///Returns true if vulkan should be silent
+    #[inline]
+    pub fn vulkan_silence(&self) -> bool{
+        match self.build_mode{
+            BuildType::Release => true,
+            _ => false,
+        }
     }
 
     ///Sets the name of this settings
@@ -225,4 +236,7 @@ impl EngineSettings{
     pub fn get_dimensions(&self) -> [u32; 2]{
         self.window_dimensions.clone()
     }
+
+
+
 }

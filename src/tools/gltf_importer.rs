@@ -1,6 +1,10 @@
-use core::resources::{texture, material, mesh, light, camera};
+use core::resources::{texture, material, empty, mesh, light, camera};
 use core::resources::camera::Camera;
-use core::simple_scene_system::node;
+//use core::simple_scene_system::node;
+use jakar_tree::*;
+use core::next_tree::*;
+use jakar_tree::node::{Attribute, NodeContent};
+
 use core::resource_management::{material_manager, mesh_manager, scene_manager, texture_manager};
 use core;
 use core::ReturnBoundInfo;
@@ -163,7 +167,7 @@ pub fn load_gltf_material(
     base: &Path,
     managers: &Arc<Mutex<core::resource_management::ManagerAndRenderInfo>>,
 ) -> Arc<Mutex<material::Material>>{
-    println!("Loading material with name: {}", material_name.clone());
+    //println!("Loading material with name: {}", material_name.clone());
     //first load the pbr info
     let pbr = mat.pbr_metallic_roughness();
     //now load all textures if there is none it returns none which will be respected at build time of the material
@@ -242,7 +246,7 @@ pub fn load_gltf_material(
         .with_factor_occlusion(mat.occlusion_texture().map_or(1.0, |t| t.strength()))
         .with_factor_emissive(mat.emissive_factor())
     };
-
+    /*
     println!("DEBUG: Factors:", );
     println!("\t Albedo: {:?}", pbr.base_color_factor());
     println!("\t Normal: {:?}", mat.normal_texture().map_or(1.0, |t| t.scale()));
@@ -250,7 +254,7 @@ pub fn load_gltf_material(
     println!("\t Roughness: {:?}", pbr.roughness_factor());
     println!("\t Occlusion: {:?}", mat.occlusion_texture().map_or(1.0, |t| t.strength()));
     println!("\t emmisive: {:?}", mat.emissive_factor());
-
+    */
     //get the manager
     let texture_manager = {
         let managers_lck = managers.lock().expect("failed to lock managers struct");
@@ -281,15 +285,15 @@ pub fn load_gltf_material(
     let blending_mode = {
         match mat.alpha_mode(){
             gltf::material::AlphaMode::Opaque =>{
-                println!("RENDING PASS THROUGH! ======================================================", );
+                //println!("RENDING PASS THROUGH! ======================================================", );
                 pipeline_builder::BlendTypes::BlendPassThrough
             },
             gltf::material::AlphaMode::Mask =>{
-                println!("RENDING ALPHA BLENDING! ======================================================", );
+                //println!("RENDING ALPHA BLENDING! ======================================================", );
                 pipeline_builder::BlendTypes::BlendAlphaBlending //TODO create a Shader for masking, this will come with the uber shading system
             },
             gltf::material::AlphaMode::Blend =>{
-                println!("RENDING ALPHA BLENDING! ======================================================", );
+                //println!("RENDING ALPHA BLENDING! ======================================================", );
                 pipeline_builder::BlendTypes::BlendAlphaBlending
             },
 
@@ -298,10 +302,10 @@ pub fn load_gltf_material(
 
     let cull_mode = {
         if mat.double_sided(){
-            println!("RENDING DOUBLE SIDED! ======================================================", );
+            //println!("RENDING DOUBLE SIDED! ======================================================", );
             pipeline_builder::CullMode::Disabled
         }else{
-            println!("RENDING SINGLE SIDED! ======================================================", );
+            //println!("RENDING SINGLE SIDED! ======================================================", );
             pipeline_builder::CullMode::Back
         }
     };
@@ -353,7 +357,7 @@ pub fn load_gltf_material(
     //now add a copy to the manager and return the name
     let mut material_manager_lck = material_manager.lock().expect("failed to lock material manager");
     //Add it and return its
-    println!("Finished loading material with name: {}", material_name);
+    //println!("Finished loading material with name: {}", material_name);
     let material_in_manager_name = {
         match (*material_manager_lck).add_material(final_material){
             Ok(k) => k,
@@ -538,13 +542,13 @@ pub fn load_gltf_mesh(
         match mesh_material.index(){
             None => {
                 //is the default material, we can leave the mesh material like it is
-                println!("\tIs using default material ... ", );
+                //println!("\tIs using default material ... ", );
             },
             Some(material_index) =>{
                 //create a String for the material name, then check for it, if it isn't in there
                 //create a material from this name
                 let material_name = String::from(scene_name.clone()) + "_material_" + &material_index.to_string();
-                println!("\tIs non default with name: {}", material_name.clone());
+                //println!("\tIs non default with name: {}", material_name.clone());
                 //we need to lock the material manager twice seperatly because we otherwise get a memory lock
                 let is_in_manager = {
                     //first check if there is already a material with this name, if not create one
@@ -608,31 +612,31 @@ pub fn load_gltf_mesh(
 
 ///Loads a gltf node into the right node::GenericNode
 pub fn load_gltf_node(
-    node: &gltf::Node,
-    scene_name: String,
-    buffers: &gltf_importer::Buffers,
-    base: &Path,
-    managers: &Arc<Mutex<core::resource_management::ManagerAndRenderInfo>>,
-) -> node::GenericNode
+    gltf_node: &gltf::Node, //used to reference gltf stuff
+    scene_name: &String, //used to generate a short, but unique name from the node id
+    parent_node_name: &String, //used to add the node in the tree
+    tree: &mut tree::Tree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>, //the actual tree
+    buffers: &gltf_importer::Buffers, //the buffers to read the gltf info from
+    base: &Path, //the base path from the node
+    managers: &Arc<Mutex<core::resource_management::ManagerAndRenderInfo>>, //teh manager to add textures etc to.
+)
 {
     //creates the new name, based on the indice
-    let new_name = scene_name.clone() + "_node_" + &node.index().to_string();
-    let mut this_node = node::GenericNode::new_empty(&new_name);
-    println!("Created node: {}", new_name.clone());
+    let new_name = scene_name.clone() + "_node_" + &gltf_node.index().to_string();
+
+    //let mut this_node = node::GenericNode::new_empty(&new_name);
+    //println!("Created node: {}", new_name.clone());
     //get the transform of this node
     let node_transform = {
         let mut new_transform: Decomposed<Vector3<f32>, Quaternion<f32>> = Decomposed::one();
 
-
-
-
-        let node_transform = node.transform().decomposed();
-
+        let node_transform = gltf_node.transform().decomposed();
+        /*
         println!("GLTF Node Transfrom:", );
         println!("\t Translation: {}, {}, {}", node_transform.0[0], node_transform.0[1], node_transform.0[2]);
         println!("\t Rotation   : {}, {}, {}, {}", node_transform.1[0], node_transform.1[1], node_transform.1[2], node_transform.1[3]);
         println!("\t Scale      : {}", node_transform.2[0]);
-
+        */
         //According to the gltf crate the decomposed is (translation, rotation, scale).
         //translation is the 0th field of decomposed with 3 elements
         let translation = Vector3::new(
@@ -648,12 +652,12 @@ pub fn load_gltf_node(
         let scale = {
             node_transform.2[0] //is currently only the x value
         };
-
+        /*
         println!("Node Transfrom:", );
         println!("\t Translation: {}, {}, {}", translation.x, translation.y, translation.z);
         println!("\t Rotation   : {}, {}, {}, {}", rotation.v.x, rotation.v.y, rotation.v.z, rotation.s);
         println!("\t Scale      : {}", scale);
-
+        */
         //update the transform
         new_transform.scale = scale;
         new_transform.disp = translation;
@@ -662,10 +666,20 @@ pub fn load_gltf_node(
 
     };
 
-    //check for a mesh in the node
-    match node.mesh(){
+    //now create the node as an empty, this empty will be the parent to:
+    // A: all meshs, cameras and later lights attached to it
+    // B: all sub gltf nodes
+    let empty = empty::Empty::new(&new_name);
+    let empty_value = content::ContentType::Empty(empty);
+    let mut node_attributes = attributes::NodeAttributes::default();
+    node_attributes.transform = node_transform;
+    //add the empty to the parent node in tree
+    tree.add(empty_value, parent_node_name.clone(), Some(node_attributes));
+
+    //check for a mesh in the gltf_node
+    match gltf_node.mesh(){
         Some(mesh) =>{
-            println!("Found mesh in node: {}", new_name.clone());
+            //println!("Found mesh in node: {}", new_name.clone());
             //load the primitves as an Vec<mesh::Mesh>
             let primitives = load_gltf_mesh(
                 scene_name.clone(),
@@ -674,21 +688,61 @@ pub fn load_gltf_node(
                 base,
                 managers,
             );
-            println!("Finished loading mesh from gltf, adding to node...", );
-            //TODO set transform
-            //TODO
+            //println!("Finished loading mesh from gltf, adding to node...", );
             //create a node from every mesh and add it to the own Node
-            for mesh in primitives{
-                let mesh_node = node::ContentType::Mesh(mesh);
-                //apply the transformation of this node
-                this_node.add_child(mesh_node);
+            for prim in primitives{
+                //create the mesh node
+                let mesh_name = new_name.clone() + "_mesh_" + &mesh.index().to_string();
+                //now we lock the mesh for a moment to decide:
+                // transparency
+                // bound
+                // TODO shadow casting based on size?
+                // transform
+                let prim_attrib = {
+                    //create a default set of values, first change the transform param to the same
+                    // like the parent node
+                    let mut attrib = attributes::NodeAttributes::default();
+                    attrib.transform = node_transform;
+                    //now we have to lock the mesh and then get its material, the the material
+                    // transparency param and use it to set the transparency bool.
+                    // After that we can read the bound info of the mesh and use it as the node bound
+                    // because of the nature of this node (at least at import time) it is save to assume
+                    // that the bound won't change till the next rebuild.
+                    let transparent = {
+                        let mesh_lck = prim.lock().expect("failed to lock the mesh while importing");
+
+                        let material = (*mesh_lck)
+                        .get_material();
+                        let material_lck = material
+                        .lock()
+                        .expect("failed to lock mesh material while importing");
+                        //well we have to get the pipeline now and match the transparency config.
+                        // if its alpha belnding, set to transparent
+                        // all other types (including masked operation) can drawn unordered
+                        match (*material_lck).get_pipeline().pipeline_config.blending_operation {
+                            pipeline_builder::BlendTypes::BlendAlphaBlending => {
+                                true
+                            },
+                            _ => {
+                                false
+                            }
+                        }
+                    };
+
+                    attrib.is_transparent = transparent;
+                    attrib.bound = (*(prim.lock().expect("failed to lock mesh"))).get_bound();
+                    //return the correct mesh attributes
+                    attrib
+
+                };
+                //create a content struct from the mesh
+                let mesh_node_value = content::ContentType::Mesh(prim);
+                //now add this mesh node to the current tree together with its forged attributes :D
+                tree.add(mesh_node_value, new_name.clone(), Some(prim_attrib));
             }
         }
         None => {}, //no mesh found for this node
     }
-    //Now apply this nodes transform to it and its meshes (not the child nodes, tejy have their own
-    // transform).
-    this_node.set_transform(node_transform);
 
     //check for Camera
     //TODO
@@ -698,22 +752,19 @@ pub fn load_gltf_node(
 
     //after adding everything to the current node, have a look for children, if there are any,
     //iterate through them, always create a node, load it and add it to the current parent
-    if node.children().len() > 0{
-        for child in node.children(){
+    if gltf_node.children().len() > 0{
+        for child in gltf_node.children(){
             let new_child = load_gltf_node(
                 &child,
-                scene_name.clone(),
+                scene_name,
+                &new_name,
+                tree,
                 buffers,
                 base,
                 managers,
             );
-            //and add the new child to the current node
-            this_node.add_node(new_child);
         }
     }
-    //After adding all childs and their sub childs, return
-    //return this node
-    this_node
 }
 
 ///Imports a scene from the file at `path`
@@ -731,35 +782,45 @@ pub fn import_gltf(
     let (gltf, buffers) = gltf_importer::import(path).expect("invalid model for gltf 2.0 loader");
 
 
-    let mut scene_tree = node::GenericNode::new_empty(name);
-
+    //build an empty root node
+    let empty_object = empty::Empty::new(name);
+    let empty_node = content::ContentType::Empty(empty_object);
+    //create a tree from it
+    //TODO we might have to read the roots node location, rotation and scale
+    let mut scene_tree = tree::Tree::new(empty_node, attributes::NodeAttributes::default());
 
     for scene in gltf.scenes(){
         //create an empty scene node with the correct name
         let scene_name = String::from(name) + "_scene_" + &scene.index().to_string();
-        let mut scene_node = node::GenericNode::new_empty(&scene_name.to_string());
+
+        let empty_scene_object = empty::Empty::new(&scene_name);
+        let scene_node = content::ContentType::Empty(empty_scene_object);
+        //now add the node to the tree
+        let _ = scene_tree.add_at_root(scene_node, None); //TODO might need to read scene location/rotation/scale
         //now cycle through its nodes and add the correct meshes, lights whatever to it
         for node in scene.nodes(){
-            //lock managers
-            //let manager_lck = managers.lock().expect("failed to lock managers");
+
             //loading each node in this scene
-            let new_node = load_gltf_node(
+            load_gltf_node(
                 &node,
-                String::from(name),       //This is the name of this gltf file used to reference global gltf file specific data like textures and materials
+                &String::from(name),       //This is the name of this gltf file used to reference global gltf file specific data like textures and materials
+                &scene_name,
+                &mut scene_tree,
                 &buffers,
                 base,
                 &managers,
             );
-            scene_node.add_node(new_node);
         }
-        //now add the new scene node to the root empty
-        scene_tree.add_node(scene_node);
+        //Now we added all nodes to the scene tree and can return
     }
 
-    //Donw with loading gltf
+    //Done with loading gltf
     let manager_lck = managers.lock().expect("failed to lock managers");
     let scene_manager = (*manager_lck).scene_manager.clone();
     let mut scene_manager_inst = scene_manager.lock().expect("failed to lock scene manager");
+    println!("Adding tree: =================================================================", );
+    scene_tree.print_tree();
+
 
     (*scene_manager_inst).add_scene(scene_tree);
 }

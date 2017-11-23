@@ -1,6 +1,11 @@
 
 ///The main renderer responsible for the coordination of all render work in its own render loop
 pub mod renderer;
+///Contains some helper functions and types for the main renderer
+pub mod render_helper;
+///Creates a builder struct to configure the renderer. And creates a renderer object from it.
+pub mod render_builder;
+
 ///Manages all available pipeline, you'll mostly just need the default one
 pub mod pipeline_manager;
 ///Defines the pipeline an renderable object can have, must be stored in the pipeline_manager
@@ -15,5 +20,3 @@ pub mod uniform_manager;
 ///An module which collects all the shader implementations, these are usually derived from
 ///vulkano-shader-derive
 pub mod shader_impls;
-///Contains some helper functions and types for the main renderer
-pub mod render_helper;

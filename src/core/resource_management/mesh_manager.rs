@@ -1,6 +1,7 @@
 
 use core::resources::mesh;
-use core::simple_scene_system::node;
+use jakar_tree::node;
+use core::next_tree::*;
 //use tools::assimp_importer;
 
 use vulkano;
@@ -24,21 +25,42 @@ impl MeshManager {
     ///Adds a mesh to the manager
     pub fn add_mesh(&mut self, mut mesh: mesh::Mesh){
 
-        let mut mesh_lck = self.meshes.lock().expect("Failed to hold while adding mesh to mesh manager");
+
         //have a look for this mesh in self
-        let b_contains = (*mesh_lck).contains_key(&String::from(mesh.name.clone()));
+        let b_contains = {
+            let mut mesh_lck = self.meshes.lock().expect("Failed to hold while adding mesh to mesh manager");
+            (*mesh_lck).contains_key(&String::from(mesh.name.clone()))
+        };
+
         match b_contains{
             true => {
-                println!("The name: {} is already in the mesh manager, will add as {}_1", mesh.name.clone(), mesh.name.clone());
-                let new_name = mesh.name.clone() + "_1";
+                //generate a unque mesh name
+                let unique_name = self.get_unique_name(mesh.name.clone());
+                println!("The name: {} is already in the mesh manager, will add as {}", mesh.name.clone(), unique_name);
                 //change the name in mesh
-                mesh.name = new_name.clone();
-                (*mesh_lck).insert(new_name, Arc::new(Mutex::new(mesh)));
+                mesh.name = unique_name.clone();
+                let mut mesh_lck = self.meshes.lock().expect("Failed to hold while adding mesh to mesh manager");
+                (*mesh_lck).insert(unique_name, Arc::new(Mutex::new(mesh)));
             },
             false => {
+                let mut mesh_lck = self.meshes.lock().expect("Failed to hold while adding mesh to mesh manager");
                (*mesh_lck).insert(mesh.name.clone(), Arc::new(Mutex::new(mesh)));
             }
         }
+
+    }
+
+    ///helper function to get a not taken name, returns the name + _id
+    fn get_unique_name(&self, name: String) -> String{
+        //lock the meshes
+        let mesh_lck = self.meshes.lock().expect("failed to lock meshes for unique name");
+        let mut unique_id = 0;
+
+        while mesh_lck.contains_key(&(name.clone() + "_" + &unique_id.to_string())){
+            unique_id += 1;
+        }
+
+        name + "_" + &unique_id.to_string()
 
     }
 
@@ -49,24 +71,29 @@ impl MeshManager {
             let mesh_ref_lck = mesh.lock().expect("failed to lock mesh while adding to manager");
             (*mesh_ref_lck).name.clone()
         };
-        //now test the name
-        let mut mesh_lck = self.meshes.lock().expect("Failed to hold while adding mesh to mesh manager");
+
         //have a look for this mesh in self
-        let b_contains = (*mesh_lck).contains_key(&mesh_name);
+        let b_contains = {
+            //now test the name
+            let mesh_lck = self.meshes.lock().expect("Failed to hold while adding mesh to mesh manager");
+            (*mesh_lck).contains_key(&mesh_name)
+        };
 
         match b_contains {
             true => {
-                println!("The name: {} is already in the mesh manager, will add as {}_1", mesh_name, mesh_name);
-                let new_name = mesh_name + "_1";
+                let unique_name = self.get_unique_name(mesh_name.clone());
+                println!("The name: {} is already in the mesh manager, will add as {}", mesh_name, unique_name);
                 //change the name in mesh
                 {
                     let mut mesh_ref_lck = mesh.lock().expect("failed to lock mesh while adding to manager");
-                    (*mesh_ref_lck).name = new_name.clone();
+                    (*mesh_ref_lck).name = unique_name.clone();
                 }
+                let mut mesh_lck = self.meshes.lock().expect("Failed to hold while adding mesh to mesh manager");
                 //and add it to the manager finally
-                (*mesh_lck).insert(new_name, mesh);
+                (*mesh_lck).insert(unique_name, mesh);
             }
             false => {
+                let mut mesh_lck = self.meshes.lock().expect("Failed to hold while adding mesh to mesh manager");
                 //if all is right just add it
                 (*mesh_lck).insert(mesh_name, mesh);
             }
@@ -80,75 +107,5 @@ impl MeshManager {
             Some(mesh) => Some(mesh.clone()),
             None => None,
         }
-    }
-
-    ///Imports a mesh in a seperate thread.
-    ///This will do two things:
-    ///
-    /// 1st. Import all sub meshes of this file in seperate `Arc<Mutex<Mesh>>` objects
-    ///
-    /// 2nd. Create a scene with all meshes stack as children below the root node
-    ///
-    /// By doing this the sub.meshes can be reused to create new scene and a complex scene with
-    /// different objects stays in one sub-scene
-
-    //Deprecaed in favor of the gltf loader
-    pub fn import_mesh(&mut self, name: &str, path: &str, device: Arc<vulkano::device::Device>,
-        queue: Arc<vulkano::device::Queue>,
-        scene_manager_scenes: Arc<Mutex<node::GenericNode>>
-    )
-    {
-
-    /*
-        let mut meshes_instance = self.meshes.clone();
-        let mut scene_instance = scene_manager_scenes.clone();
-        let device_instance = device.clone();
-        let queue_instance = queue.clone();
-        let name_instance = name.to_owned();
-        let path_instance = path.to_owned();
-
-        let thread = thread::spawn(move ||{
-
-            //println!("STATUS: MESH_MANAGER: Spawned thread with id: {:?}", thread::current().id());
-
-            let mut importer = assimp_importer::AssimpImporter::new();
-            let new_meshes = importer.import(&path_instance, &name_instance, device_instance.clone(), queue_instance.clone());
-
-
-            let mut arc_meshes: Vec<(String, Arc<Mutex<mesh::Mesh>>)> = Vec::new();
-            for mesh in new_meshes.iter(){
-                arc_meshes.push((String::from(mesh.name.clone()),Arc::new(Mutex::new(mesh.clone()))));
-            }
-
-
-            //Now add the mesh[s] to the meshes vector in self
-            //after that build a scene from it and add the scene to
-            //the scenes Vec
-            {
-                let mut meshes_editor = (*meshes_instance).lock().expect("failed to lock meshes vec");
-                for mesh in arc_meshes.iter(){
-                    meshes_editor.insert(mesh.0.clone() ,mesh.1.clone() );
-                }
-            }
-
-            //now lock the scene and add all meshes to it
-            //println!("STATUS: MESH_MANAGER: Adding scene with name: {}", &name_instance.clone());
-            let mut root_node = scene_instance.lock().expect("faield to lock scene while adding mehes");
-            for i in arc_meshes.iter(){
-                //create a node
-                let mesh_node = node::ContentType::Renderable(
-                    node::RenderableContent::Mesh(
-                        i.1.clone()
-                    )
-                );
-                println!("Adding mesh: {} ==================", i.0.clone());
-                //And add it to the scene
-                root_node.add_child(mesh_node);
-            }
-
-
-            //println!("STATUS: MESH_MANAGER: Finshed importing {}", name_instance.clone());
-        });
-    */
     }
 }

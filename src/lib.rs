@@ -39,13 +39,29 @@ use std::thread;
 use std::sync::mpsc;
 
 
+///Holds possible engine creation errors
+pub enum CreationErrors{
+    ///Is returned when something went wrong while creating the renderer. The String holds a message.
+    FailedToCreateRenderer(String),
+    ///Is returned when there was a problem with the asset manager or thread creation
+    FailedToCreateAssetManager,
+    ///Is returned when the engine couldn't start the input loop.
+    FailedToCreateInputManager,
+    ///Is returned when something else happned.
+    UnknownError,
+}
+
 ///Describes the current status of the engine
 #[derive(PartialEq)]
 pub enum EngineStatus {
+    ///Is used when starting normal
     STARTING,
     RUNNING,
+    ///Is used when the engine is waiting for threads to end.
     WAITING,
-    ENDING
+    ENDING,
+    ///Is used when something is going wrong while creating the engine runtime.
+    Aboarding(String)
 }
 
 ///An struct representing the top level of this engine
@@ -85,7 +101,7 @@ impl JakarEngine {
     ///     - Scene manager
     ///     - Texture manager
     /// - Input system
-    pub fn start(settings: Option<core::engine_settings::EngineSettings>) -> Self{
+    pub fn start(settings: Option<core::engine_settings::EngineSettings>) -> Result<Self, CreationErrors>{
         //first create the thread save engine settings and the engine status.
         //they are needed to start the input, asset and rendering thread.
         //Thoose will return their main features which will be an Arc<Mutex<T>> of the
@@ -101,7 +117,7 @@ impl JakarEngine {
                             core::engine_settings::EngineSettings::new()
                             .with_dimensions(1600, 900)
                             .with_name("jakar Instance")
-                            .set_vulkan_silent()
+                            //.set_vulkan_silent() //TODO make this conditional
                             .with_fullscreen_mode(false)
                             .with_cursor_state(winit::CursorState::Grab)
                             .with_cursor_visibility(winit::MouseCursor::NoneCursor)
@@ -127,7 +143,12 @@ impl JakarEngine {
         );
         //now start the thread and return it
         let input_thread_handle = {
-            let mut input_sys = input_handler.lock().expect("failed to lock input system before start");
+            let mut input_sys = {
+                match input_handler.lock(){
+                    Ok(k) => k,
+                    Err(_) => return Err(CreationErrors::FailedToCreateInputManager),
+                }
+            };
 
             //Start the input thread
             (*input_sys).start()
@@ -156,38 +177,120 @@ impl JakarEngine {
             };
             //Create a renderer with the input system
             let (render, mut gpu_future) = {
+                //first we create an engine builder. Then we configure it. Finally we return
+                // the renderer and the gpu future. If something went wrong while creating the
+                // renderer we set the engine status to Err(message). This way we can ensure
+                // that the engine only starts if the renderer is created successfuly.
+                let render_builder = render::render_builder::RenderBuilder::new();
+                //Configure======================================
+
+                //===============================================
+                //lock the input system for the creation
                 let mut input_sys = render_input_system
                 .lock()
-                .expect("failed to lock input system before start");
+                .expect("failed to lock input system before render start");
+                //now build
+                let render_status = render_builder.create(
+                    (*input_sys).get_events_loop(),
+                    render_settings,
+                    (*input_sys).get_key_map()
+                );
+
+                /*
                 let render_build = render::renderer::Renderer::new(
                     (*input_sys).get_events_loop(),
                     render_settings.clone(),
                     (*input_sys).get_key_map(),
                 );
-                //wrapping the renderer in an Arc
-                let arc_render = Arc::new(Mutex::new(render_build.0));
-                let gpu_future_box = render_build.1;
-                //return both
-                (arc_render, gpu_future_box)
+                */
+                //now we match the craetion status, if sucessful, we can return the renderer
+                // and the gpu future. If not, we set the Engine status to
+                // CreationErrors::FailedToCreateRenderer(Message)
+                match render_status{
+                    Ok(r) => {
+                        //wrapping the renderer in an Arc
+                        let arc_render = Arc::new(Mutex::new(r.0));
+                        let gpu_future_box = r.1;
+                        //return both
+                        (arc_render, gpu_future_box)
+                    },
+                    Err(msg) => {
+                        //something went wrong :(
+                        (*(render_engine_status
+                            .lock()
+                            .expect("failed to lock render engine status")
+                        )) = EngineStatus::Aboarding(msg.clone());
+                        println!("Failed to create renderer: {}\n returning!", msg);
+                        return;
+                    }
+                }
+
             };
-            //Created an renderer, send it to the engien struct
+
+            //Created an renderer, send it to the engine struct
             match render_t_sender.send(render.clone()){
                 Ok(_) => {},
                 Err(e) => println!("Failed to send renderer to main thread: {}", e),
             }
 
             //wait till we are reciving an asset manager
-            let asset_manager_inst: Arc<Mutex<core::resource_management::asset_manager::AssetManager>> = render_asset_reciver
-            .recv()
-            .expect("faield to recive asset manager in render thread");
+                //we are actually cycling between trying to get the asset_manager and testing
+                // the status, if there went something wrong while creating any of the sub systems
+                // we return as well, without starting the rendering loop
+            //create a variable for the asset manager. Will return Some eventually
+            let mut asset_manager_inst = None;
+
+            'render_waiting_loop: loop{
+                //trying to recive
+                match render_asset_reciver.try_recv(){
+                    Ok(manager) => {
+                        //actually recived something, will overwrite now
+                        asset_manager_inst = Some(manager);
+                        //now we can break the loop
+                        break;
+                    }
+                    Err(r) =>{
+                        //well either the sender is disconnected or has not yet sended
+                        //when disconected we can return, when not sended we test if any other
+                        //system has crashed
+                        match r{
+                            mpsc::TryRecvError::Disconnected => return,
+                            mpsc::TryRecvError::Empty => {},
+                        }
+                    }
+                }
+
+                //now test, if the messag is "aboard" if yes, we can aboard as well
+                {
+                    match *(render_engine_status
+                        .lock()
+                        .expect("failed to lock render engine status")
+                    )
+                    {
+                        EngineStatus::Aboarding(_) => return,
+                        _ => {}, //all is nice test again for a return value of the channel
+                    }
+                }
+            }
+
+            let asset_manager: Arc<Mutex<core::resource_management::asset_manager::AssetManager>> = {
+                match asset_manager_inst{
+                    None => return,
+                    Some(am) => am,
+                }
+            };
+
+
             //Set the thread start time
             let mut last_time = Instant::now();
 
             let mut fps_time_start = Instant::now();
             println!("Started renderer!", );
+
             //now start the rendering loop
             'render_thread: loop{
                 //lock the renderer and render an image
+                //TODO loc in scope
                 let mut renderer_lck = render
                 .lock().expect("failed to lock renderer");
 
@@ -197,12 +300,13 @@ impl JakarEngine {
                 //to render a frame we just copy the whole asset manager and submit the copy to the
                 //renderer, this might be optimized
                 let mut asset_copy = {
-                    let asset_manager_lck = asset_manager_inst
+                    let asset_manager_lck = asset_manager
                     .lock().expect("failed to lock asset manager");
                     (*asset_manager_lck).clone()
                 };
-
                 gpu_future = (*renderer_lck).render(&mut asset_copy, gpu_future);
+
+                //Tet if the engine should still run
                 let engine_is_running = {
                     let status = render_engine_status.lock().expect("failed to lock engine status");
                     match *status{
@@ -213,6 +317,7 @@ impl JakarEngine {
                 };
 
                 if !engine_is_running{
+                    println!("Renderer should end", );
                     //engine is stoping, ending loop
                     //wait a second for the gpu to finish its last work, then clean up the future
                     thread::sleep_ms(60);
@@ -220,7 +325,6 @@ impl JakarEngine {
                     gpu_future.cleanup_finished();
                     break;
                 }
-
                 //now sleep the rest if needed
                 sleep_rest_time(last_time, max_fps);
 
@@ -235,8 +339,61 @@ impl JakarEngine {
             }
         });
 
+        //last but not least, we try to recive the renderer  as fast as possible
+        //if something went wrong, teh status should be aborad.
+        //if this is the case we can already return the function the the error messages.
+        //else we test if we can recive something.
+        //all this happens in the loop
+        let mut renderer_isnt = None;
+        'main_render_waiting_loop: loop{
+            //trying to recive
+            match render_t_reciver.try_recv(){
+                Ok(renderer) => {
+                    //actually recived something, will overwrite now
+                    renderer_isnt = Some(renderer);
+                    //now we can break the loop
+                    println!("Got a Renderer in the asset waiting loop", );
+                    break;
+                }
+                Err(r) =>{
+                    //well either the sender is disconnected or has not yet sended
+                    //when disconected we can return, when not sended we test if any other
+                    //system has crashed
+                    match r{
+                        mpsc::TryRecvError::Disconnected => {
+                            //while we already know that something went wrong, we try to get the message later
+                            println!("Renderer crashed, getting message", );
+                        },
+                        mpsc::TryRecvError::Empty => {},
+                    }
+                }
+            }
+
+            //now test, if the messag is "aboard" if yes, we can aboard as well
+            {
+                match *(engine_status
+                    .lock()
+                    .expect("failed to lock render engine status")
+                )
+                {
+                    EngineStatus::Aboarding(ref msg) => return Err(
+                        CreationErrors::FailedToCreateRenderer(msg.clone())
+                    ),
+                    _ => {}, //all is nice test again for a return value of the channel
+                }
+            }
+        }
+
+
         //now recive the renderer in the main thread
-        let renderer_isnt = render_t_reciver.recv().expect("failed to recive renderer for jakar struct");
+        let renderer = match renderer_isnt{
+            Some(renderer) => renderer,
+            None => return Err(
+                CreationErrors::FailedToCreateRenderer(
+                    "Reciving was successful, but returned non".to_string()
+                )
+            ),
+        };
 
         //=========================================================================================
 
@@ -247,19 +404,19 @@ impl JakarEngine {
         let asset_t_status = engine_status.clone();
         let asset_t_settings = engine_settings.clone();
         let asset_t_pipeline_manager = {
-            let mut ren_inst = renderer_isnt.lock().expect("failed to lock renderer");
+            let mut ren_inst = renderer.lock().expect("failed to lock renderer");
             (*ren_inst).get_pipeline_manager()
         };
         let asset_t_device = {
-            let ren_inst = renderer_isnt.lock().expect("failed to lock renderer");
+            let ren_inst = renderer.lock().expect("failed to lock renderer");
             (*ren_inst).get_device()
         };
         let asset_t_queue = {
-            let ren_inst = renderer_isnt.lock().expect("failed to lock renderer");
+            let ren_inst = renderer.lock().expect("failed to lock renderer");
             (*ren_inst).get_queue()
         };
         let asset_t_uniform_manager = {
-            let ren_inst = renderer_isnt.lock().expect("failed to lock renderer");
+            let ren_inst = renderer.lock().expect("failed to lock renderer");
             (*ren_inst).get_uniform_manager()
         };
         let asset_t_input_handler = input_handler.clone();
@@ -337,6 +494,10 @@ impl JakarEngine {
         });
 
         //=========================================================================================
+        //Recive asset manager and store them in the struct
+        let asset_manager_inst = asset_t_reciver
+        .recv()
+        .expect("failed to recive asset manager for jakar struct");
 
         //Now switch the state to "running"
         {
@@ -345,15 +506,9 @@ impl JakarEngine {
         }
 
 
-        //Recive asset manager and store them in the struct
-        let asset_manager_inst = asset_t_reciver
-        .recv()
-        .expect("failed to recive asset manager for jakar struct");
-
-
         //now create the engine struct and retun it to the instigator
-        JakarEngine{
-            renderer: renderer_isnt,
+        Ok(JakarEngine{
+            renderer: renderer,
             render_thread: render_thread,
 
             asset_manager: asset_manager_inst,
@@ -365,7 +520,7 @@ impl JakarEngine {
             engine_settings: engine_settings,
 
             engine_status: engine_status,
-        }
+        })
     }
 
     ///Ends all threads of the engine and then Returns
@@ -476,7 +631,7 @@ fn sleep_rest_time(last_time: Instant, max_speed: u32) -> Instant{
         //calc a duration
         let sleep_duration = Duration::new(0, time_to_sleep as u32);
         //and sleep it
-        println!("Sleeping {:?} ...", sleep_duration);
+        //println!("Sleeping {:?} ...", sleep_duration);
         thread::sleep(sleep_duration);
     }
 

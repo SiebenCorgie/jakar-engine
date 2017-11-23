@@ -1,37 +1,33 @@
 use render::pipeline_manager;
 use render::uniform_manager;
 use core::resource_management::asset_manager;
-use core::resources::mesh;
 use render::window;
 use render::render_helper;
 use core::engine_settings;
 use core::resources::camera::Camera;
-use core::simple_scene_system::node_helper;
-use input::KeyMap;
+//use core::simple_scene_system::node_helper;
+use core::next_tree;
+use jakar_tree;
 
 use vulkano;
+use vulkano::command_buffer::AutoCommandBufferBuilder;
+use vulkano::command_buffer::CommandBuffer;
 use vulkano::framebuffer::FramebufferAbstract;
 use vulkano::framebuffer::RenderPassAbstract;
 use vulkano::swapchain::SwapchainCreationError;
 use vulkano::swapchain::SwapchainAcquireFuture;
 use vulkano::swapchain::AcquireError;
 use vulkano::sync::GpuFuture;
-use vulkano_win;
 use vulkano::instance::debug::{DebugCallback, MessageTypes};
-use vulkano::pipeline::GraphicsPipelineAbstract;
 
-use winit;
-
-use cgmath;
 
 use std::sync::{Arc,Mutex};
 use std::time::{Instant};
 use std::mem;
-use std::collections::BTreeMap;
 
 ///An enum describing states of the renderer
 #[derive(Eq, PartialEq)]
-enum RendererState {
+pub enum RendererState {
     RUNNING,
     WAITING,
     SHOULD_END,
@@ -40,7 +36,7 @@ enum RendererState {
 
 
 
-///The main renderer
+///The main renderer. Should be created through a RenderBuilder
 pub struct Renderer  {
     ///Holds the renderers pipeline_manager
     pipeline_manager: Arc<Mutex<pipeline_manager::PipelineManager>>,
@@ -66,7 +62,40 @@ pub struct Renderer  {
 }
 
 impl Renderer {
-    ///Creates a new renderer with all subsystems, returns the renderer and the GPUs future.
+    ///Creates a new renderer from all the systems. However, you should only use the builder to create
+    /// a renderer.
+    pub fn create_for_builder(
+        pipeline_manager: Arc<Mutex<pipeline_manager::PipelineManager>>,
+        window: window::Window,
+        device: Arc<vulkano::device::Device>,
+        queue: Arc<vulkano::device::Queue>,
+        swapchain: Arc<vulkano::swapchain::Swapchain>,
+        images: Vec<Arc<vulkano::image::SwapchainImage>>,
+        renderpass: Arc<RenderPassAbstract + Send + Sync>,
+        depth_buffer: Arc<vulkano::image::AttachmentImage<vulkano::format::D16Unorm>>,
+        framebuffers: Vec<Arc<FramebufferAbstract + Send + Sync>>,
+        recreate_swapchain: bool,
+        engine_settings: Arc<Mutex<engine_settings::EngineSettings>>,
+        uniform_manager: Arc<Mutex<uniform_manager::UniformManager>>,
+        state: Arc<Mutex<RendererState>>,
+    ) -> Renderer{
+        Renderer{
+            pipeline_manager: pipeline_manager,
+            window: window,
+            device: device,
+            queue: queue,
+            swapchain: swapchain,
+            images: images,
+            renderpass: renderpass,
+            depth_buffer: depth_buffer,
+            framebuffers: framebuffers,
+            recreate_swapchain: recreate_swapchain,
+            engine_settings: engine_settings,
+            uniform_manager: uniform_manager,
+            state: state,
+        }
+    }
+    /*
     pub fn new(
             events_loop: Arc<Mutex<winit::EventsLoop>>,
             engine_settings: Arc<Mutex<engine_settings::EngineSettings>>,
@@ -204,7 +233,7 @@ impl Renderer {
 
         //Create a artificial device and its queue
         let (device, mut queues) = vulkano::device::Device::new(
-            physical, physical.supported_features(),
+            physical, physical.supported_features(), //TODO test for needed features and only activate the needed ones
             &device_ext, [(queue, 0.5)].iter().cloned()
         )
         .expect("failed to create device");
@@ -343,8 +372,7 @@ impl Renderer {
 
         (renderer, previous_frame)
     }
-
-
+    */
 
     ///Recreates swapchain for the window size in `engine_settings`
     ///Returns true if successfully recreated chain
@@ -400,7 +428,6 @@ impl Renderer {
             store_framebuffer.push(i.clone());
         }
 
-
         mem::replace(&mut self.framebuffers, store_framebuffer);
 
         //Now when can mark the swapchain as "fine" again
@@ -411,9 +438,15 @@ impl Renderer {
     ///Returns the image if the image state is outdated
     ///Panics if another error occures while pulling a new image
     pub fn check_image_state(&self) -> Result<(usize, SwapchainAcquireFuture), AcquireError>{
+        use std::time::Duration;
+
+        let time_out = Duration::new(1, 0);
+
 
         match vulkano::swapchain::acquire_next_image(self.swapchain.clone(), None) {
-            Ok(r) => return Ok(r),
+            Ok(r) => {
+                return Ok(r);
+            },
             Err(vulkano::swapchain::AcquireError::OutOfDate) => {
                 return Err(vulkano::swapchain::AcquireError::OutOfDate);
             },
@@ -430,48 +463,223 @@ impl Renderer {
         mut previous_frame: Box<GpuFuture>,
     ) -> Box<GpuFuture>{
 
+        //clean old frame
+        previous_frame.cleanup_finished();
+
+        //first of all we have to check our pipeline
+        let (image_number, acquire_future) = {
+            match self.check_pipeline(){
+                Ok(k) => {
+                    k
+                },
+                Err(e) => {
+                    println!("Could not get next swapchain image: {}", e);
+                    //early return to restart the frame
+                    return previous_frame;
+                }
+            }
+        };
+
+        //now we can actually start the frame
+        //get all opaque meshes
+        let opaque_meshes = asset_manager.get_all_meshes(
+            Some(next_tree::SceneComparer::new().without_transparency())
+        );
+        //get all translucent meshes
+        let translucent_meshes = asset_manager.get_all_meshes(
+            Some(next_tree::SceneComparer::new().with_transparency())
+        );
+        //now send the translucent meshes to another thread for ordering
+        let trans_recv = render_helper::order_by_distance(
+            translucent_meshes, asset_manager.get_camera()
+        );
+
+        //While the cpu is gathering the the translucent meshes based on the distance to the
+        //camera, we start to build the command buffer for the opaque meshes, unordered actually.
+        //1st.:get the dimensions of the current image and start a command buffer builder for it
+        //Get the dimensions to fill the dynamic vieport setting per mesh.
+        let dimensions = {
+            let engine_settings_lck = self.engine_settings
+            .lock()
+            .expect("Failed to lock settings");
+            (*engine_settings_lck).get_dimensions()
+        };
+
+        //start the command buffer
+        let mut command_buffer: AutoCommandBufferBuilder =
+            vulkano::command_buffer::AutoCommandBufferBuilder::new(
+                self.device.clone(),
+                self.queue.family()
+            )
+            .expect("failed to create tmp buffer!")
+            .begin_render_pass(
+                self.framebuffers[image_number].clone(), false,
+                vec![
+                    [1.0, 0.1, 0.1, 1.0].into(),
+                    1f32.into()
+                ]
+            ).expect("failed to clear");
+
+        //we now have the start for a command buffer. In a later engine
+        //stage at this point a compute command is added for the forward+ early depth pass.
+        // we are currently rendering only in a normal forward manor.
+
+        //add all opaque meshes to the command buffer
+
+        for opaque_mesh in opaque_meshes.iter(){
+            command_buffer = self.add_node_to_command_buffer(opaque_mesh, command_buffer, dimensions);
+        }
+
+
+        //now try to get the ordered list of translucent meshes and add them as well
+        match trans_recv.recv(){
+            Ok(ord_tr) => {
+                for opaque_mesh in ord_tr.iter(){
+                    command_buffer = self.add_node_to_command_buffer(opaque_mesh, command_buffer, dimensions);
+                }
+            },
+            Err(er) => {
+                println!("Something went wrong while ordering the translucent meshes: {}", er);
+            }
+        }
+
+        //now we can end the frame. In the future this might be the time to add post processing
+        //etc. but not for now ;)
+
+        //thanks firewater
+        let real_cb = command_buffer
+        .end_render_pass().expect("failed to end command buffer")
+        .build().expect("failed to build command buffer");
+
+
+        let after_prev_and_aq = previous_frame.join(acquire_future);
+
+        let before_present_frame = after_prev_and_aq.then_execute(self.queue.clone(), real_cb)
+        .unwrap();
+
+        //now present to the image
+        let after_present_frame = vulkano::swapchain::present(
+            self.swapchain.clone(),
+            before_present_frame, self.queue.clone(),
+            image_number
+        );
+        //now signal fences
+        let after_frame = after_present_frame.then_signal_fence_and_flush().unwrap();
+
+
+
+        Box::new(after_frame)
+
+
+    }
+
+    ///adds a `node` to the `command_buffer` if possible to be rendered.
+    fn add_node_to_command_buffer(
+        &self, node: &jakar_tree::node::Node<
+            next_tree::content::ContentType,
+            next_tree::jobs::SceneJobs,
+            next_tree::attributes::NodeAttributes>,
+        command_buffer: AutoCommandBufferBuilder,
+        dimensions: [u32; 2])
+    -> AutoCommandBufferBuilder
+    where AutoCommandBufferBuilder: Sized + 'static
+    {
+
+        //get the actual mesh as well as its pipeline an create the descriptor sets
+        let mesh_locked = match node.value{
+            next_tree::content::ContentType::Mesh(ref mesh) => mesh.clone(),
+            _ => return command_buffer, //is no mesh :(
+        };
+
+        let mesh = mesh_locked.lock().expect("failed to lock mesh in cb creation");
+
+        let mesh_transform = node.attributes.get_matrix();
+
+        let material_locked = mesh.get_material();
+        let mut material = material_locked
+        .lock()
+        .expect("failed to lock mesh for command buffer generation");
+
+        let pipeline = material.get_vulkano_pipeline();
+
+        let set_01 = {
+            //aquirre the tranform matrix and generate the new set_01
+            material.get_set_01(mesh_transform)
+        };
+
+        let set_02 = {
+            material.get_set_02()
+        };
+
+        let set_03 = {
+            material.get_set_03()
+        };
+
+        let set_04 = {
+            material.get_set_04()
+        };
+
+        //extend the current command buffer by this mesh
+        command_buffer
+            .draw_indexed(
+                pipeline,
+
+                vulkano::command_buffer::DynamicState{
+                    line_width: None,
+                    viewports: Some(vec![vulkano::pipeline::viewport::Viewport {
+                        origin: [0.0, 0.0],
+                        dimensions: [dimensions[0] as f32, dimensions[1] as f32],
+                        depth_range: 0.0 .. 1.0,
+                    }]),
+                    scissors: None,
+                },
+                mesh
+                .get_vertex_buffer(), //vertex buffer (static usually)
+
+                mesh
+                .get_index_buffer(
+                    self.device.clone(), self.queue.clone()
+                ).clone(), //index buffer
+                (set_01, set_02, set_03, set_04), //descriptor sets (currently static)
+                ()
+            )
+            .expect("Failed to draw in command buffer!")
+    }
+
+
+    /*
+    pub fn render(
+        &mut self,
+        asset_manager: &mut asset_manager::AssetManager,
+        mut previous_frame: Box<GpuFuture>,
+    ) -> Box<GpuFuture>{
+
 
         let start_time = Instant::now();
 
         previous_frame.cleanup_finished();
 
-
-        //If found out in last frame that images are out of sync, generate new ones
-        if self.recreate_swapchain{
-            if !self.recreate_swapchain(){
-                //If we got the UnsupportedDimensions Error (and therefor returned false)
-                //Abord the frame
-                return previous_frame;
-            }
+        //check the pipeline if false is returned, we return the future of the previos frame
+        if !self.check_pipeline(){
+            return previous_frame;
         }
-
-        //Try to get a new image
-        //If not possible becuase outdated (result is Err)
-        //then return (abort frame)
-        //and recreate swapchain
-        let (image_num, acquire_future) =
-        match self.check_image_state(){
-            Ok(r) => r,
-            Err(_) => {
-                self.recreate_swapchain = true;
-                return previous_frame;
-            },
-        };
 
 
         //get all opaque meshes
         let opaque_meshes = asset_manager.get_meshes_in_frustum(
-            Some(node_helper::SortAttributes::new().is_not_translucent())
+            Some(next_tree::SceneComparer::new().without_transparency())
         );
         //get all translucent meshes
         let translucent_meshes = asset_manager.get_meshes_in_frustum(
-            Some(node_helper::SortAttributes::new().is_translucent())
+            Some(next_tree::SceneComparer::new().with_transparency())
         );
+
+
         //now start the sorting process on another thread, we recive the sorted
         // meshes when done with adding the opaque meshes
         let sorted_translucent_meshes = render_helper::order_by_distance(
             translucent_meshes, asset_manager.get_camera().clone()
-        );
+        ); //this only returns the Receiver
 
 
         //TODO have to find a nicer way of doing this... later
@@ -507,7 +715,7 @@ impl Renderer {
             //now render the opaque meshes
             for mesh in opaque_meshes.iter(){
                 //get the mesh in the tubel
-                let mesh_lck = mesh.0
+                let mesh_lck = mesh
                 .lock()
                 .expect("could not lock mesh for building command buffer");
                 //take the command buffer
@@ -701,6 +909,37 @@ impl Renderer {
         //println!("Ending frame with new future", );
         new_frame
     }
+    */
+
+    ///checks the pipeline. If not up to date (return is AcquireError), recreates it.
+    fn check_pipeline(&mut self) -> Result<(usize, SwapchainAcquireFuture), AcquireError>{
+        //If found out in last frame that images are out of sync, generate new ones
+        if self.recreate_swapchain{
+            if !self.recreate_swapchain(){
+                //If we got the UnsupportedDimensions Error (and therefor returned false)
+                //Abord the frame
+                println!("Fucked up while recreating new swapchain", );
+                return Err(AcquireError::SurfaceLost);
+            }
+        }
+
+        //Try to get a new image
+        //If not possible becuase outdated (result is Err)
+        //then return (abort frame)
+        //and recreate swapchain
+        match self.check_image_state(){
+            Ok(r) => {
+                return Ok(r)
+            },
+            Err(er) => {
+                self.recreate_swapchain = true;
+                return Err(er);
+            },
+        };
+
+    }
+
+
 
     ///Returns the uniform manager
     pub fn get_uniform_manager(&self) -> Arc<Mutex<uniform_manager::UniformManager>>{
@@ -721,32 +960,6 @@ impl Renderer {
     pub fn get_queue(&self) -> Arc<vulkano::device::Queue>{
         self.queue.clone()
     }
-
-    /*
-    ///A helper function which will create a tubel of
-    ///(`pipeline_manager`, `uniform_manager`, `device`)
-    ///This is needed for the material creation
-    pub fn get_material_instances(&self) -> (
-        Arc<GraphicsPipelineAbstract + Send + Sync>,
-        Arc<Mutex<uniform_manager::UniformManager>>,
-        Arc<vulkano::device::Device>,
-        )
-    {
-        //Copy a default pipeline currently there is no way to nicly create a pipeline from a
-        //shader file without doubling the pipeline code :/
-        let pipeline_copy = {
-            let pipe_man_inst = self.pipeline_manager.clone();
-            let mut pipe_man_lck = pipe_man_inst.lock().expect("failed to hold pipe man lock");
-            (*pipe_man_lck).get_default_pipeline()
-        };
-
-        let pipe = pipeline_copy;
-        let uni_man = self.uniform_manager.clone();
-        let device = self.device.clone();
-
-        (pipe, uni_man, device)
-    }
-    */
 
     ///Returns an instance of the engine settings
     ///This might be a dublicate, still helpful
