@@ -24,12 +24,12 @@ fn main() {
 
     let settings = core::engine_settings::EngineSettings::default()
     .with_dimensions(1600, 900)
-    .with_name("jakar Instance")
+    .with_name("Jakar Instance")
     .in_release_mode()
     .with_input_poll_speed(400)
     .with_fullscreen_mode(false)
-    .with_cursor_state(winit::CursorState::Normal)
-    .with_cursor_visibility(winit::MouseCursor::Default)
+    .with_cursor_state(winit::CursorState::Grab)
+    .with_cursor_visibility(winit::MouseCursor::NoneCursor)
 
     ;
 

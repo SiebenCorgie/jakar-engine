@@ -1,9 +1,12 @@
 use vulkano;
+use vulkano::image::attachment::AttachmentImage;
 use vulkano::framebuffer::FramebufferAbstract;
 use winit;
 use vulkano::sync::GpuFuture;
 use vulkano_win;
 use vulkano::instance::debug::{DebugCallback, MessageTypes};
+use vulkano::framebuffer::RenderPassAbstract;
+use vulkano::format::Format;
 
 use std::sync::{Arc, Mutex};
 
@@ -11,6 +14,7 @@ use render;
 use render::pipeline_manager;
 use render::uniform_manager;
 use render::window;
+use core::render_settings;
 use core::engine_settings;
 use input::KeyMap;
 
@@ -336,7 +340,7 @@ impl RenderBuilder {
                 device.clone(),
                 window.surface().clone(),
                 caps.min_image_count,
-                format,
+                format, //automaticly use the right format for the hardware display
                 dimensions,
                 1,
                 usage,
@@ -355,8 +359,13 @@ impl RenderBuilder {
             println!("Images have samples: {}", i.samples());
         }
 
+        //Creates a buffer for the msaa image
+        let intermediary = AttachmentImage::transient_multisampled(device.clone(), images[0].dimensions(),
+        4, swapchain.format()).expect("failed to create msaa buffer!");
+
+
         //Create a depth buffer
-        let depth_buffer = vulkano::image::attachment::AttachmentImage::transient(
+        let depth_buffer = AttachmentImage::transient(
             device.clone(), images[0].dimensions(), vulkano::format::D16Unorm)
             .expect("failed to create depth buffer!");
 
@@ -374,24 +383,37 @@ impl RenderBuilder {
         let renderpass = Arc::new(
             ordered_passes_renderpass!(queue.device().clone(),
             attachments: {
+
+                //the final image
                 color: {
                     load: Clear,
                     store: Store,
-                    format: swapchain.format(),
+                    format: swapchain.format(), //this needs to have the format which is presentable to the window
                     samples: 1, //TODO msaa samples based on settings
                 },
+                // The first framebuffer attachment is the intermediary image.
+                /*
+                intermediary: {
+                    load: Clear,
+                    store: DontCare,
+                    format: swapchain.format(), //this needs to have the format which is presentable to the window,
+                    samples: 4,     // This has to match the image definition.
+                },
+                */
+                //the depth buffer
                 depth: {
                     load: Clear,
                     store: DontCare,
-                    format: vulkano::format::Format::D16Unorm,
+                    format: Format::D16Unorm,
                     samples: 1,
                 }
             },
             passes:[
                 {
-                    color: [color],
+                    color: [color], //TODO change to msaa
                     depth_stencil: {depth},
                     input: []   //has no input, might get the light vec as input and the pre rendered light depth infos
+                    //resolve: [color],
                 }
             ]
         ).expect("failed to create render_pass")
@@ -403,6 +425,8 @@ impl RenderBuilder {
             Arc::new(vulkano::framebuffer::Framebuffer::start(renderpass.clone())
                 //The color pass
                 .add(image.clone()).expect("failed to add image to frame buffer!")
+                //the msaa image
+                //.add(intermediary.clone()).expect("failed to add msaa image")
                 //and its depth pass
                 .add(depth_buffer.clone()).expect("failed to add depth to frame buffer!")
                 .build().expect("failed to build framebuffer!"))
@@ -435,7 +459,10 @@ impl RenderBuilder {
             swapchain,
             images,
             renderpass,
+
             depth_buffer,
+            intermediary,
+
             store_framebuffer,
 
             false,
@@ -484,5 +511,135 @@ fn rank_devices(devices: vulkano::instance::PhysicalDevicesIter)
     }else{
         None
     }
-
 }
+
+
+///A collection of renderpasses. The right pass is choosen based on the render settings which are present
+/// while building the renderer
+pub enum RenderPassLayout {
+    ///Msaa: no, HDR/Bloom: no, Postprogress: no
+    NoMsaaNoHdrNoPostProgress,
+    ///Msaa: yes, HDR/Bloom: no, Postprogress: no
+    MsaaNoHdrNoPostProgress,
+    ///Msaa: yes, HDR/Bloom: yes, Postprogress: no
+    MsaaHdrNoPostProgress,
+    ///Msaa: yes, HDR/Bloom: no, Postprogress: yes
+    MsaaNoHdrPostProgress,
+    ///Msaa: no, HDR/Bloom: yes, Postprogress: no
+    NoMsaaHdrNoPostProgress,
+    ///Msaa: no, HDR/Bloom: no, Postprogress: yes
+    NoMsaaNoHdrPostProgress,
+    ///Msaa: no, HDR/Bloom: yes, Postprogress: yes
+    NoMsaaHdrPostProgress,
+    ///Msaa: yes, HDR/Bloom: yes, Postprogress: yes
+    MsaaHdrPostProgress,
+}
+
+impl RenderPassLayout{
+
+    ///Returns a RenderPass, based on the render settings to give to it.
+    pub fn get_render_pass(settings: &render_settings::RenderSettings) -> Self{
+        //get the msaa settings
+        if settings.get_msaa_factor() > 1{
+            //save the msaa factor
+            let msaa_factor = settings.get_msaa_factor();
+            //get the hdr setting
+            if settings.has_hdr(){
+                //has postprogress?
+                if settings.has_post_progress(){
+                    RenderPassLayout::MsaaHdrPostProgress
+                }else{
+                    RenderPassLayout::MsaaHdrNoPostProgress
+                }
+            }else{
+                //has postprogress?
+                if settings.has_post_progress(){
+                    RenderPassLayout::MsaaNoHdrPostProgress
+                }else{
+                    RenderPassLayout::MsaaNoHdrNoPostProgress
+                }
+            }
+        }else{
+            //get the hdr setting
+            if settings.has_hdr(){
+                //has postprogress?
+                if settings.has_post_progress(){
+                    RenderPassLayout::NoMsaaHdrPostProgress
+                }else{
+                    RenderPassLayout::NoMsaaHdrNoPostProgress
+                }
+            }else{
+                //has postprogress?
+                if settings.has_post_progress(){
+                    RenderPassLayout::NoMsaaNoHdrPostProgress
+                }else{
+                    RenderPassLayout::NoMsaaNoHdrNoPostProgress
+                }
+            }
+        }
+    }
+
+    pub fn has_msaa(&self) -> bool{
+        match self{
+            &RenderPassLayout::MsaaNoHdrNoPostProgress => true,
+            &RenderPassLayout::MsaaHdrNoPostProgress => true,
+            &RenderPassLayout::MsaaNoHdrPostProgress => true,
+            &RenderPassLayout::MsaaHdrPostProgress => true,
+            _ => false,
+        }
+    }
+
+    pub fn has_hdr(&self) -> bool{
+        match self{
+            &RenderPassLayout::MsaaHdrNoPostProgress => true,
+            &RenderPassLayout::NoMsaaHdrNoPostProgress => true,
+            &RenderPassLayout::NoMsaaHdrPostProgress => true,
+            &RenderPassLayout::MsaaHdrPostProgress => true,
+            _ => false,
+        }
+    }
+
+    pub fn has_post_progress(&self) -> bool{
+        match self{
+            &RenderPassLayout::MsaaNoHdrPostProgress => true,
+            &RenderPassLayout::NoMsaaNoHdrPostProgress => true,
+            &RenderPassLayout::NoMsaaHdrPostProgress => true,
+            &RenderPassLayout::MsaaHdrNoPostProgress => true,
+            _ => false,
+        }
+    }
+}
+
+/*
+///returns a simple render pass
+pub fn get_simple_rendepass() -> Arc<RenderPassAbstract + Send + Sync>{
+    let renderpass = Arc::new(
+        ordered_passes_renderpass!(queue.device().clone(),
+        attachments: {
+            color: {
+                load: Clear,
+                store: Store,
+                format: swapchain.format(),
+                samples: 1, //TODO msaa samples based on settings
+            },
+            depth: {
+                load: Clear,
+                store: DontCare,
+                format: vulkano::format::Format::D16Unorm,
+                samples: 1,
+            }
+        },
+        passes:[
+            {
+                color: [color],
+                depth_stencil: {depth},
+                input: []   //has no input, might get the light vec as input and the pre rendered light depth infos
+            }
+        ]
+    ).expect("failed to create render_pass")
+    );
+
+    renderpass
+}
+
+*/

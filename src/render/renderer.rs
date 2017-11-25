@@ -12,6 +12,8 @@ use jakar_tree;
 use vulkano;
 use vulkano::command_buffer::AutoCommandBufferBuilder;
 use vulkano::command_buffer::CommandBuffer;
+use vulkano::image::traits::ImageViewAccess;
+use vulkano::image::attachment::AttachmentImage;
 use vulkano::framebuffer::FramebufferAbstract;
 use vulkano::framebuffer::RenderPassAbstract;
 use vulkano::swapchain::SwapchainCreationError;
@@ -49,7 +51,11 @@ pub struct Renderer  {
     swapchain: Arc<vulkano::swapchain::Swapchain>,
     images: Vec<Arc<vulkano::image::SwapchainImage>>,
     renderpass: Arc<RenderPassAbstract + Send + Sync>,
-    depth_buffer: Arc<vulkano::image::AttachmentImage<vulkano::format::D16Unorm>>,
+    //The buffer to which the depth gets written
+    depth_buffer: Arc<ImageViewAccess + Send + Sync>,
+    //this holds a multi sampled image (later hdr)
+    msaa_image: Arc<ImageViewAccess + Send + Sync>,
+
     framebuffers: Vec<Arc<FramebufferAbstract + Send + Sync>>,
 
     //Is true if we need to recreate the swap chain
@@ -72,7 +78,10 @@ impl Renderer {
         swapchain: Arc<vulkano::swapchain::Swapchain>,
         images: Vec<Arc<vulkano::image::SwapchainImage>>,
         renderpass: Arc<RenderPassAbstract + Send + Sync>,
-        depth_buffer: Arc<vulkano::image::AttachmentImage<vulkano::format::D16Unorm>>,
+
+        depth_buffer: Arc<ImageViewAccess + Send + Sync>,
+        msaa_image: Arc<ImageViewAccess + Send + Sync>,
+
         framebuffers: Vec<Arc<FramebufferAbstract + Send + Sync>>,
         recreate_swapchain: bool,
         engine_settings: Arc<Mutex<engine_settings::EngineSettings>>,
@@ -88,6 +97,7 @@ impl Renderer {
             images: images,
             renderpass: renderpass,
             depth_buffer: depth_buffer,
+            msaa_image: msaa_image,
             framebuffers: framebuffers,
             recreate_swapchain: recreate_swapchain,
             engine_settings: engine_settings,
@@ -96,7 +106,7 @@ impl Renderer {
         }
     }
 
-    ///Recreates swapchain for the window size in `engine_settings`
+    ///Recreates swapchain for the window size.
     ///Returns true if successfully recreated chain
     pub fn recreate_swapchain(&mut self) -> bool{
         //get new dimmensions etc
@@ -125,10 +135,17 @@ impl Renderer {
 
         //Recreate depth buffer for new size
         //Create a depth buffer
-        self.depth_buffer = vulkano::image::attachment::AttachmentImage::transient(
-            self.device.clone(), self.images[0].dimensions(), vulkano::format::D16Unorm)
+        let dimensions = self.images[0].dimensions().width_height();
+
+
+        self.depth_buffer = AttachmentImage::transient(
+            self.device.clone(), dimensions, vulkano::format::D16Unorm)
             .expect("failed to create depth buffer!");
 
+        //TODO recreate msaa as well
+        self.msaa_image = AttachmentImage::transient_multisampled(self.device.clone(),
+        dimensions,
+        4, self.swapchain.format()).expect("failed to create msaa buffer!");
 
         // Because framebuffers contains an Arc on the old swapchain, we need to
         // recreate framebuffers as well.
@@ -167,6 +184,32 @@ impl Renderer {
                 return Err(vulkano::swapchain::AcquireError::OutOfDate);
             },
             Err(err) => panic!("{:?}", err)
+        };
+    }
+
+    ///checks the pipeline. If not up to date (return is AcquireError), recreates it.
+    fn check_pipeline(&mut self) -> Result<(usize, SwapchainAcquireFuture), AcquireError>{
+        //If found out in last frame that images are out of sync, generate new ones
+        if self.recreate_swapchain{
+            if !self.recreate_swapchain(){
+                //If we got the UnsupportedDimensions Error (and therefor returned false)
+                //Abord the frame
+                println!("Fucked up while recreating new swapchain", );
+                return Err(AcquireError::SurfaceLost);
+            }
+        }
+        //Try to get a new image
+        //If not possible becuase outdated (result is Err)
+        //then return (abort frame)
+        //and recreate swapchain
+        match self.check_image_state(){
+            Ok(r) => {
+                return Ok(r)
+            },
+            Err(er) => {
+                self.recreate_swapchain = true;
+                return Err(er);
+            },
         };
     }
 
@@ -266,6 +309,8 @@ impl Renderer {
         let before_present_frame = after_prev_and_aq.then_execute(self.queue.clone(), real_cb)
         .unwrap();
 
+        //test copy the depth buffer as the show image
+
         //now present to the image
         let after_present_frame = vulkano::swapchain::present(
             self.swapchain.clone(),
@@ -355,34 +400,6 @@ impl Renderer {
                 ()
             )
             .expect("Failed to draw in command buffer!")
-    }
-
-    ///checks the pipeline. If not up to date (return is AcquireError), recreates it.
-    fn check_pipeline(&mut self) -> Result<(usize, SwapchainAcquireFuture), AcquireError>{
-        //If found out in last frame that images are out of sync, generate new ones
-        if self.recreate_swapchain{
-            if !self.recreate_swapchain(){
-                //If we got the UnsupportedDimensions Error (and therefor returned false)
-                //Abord the frame
-                println!("Fucked up while recreating new swapchain", );
-                return Err(AcquireError::SurfaceLost);
-            }
-        }
-
-        //Try to get a new image
-        //If not possible becuase outdated (result is Err)
-        //then return (abort frame)
-        //and recreate swapchain
-        match self.check_image_state(){
-            Ok(r) => {
-                return Ok(r)
-            },
-            Err(er) => {
-                self.recreate_swapchain = true;
-                return Err(er);
-            },
-        };
-
     }
 
 
