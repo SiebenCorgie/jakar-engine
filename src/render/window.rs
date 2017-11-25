@@ -24,7 +24,7 @@ impl Window{
 
         let mut available_monitors = winit::get_available_monitors();
 
-        let engine_settings_lck = engine_settings.lock().expect("Failed to lock engine settings");
+        let mut engine_settings_lck = engine_settings.lock().expect("Failed to lock engine settings");
         let mut window_builder = winit::WindowBuilder::new();
 
         //do not specifiy screen dimensions when creating with fullscreen
@@ -45,6 +45,7 @@ impl Window{
             };
             //After getting a vaild monitor id, returning if for the fullscreen
             window_builder = window_builder.with_fullscreen(valid_monitor_id);
+            //beacuse we are in fullscreen, we can overwerite the dimensions in the settings
         }else{
             //is not fullscreen, so we set up a window with dimensions
             window_builder = window_builder.with_dimensions(
@@ -64,6 +65,15 @@ impl Window{
         //Set the cursor state (can only be done on a already created window)
         window.window().set_cursor(engine_settings_lck.cursor_visible_state);
         window.window().set_cursor_state(engine_settings_lck.cursor_state).ok().expect("could not set cursor");
+        //now update the engine settings with the actual size
+        match window.window().get_inner_size_pixels(){
+            Some(dims) =>{
+                engine_settings_lck.window_dimensions = [dims.0, dims.1];
+            },
+            None => {}, //don't do anything something did'nt work
+        }
+
+
 
         Window{
             window: window,
@@ -81,5 +91,15 @@ impl Window{
     #[inline]
     pub fn window(&mut self) -> &winit::Window{
         self.window.window()
+    }
+
+    ///Returns the current extend of the window vk_surface, returns [100,100] if something went wrong.
+    pub fn get_current_extend(&self) -> [u32; 2]{
+        match self.window.window().get_inner_size_pixels(){
+            Some(dims) =>{
+                [dims.0, dims.1]
+            },
+            None => {[100, 100]}, //return fallbacks
+        }
     }
 }

@@ -35,6 +35,12 @@ impl NodeAttributes{
     ///Returns the model matrix of this node
     pub fn get_matrix(&self) -> Matrix4<f32>{
         Matrix4::from(self.transform)
+        /*
+        Matrix4::from_translation(self.transform.disp)
+        // * Matrix4::from_scale(self.transform.scale)
+         * Matrix4::from(self.transform.rot)
+        */
+
     }
 
     /// Returns bound information of this node (**NOT THE MESH BOUND**)
@@ -72,16 +78,45 @@ impl Attribute<SceneJobs> for NodeAttributes{
         }
     }
 
-    ///Exectues a `job` on this set of attributes.
-    fn execute(&mut self, job: &SceneJobs){
+    ///Exectues a `job` on this set of attributes. Returns job to be passed down to the children.
+    fn execute(&mut self, job: &SceneJobs) -> SceneJobs{
         match job{
             &SceneJobs::Move(t) =>{
-                self.transform.disp += t;
+                self.transform.disp = self.transform.disp + t;
+                //Return the same because we want to move each vector the same
+                SceneJobs::Move(t)
             } ,
             &SceneJobs::Rotate(r) => {
                 self.transform.rot += Quaternion::from(Euler::new(Deg(r.x), Deg(r.y), Deg(r.z)));
+                //if we rotate self, we want to rotate the children around self's location
+                SceneJobs::RotateAroundPoint(r, self.transform.disp)
             }
-            &SceneJobs::Scale(s) => self.transform.scale += s.x,
+
+            &SceneJobs::RotateAroundPoint(rotation, point) => {
+                //FIXME reimplemt from https://gamedev.stackexchange.com/questions/16719/what-is-the-correct-order-to-multiply-scale-rotation-and-translation-matrices-f
+                //move to point
+                //create a rotation Quaternion from the angles in rotation.xyz
+                let q_rotation = Quaternion::from(Euler {
+                    x: Deg(rotation.x),
+                    y: Deg(rotation.y),
+                    z: Deg(rotation.z),
+                });
+
+                //go to the point
+                self.transform.disp -= point;
+                //do rotation
+                self.transform.rot = self.transform.rot * q_rotation;
+                //rotate selfs disp to match the rotation at the point
+                self.transform.disp = q_rotation.rotate_vector(self.transform.disp);
+                //move back to the new origin
+                self.transform.disp += point;
+                //All other children should be rotated the same
+                SceneJobs::RotateAroundPoint(rotation, point)
+            }
+            &SceneJobs::Scale(s) => {
+                self.transform.scale += s.x;
+                SceneJobs::Scale(s)
+            },
         }
     }
 

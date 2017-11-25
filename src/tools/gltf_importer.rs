@@ -614,6 +614,7 @@ pub fn load_gltf_mesh(
 pub fn load_gltf_node(
     gltf_node: &gltf::Node, //used to reference gltf stuff
     scene_name: &String, //used to generate a short, but unique name from the node id
+    parent_transform: Option<Decomposed<Vector3<f32>, Quaternion<f32>>>, //used to construct the initial location of self
     parent_node_name: &String, //used to add the node in the tree
     tree: &mut tree::Tree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>, //the actual tree
     buffers: &gltf_importer::Buffers, //the buffers to read the gltf info from
@@ -630,27 +631,45 @@ pub fn load_gltf_node(
     let node_transform = {
         let mut new_transform: Decomposed<Vector3<f32>, Quaternion<f32>> = Decomposed::one();
 
+        //if we got a parent transform we can add it to the current transform, if not we have to leave it
+        let offset_transform = {
+            match parent_transform {
+                Some(trans) => trans,
+                //if there is no extra transform make all of them 0.0
+                None => Decomposed{
+                    scale: 1.0,
+                    rot: Quaternion::zero(),
+                    disp: Vector3::new(0.0, 0.0, 0.0),
+                }
+
+            }
+        };
+
         let node_transform = gltf_node.transform().decomposed();
-        /*
-        println!("GLTF Node Transfrom:", );
-        println!("\t Translation: {}, {}, {}", node_transform.0[0], node_transform.0[1], node_transform.0[2]);
-        println!("\t Rotation   : {}, {}, {}, {}", node_transform.1[0], node_transform.1[1], node_transform.1[2], node_transform.1[3]);
-        println!("\t Scale      : {}", node_transform.2[0]);
-        */
+
         //According to the gltf crate the decomposed is (translation, rotation, scale).
         //translation is the 0th field of decomposed with 3 elements
         let translation = Vector3::new(
-            node_transform.0[0], node_transform.0[1], node_transform.0[2]
+            node_transform.0[0] + offset_transform.disp.x,
+            node_transform.0[1] + offset_transform.disp.y,
+            node_transform.0[2] + offset_transform.disp.z
         );
         //The 1th element is rotation and rotation is in the format of [w,x,y,z]
         //the rotation in gltf is saved as x,y,z,w while in cgmath its w,x,y,z, therefore we need to change
-        let rotation = Quaternion::new(
-            node_transform.1[3], node_transform.1[0], node_transform.1[1], node_transform.1[2]
-        );
+        let rotation = {
+            let tmp_rot = Quaternion::new(
+                node_transform.1[3],
+                node_transform.1[0],
+                node_transform.1[1],
+                node_transform.1[2]
+            );
+            tmp_rot //+ offset_transform.rot
+        };
+
         //NOTE: Scale is currently only linear in one direction, this might be changed in future to
         //be comformant to the gltf2.0 rules
         let scale = {
-            node_transform.2[0] //is currently only the x value
+            node_transform.2[0]  * offset_transform.scale //is currently only the x value
         };
         /*
         println!("Node Transfrom:", );
@@ -738,7 +757,7 @@ pub fn load_gltf_node(
                 //create a content struct from the mesh
                 let mesh_node_value = content::ContentType::Mesh(prim);
                 //now add this mesh node to the current tree together with its forged attributes :D
-                tree.add(mesh_node_value, new_name.clone(), Some(prim_attrib));
+                let _ = tree.add(mesh_node_value, new_name.clone(), Some(prim_attrib));
             }
         }
         None => {}, //no mesh found for this node
@@ -757,6 +776,7 @@ pub fn load_gltf_node(
             let new_child = load_gltf_node(
                 &child,
                 scene_name,
+                Some(node_transform),
                 &new_name,
                 tree,
                 buffers,
@@ -803,7 +823,8 @@ pub fn import_gltf(
             //loading each node in this scene
             load_gltf_node(
                 &node,
-                &String::from(name),       //This is the name of this gltf file used to reference global gltf file specific data like textures and materials
+                &String::from(name), //This is the name of this gltf file used to reference global gltf file specific data like textures and materials
+                None,       //Scenes dont have a transform
                 &scene_name,
                 &mut scene_tree,
                 &buffers,

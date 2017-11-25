@@ -97,7 +97,6 @@ impl RenderBuilder {
         //Check for needed extensions
         //let mut extensions = vulkano_win::required_extensions();
         //Add the debug extension
-        //extensions.ext_debug_report = true;
 
         //Generate the list of debuging layers used
         let debuging_layers_string = {
@@ -350,7 +349,7 @@ impl RenderBuilder {
             )
             .expect("failed to create swapchain")
         };
-        
+
         for i in images.iter(){
             use vulkano::image::ImageAccess;
             println!("Images have samples: {}", i.samples());

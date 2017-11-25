@@ -320,7 +320,7 @@ impl Input{
         self.input_handler.end();
 
         //Wait some mil seconds so the thread has time to end
-        thread::sleep(Duration::from_millis(1000));
+        thread::sleep(Duration::from_millis(10));
     }
 
     ///Returns the Events loop, used for renderer creation

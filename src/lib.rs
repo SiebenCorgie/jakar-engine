@@ -114,14 +114,7 @@ impl JakarEngine {
                     //Creating default settings
                     let n_settings = Arc::new(
                         Mutex::new(
-                            core::engine_settings::EngineSettings::new()
-                            .with_dimensions(1600, 900)
-                            .with_name("jakar Instance")
-                            //.set_vulkan_silent() //TODO make this conditional
-                            .with_fullscreen_mode(false)
-                            .with_cursor_state(winit::CursorState::Grab)
-                            .with_cursor_visibility(winit::MouseCursor::NoneCursor)
-                            .with_msaa_factor(4)
+                            core::engine_settings::EngineSettings::default()
                         )
                     );
                     n_settings

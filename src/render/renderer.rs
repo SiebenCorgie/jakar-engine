@@ -104,11 +104,8 @@ impl Renderer {
         .lock()
         .expect("Faield to lock settings");
 
-        let (new_width, new_height) = self.window
-        .window()
-        .get_inner_size_pixels()
-        .expect("failed to get hight and width of current window");
-
+        let c_d = self.window.get_current_extend();
+        let (new_width, new_height) = (c_d[0], c_d[1]);
         (*engine_settings_lck).set_dimensions(new_width, new_height);
 
         let (new_swapchain, new_images) =
@@ -162,9 +159,6 @@ impl Renderer {
     pub fn check_image_state(&self) -> Result<(usize, SwapchainAcquireFuture), AcquireError>{
         use std::time::Duration;
 
-        let time_out = Duration::new(1, 0);
-
-
         match vulkano::swapchain::acquire_next_image(self.swapchain.clone(), None) {
             Ok(r) => {
                 return Ok(r);
@@ -185,7 +179,6 @@ impl Renderer {
         previous_frame: Box<GpuFuture>,
     ) -> Box<GpuFuture>{
 
-        //first of all we have to check our pipeline
         let (image_number, acquire_future) = {
             match self.check_pipeline(){
                 Ok(k) => {
@@ -217,12 +210,7 @@ impl Renderer {
         //camera, we start to build the command buffer for the opaque meshes, unordered actually.
         //1st.:get the dimensions of the current image and start a command buffer builder for it
         //Get the dimensions to fill the dynamic vieport setting per mesh.
-        let dimensions = {
-            let engine_settings_lck = self.engine_settings
-            .lock()
-            .expect("Failed to lock settings");
-            (*engine_settings_lck).get_dimensions()
-        };
+        let dimensions = self.window.get_current_extend();
 
         //start the command buffer
         let mut command_buffer: AutoCommandBufferBuilder =

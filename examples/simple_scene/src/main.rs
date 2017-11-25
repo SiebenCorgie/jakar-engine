@@ -22,14 +22,15 @@ extern crate winit;
 
 fn main() {
 
-    let settings = core::engine_settings::EngineSettings::new()
+    let settings = core::engine_settings::EngineSettings::default()
     .with_dimensions(1600, 900)
     .with_name("jakar Instance")
     .in_release_mode()
+    .with_input_poll_speed(400)
     .with_fullscreen_mode(false)
-    .with_cursor_state(winit::CursorState::Grab)
-    .with_cursor_visibility(winit::MouseCursor::NoneCursor)
-    .with_msaa_factor(4)
+    .with_cursor_state(winit::CursorState::Normal)
+    .with_cursor_visibility(winit::MouseCursor::Default)
+
     ;
 
     //Start the engine
@@ -79,20 +80,37 @@ fn main() {
         //try to get the TestScene and move it if a key is pressed
 
         //test if a is pressed
-        if engine.get_asset_manager().get_keymap().a{
+        if engine.get_asset_manager().get_keymap().h{
 
             match engine.get_asset_manager().get_active_scene().get_node("TestScene".to_string()){
                 Some(scene) => {
-                    scene.add_job(jobs::SceneJobs::Move(Vector3::new(1.0, 0.0, 0.0)));
+                    scene.add_job(jobs::SceneJobs::Rotate(Vector3::new(1.0, 0.0, 0.0)));
                 }
                 None => {println!("Could not find TestScene :( !0!0!0!=!=!=!0!=!=!=!=!=!0!0!0", );}, //get on with it
             }
         }
 
+        /*
+        //test if a is pressed
+        if engine.get_asset_manager().get_keymap().g{
+
+            match engine.get_asset_manager().get_active_scene().get_node("TestScene_node_7".to_string()){
+                Some(scene) => {
+                    scene.add_job(jobs::SceneJobs::Rotate(Vector3::new(1.0, 0.0, 0.0)));
+                }
+                None => {println!("Could not find TestScene :( !0!0!0!=!=!=!0!=!=!=!=!=!0!0!0", );}, //get on with it
+            }
+        }
+        */
+
+
         if engine.get_asset_manager().get_keymap().q{
             let mut asset_manager = engine.get_asset_manager();
             asset_manager.get_scene_manager().print_all_scenes();
         }
+
+
+
 
         //test if a is pressed
         if engine.get_asset_manager().get_keymap().escape{
@@ -102,7 +120,10 @@ fn main() {
             break;
         }
 
-        thread::sleep(Duration::from_millis(100));
+
+
+
+        thread::sleep(Duration::from_millis(10));
 
     }
 

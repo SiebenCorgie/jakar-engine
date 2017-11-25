@@ -1,6 +1,7 @@
 
 use winit;
 use vulkano;
+use core::render_settings;
 
 ///Describes how the engine should handle debuging messages and vulkan settings
 #[derive(Clone, PartialEq)]
@@ -45,10 +46,7 @@ pub struct EngineSettings {
     pub build_mode: BuildType,
 
     ///Graphics settings:
-    ///filtering options, should be power of two between 1 and 16
-    pub anisotropic_filtering: f32,
-    ///Samples for each pixel, should be power of two between 1 and 16 (but can be higher)
-    pub msaa: u32,
+    pub render_settings: render_settings::RenderSettings,
 
 
     ///Max input pollings per second (default 60)
@@ -76,7 +74,7 @@ impl EngineSettings{
     ///     .set_vulkan_silent()
     ///     ));
     ///  ```
-    pub fn new() -> Self{
+    pub fn default() -> Self{
         EngineSettings{
             //main
             app_name: String::from("Jakar-Engine"),
@@ -106,14 +104,20 @@ impl EngineSettings{
             //graphics debuging
             build_mode: BuildType::Debug,
             //Graphics settings
-            anisotropic_filtering: 1.0,
-            msaa: 1,
+            render_settings: render_settings::RenderSettings::default(),
 
             max_input_speed: 60,
             max_asset_updates: 120,
             max_fps: 700,
         }
     }
+
+    ///Adds custom render settings to self
+    pub fn with_render_settings(mut self, settings: render_settings::RenderSettings) -> Self{
+        self.render_settings = settings;
+        self
+    }
+
 
     ///Sets the maximum updates per second value for the asset thread.
     #[inline]
@@ -160,20 +164,6 @@ impl EngineSettings{
     #[inline]
     pub fn with_cursor_state(mut self, state: winit::CursorState) -> Self{
         self.cursor_state = state;
-        self
-    }
-
-    ///Sets up a custom anisotropical filtering factor
-    #[inline]
-    pub fn with_anisotropical_filtering(mut self, af_factor: f32)-> Self{
-        self.anisotropic_filtering = af_factor;
-        self
-    }
-
-    ///Sets up a custom anisotropical filtering factor
-    #[inline]
-    pub fn with_msaa_factor(mut self, msaa_factor: u32) -> Self{
-        self.msaa = msaa_factor;
         self
     }
 
