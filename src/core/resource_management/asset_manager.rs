@@ -271,7 +271,13 @@ impl AssetManager {
         {
             let mut uniform_manager_lck = self.uniform_manager.lock().expect("failed to lock uniform_man.");
             (*uniform_manager_lck).update(
-                uniform_data, point_shader_info, directional_shader_info, spot_shader_info, c_point, c_dir, c_spot
+                uniform_data,
+                point_shader_info,
+                directional_shader_info,
+                spot_shader_info,
+                c_point,
+                c_dir,
+                c_spot
             );
         }
 
@@ -284,6 +290,9 @@ impl AssetManager {
 
         //Now update the camera
         self.camera.update_view();
+        //and finally update the tree
+        self.active_main_scene.update();
+
     }
 
     ///Returns the scene manager as a locked mutex, need to be returned

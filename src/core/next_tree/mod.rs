@@ -12,7 +12,7 @@ pub mod content;
 
 ///Describes the attributes the tree can have
 pub mod attributes;
-
+use jakar_tree::node::Attribute;
 ///Describes the jobs this tree can execute when updated
 pub mod jobs;
 
@@ -141,6 +141,20 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
         for (_, child) in self.children.iter(){
             return_vec.append(&mut child.get_all_meshes(sorting)); //append all children
         }
+        //first of all test if self has the right attributes, if not we can already return the child
+        // vector
+        match sorting{
+            &Some(ref comparer) => {
+                //early return if self doesnt match the sorting
+                if !self.attributes.compare(comparer){
+                    return return_vec;
+                }
+            },
+            &None =>  {}, //all is nice, add the mesh
+        }
+
+
+
         //check self
         match self.value{
             content::ContentType::Mesh(ref mesh) => {
@@ -172,6 +186,19 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
         for (_, child) in self.children.iter(){
             return_vec.append(&mut child.get_all_point_lights(&sorting));
         }
+
+        //first of all test if self has the right attributes, if not we can already return the child
+        // vector
+        match sorting{
+            &Some(ref comparer) => {
+                //early return if self doesnt match the sorting
+                if !self.attributes.compare(comparer){
+                    return return_vec;
+                }
+            },
+            &None =>  {}, //all is nice, add the mesh
+        }
+
         //check self
         match self.value{
             content::ContentType::PointLight(ref light) => {
@@ -197,6 +224,19 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
         for (_, child) in self.children.iter(){
             return_vec.append(&mut child.get_all_directional_lights(sorting));
         }
+
+        //first of all test if self has the right attributes, if not we can already return the child
+        // vector
+        match sorting{
+            &Some(ref comparer) => {
+                //early return if self doesnt match the sorting
+                if !self.attributes.compare(comparer){
+                    return return_vec;
+                }
+            },
+            &None =>  {}, //all is nice, add the mesh
+        }
+
         //check self
         match self.value{
             content::ContentType::DirectionalLight(ref light) => {
@@ -222,6 +262,19 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
         for (_, child) in self.children.iter(){
             return_vec.append(&mut child.get_all_spot_lights(sorting));
         }
+
+        //first of all test if self has the right attributes, if not we can already return the child
+        // vector
+        match sorting{
+            &Some(ref comparer) => {
+                //early return if self doesnt match the sorting
+                if !self.attributes.compare(comparer){
+                    return return_vec;
+                }
+            },
+            &None =>  {}, //all is nice, add the mesh
+        }
+
         //check self
         match self.value{
             content::ContentType::SpotLight(ref light) => {
@@ -247,6 +300,19 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
         for (_, child) in self.children.iter(){
             return_vec.append(&mut child.get_all_emptys(sorting));
         }
+
+        //first of all test if self has the right attributes, if not we can already return the child
+        // vector
+        match sorting{
+            &Some(ref comparer) => {
+                //early return if self doesnt match the sorting
+                if !self.attributes.compare(comparer){
+                    return return_vec;
+                }
+            },
+            &None =>  {}, //all is nice, add the mesh
+        }
+
         //check self
         match self.value{
             content::ContentType::Empty(ref empty) => {
@@ -272,6 +338,19 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
         for (_, child) in self.children.iter(){
             return_vec.append(&mut child.get_all_cameras(sorting));
         }
+
+        //first of all test if self has the right attributes, if not we can already return the child
+        // vector
+        match sorting{
+            &Some(ref comparer) => {
+                //early return if self doesnt match the sorting
+                if !self.attributes.compare(comparer){
+                    return return_vec;
+                }
+            },
+            &None =>  {}, //all is nice, add the mesh
+        }
+
         //check self
         match self.value{
             content::ContentType::Camera(ref camera) => {

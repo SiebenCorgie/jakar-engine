@@ -196,7 +196,6 @@ impl Attribute<SceneJobs> for NodeAttributes{
         }
 
         //all test where sucessful, returning true
-        println!("IsOk", );
         true
     }
 

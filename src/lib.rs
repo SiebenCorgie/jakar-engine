@@ -273,6 +273,7 @@ impl JakarEngine {
                 }
             }
 
+            //get the asset manager from the asset manager creation thread
             let asset_manager: Arc<Mutex<core::resource_management::asset_manager::AssetManager>> = {
                 match asset_manager_inst{
                     None => return,
@@ -332,7 +333,7 @@ impl JakarEngine {
                 let fps_time = fps_time_start.elapsed().subsec_nanos();
 
                 let fps = 1.0/ (fps_time as f32 / 1_000_000_000.0);
-                //println!("This Frame: {}", fps);
+                println!("This Frame: {}", fps);
 
                 fps_time_start = Instant::now();
 
