@@ -8,7 +8,7 @@ pub mod render_builder;
 ///A primitve which describes one frame. It handles the creation of the frame buffer images
 /// needed to preform this frame, returns a commnad buffer which can be filled and finaly
 /// executes the command buffer and returns the future of it.
-pub mod frame;
+pub mod frame_system;
 
 ///Manages all available pipeline, you'll mostly just need the default one
 pub mod pipeline_manager;

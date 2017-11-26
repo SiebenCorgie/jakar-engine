@@ -1,6 +1,7 @@
 use vulkano;
 use vulkano::pipeline;
-
+use vulkano::framebuffer::RenderPassAbstract;
+use vulkano::framebuffer::Subpass;
 use std::sync::Arc;
 use core::resources::mesh;
 
@@ -23,22 +24,26 @@ pub struct Pipeline {
     ///Stores the config this pipeline was created from
     pub pipeline_config: PipelineConfig,
 
-    //defines several optional descriptor set pools, they depend on the `inputs` parameter
-
+    ///saves for which subpass in this renderpass the pipeline was made for
+    pub sub_pass: u32,
 }
 
 impl Pipeline{
-    ///Creates a pipeline for a 'shader_set' from a `pipeline_configuration`.
+    ///Creates a pipeline for a 'shader_set' from a `pipeline_configuration`, at a `sub_pass` id of the `target_subpass`
     ///
     /// NOTE:
     ///
     /// Some things are not configurable like the vertex buffer definition. They are set for this engine but
     /// this might change in the future if needed.
-    pub fn new(
+    pub fn new<R>(
         device: Arc<vulkano::device::Device>,
         pipeline_configuration: PipelineConfig,
+        target_subpass: Subpass<R>,
+        sub_pass: u32,
     )
         -> Self
+    where R: RenderPassAbstract + Send + Sync + 'static
+
     {
 
         //load the shader from configuration
@@ -338,13 +343,8 @@ impl Pipeline{
                 blending_pipeline
                 .take()
                 .expect("failed to get pipeline #1")
-                .render_pass(
-                    vulkano::framebuffer::Subpass::from(
-                        pipeline_configuration.render_pass.clone(), //extracted this one at the top of this function //TODO after deleting the old approach this can move here
-                        pipeline_configuration.sub_pass_id
-                    )
-                    .expect("failed to set supass for renderpass ")
-                )
+                .render_pass(target_subpass)
+                //.expect("failed to set supass for renderpass ")
             )
         };
 
@@ -393,7 +393,8 @@ impl Pipeline{
         Pipeline{
             pipeline: final_pipeline,
             inputs: pipeline_inputs,
-            pipeline_config: pipeline_configuration
+            pipeline_config: pipeline_configuration,
+            sub_pass: sub_pass
         }
     }
 

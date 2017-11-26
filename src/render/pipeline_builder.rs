@@ -75,6 +75,33 @@ pub enum DepthStencilConfig {
     CustomDepthAndStencil(pipeline::depth_stencil::DepthStencil),
 }
 
+impl PartialEq for DepthStencilConfig{
+    fn eq(&self, other: &DepthStencilConfig) -> bool {
+        match self{
+            &DepthStencilConfig::SimpleDepthNoStencil => {
+                match other{
+                    &DepthStencilConfig::SimpleDepthNoStencil => true,
+                    _ => false,
+                }
+            },
+            &DepthStencilConfig::NoDepthNoStencil => {
+                match other{
+                    &DepthStencilConfig::NoDepthNoStencil => true,
+                    _ => false,
+                }
+            },
+            &DepthStencilConfig::CustomDepthAndStencil(ref ds) => {
+                match other{
+                    &DepthStencilConfig::CustomDepthAndStencil(ref ods) => {
+                        true //TODO comapre the ods and ds
+                    },
+                    _ => false
+                }
+            }
+        }
+    }
+}
+
 
 ///A struct which can be used to configure the pipeline which can be build via the `new()` functions
 ///of the `Pipeline` struct.
@@ -121,12 +148,15 @@ pub struct PipelineConfig {
     ///If you want to set the constant dynamic per frame, choose `None` as value!
     pub blending_constant: Option<[f32; 4]>,
 
-    ///Sets the render pass / subpass to use
-    pub render_pass: Arc<vulkano::framebuffer::RenderPassAbstract + Send + Sync>,
+    //Sets the render pass / subpass to use
+    //pub render_pass: Arc<vulkano::framebuffer::Subpass>,
 
-    ///Sets the Id of the sub pass in this render pass to use. If you have only one pass (the main pass),
-    ///use the `id: 0`.
-    pub sub_pass_id: u32
+    //Sets the Id of the sub pass in this render pass to use. If you have only one pass (the main pass),
+    //use the `id: 0`.
+    //pub sub_pass_id: u32,
+
+    //Is some if we are using per sample shading aka. multisampling
+    //pub sample_count: Option<u32>,
 }
 
 impl PipelineConfig{
@@ -143,7 +173,7 @@ impl PipelineConfig{
     ///
     /// This configuration is suitable for most simple drawing operations.
     #[inline]
-    pub fn default(renderpass: Arc<vulkano::framebuffer::RenderPassAbstract + Send + Sync>) -> Self {
+    pub fn default() -> Self {
 
         PipelineConfig {
             shader_set: shader_impls::ShaderTypes::PbrOpaque,
@@ -157,9 +187,17 @@ impl PipelineConfig{
             blending_operation: BlendTypes::BlendPassThrough,
             disabled_logic_op: false,
             blending_constant: Some([0.0; 4]),
-            render_pass: renderpass,
-            sub_pass_id: 0
+            //subpass: renderpass,
+            //sub_pass_id: 0,
+            //sample_count: None,
         }
+    }
+
+    ///Sets a sampling count
+    #[inline]
+    pub fn with_sampling_count(mut self, count: u32) -> Self{
+        //self.sample_count = Some(count);
+        self
     }
 
     ///Changes the shader set to a custom value
@@ -259,19 +297,48 @@ impl PipelineConfig{
         self
     }
 
-    ///Set the id from which pass in the `render_pass` the pipeline should be created from.
-    #[inline]
-    pub fn from_subpass_id(mut self, new_id: u32) -> Self{
-        self.sub_pass_id = new_id;
-        self
-    }
 
-    ///Can return a clone of the renderpass
-    #[inline]
-    fn get_renderpass_copy(&self) -> Arc<vulkano::framebuffer::RenderPassAbstract + Send + Sync>{
-        self.render_pass.clone()
-    }
+    ///Compares self ti another config, returns true if they are the same and false if not
+    pub fn compare(&self, other_conf: &PipelineConfig) -> bool{
 
+        if self.shader_set != other_conf.shader_set{
+            return false;
+        }
+
+        if self.topology_type != other_conf.topology_type{
+            return false;
+        }
+        if self.viewport_scissors != other_conf.viewport_scissors{
+            return false;
+        }
+        if self.has_depth_clamp != other_conf.has_depth_clamp{
+            return false;
+        }
+        if self.has_faces_clockwise != other_conf.has_faces_clockwise{
+            return false;
+        }
+        if self.cull_mode != other_conf.cull_mode{
+            return false;
+        }
+        if self.polygone_mode != other_conf.polygone_mode{
+            return false;
+        }
+        if self.depth_stencil != other_conf.depth_stencil{
+            return false;
+        }
+        if self.blending_operation != other_conf.blending_operation{
+            return false;
+        }
+        if self.disabled_logic_op != other_conf.disabled_logic_op{
+            return false;
+        }
+        if self.blending_constant != other_conf.blending_constant{
+            return false;
+        }
+
+        //all is nice
+        true
+    }
 
 }
 

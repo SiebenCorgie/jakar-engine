@@ -22,6 +22,9 @@ extern crate winit;
 
 fn main() {
 
+    let graphics_settings = core::render_settings::RenderSettings::default()
+    .with_msaa_factor(4);
+
     let settings = core::engine_settings::EngineSettings::default()
     .with_dimensions(1600, 900)
     .with_name("Jakar Instance")
@@ -30,7 +33,7 @@ fn main() {
     .with_fullscreen_mode(false)
     .with_cursor_state(winit::CursorState::Grab)
     .with_cursor_visibility(winit::MouseCursor::NoneCursor)
-
+    .with_render_settings(graphics_settings)
     ;
 
     //Start the engine
@@ -114,8 +117,8 @@ fn main() {
 
         //test if a is pressed
         if engine.get_asset_manager().get_keymap().escape{
-            println!("Scene: ", );
-            engine.get_asset_manager().get_active_scene().print_tree();
+            //println!("Scene: ", );
+            //engine.get_asset_manager().get_active_scene().print_tree();
             engine.end();
             break;
         }

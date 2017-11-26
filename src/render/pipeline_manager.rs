@@ -7,6 +7,7 @@ use render::pipeline_builder;
 use std::sync::Arc;
 
 use vulkano;
+use vulkano::framebuffer;
 
 ///Contains the requirements an material can have for a pipeline.
 /// Can be used to search for an pipeline which has thoose requirements or, if there is non, create one.
@@ -15,6 +16,21 @@ pub struct PipelineRequirements {
     pub blend_type: pipeline_builder::BlendTypes,
     ///Describes which side of an polygone should be discarded
     pub culling: pipeline_builder::CullMode,
+}
+
+impl PipelineRequirements{
+    ///Returns true if other has the same configuration as self
+    pub fn compare(&self, other: &Self) -> bool{
+        if self.blend_type != other.blend_type{
+            return false;
+        }
+
+        if self.culling != other.culling{
+            return false;
+        }
+
+        true
+    }
 }
 
 
@@ -32,16 +48,22 @@ impl PipelineManager{
     pub fn new(
         device: Arc<vulkano::device::Device>,
         renderpass: Arc<vulkano::framebuffer::RenderPassAbstract + Send + Sync>,
+        default_subpass: u32,
     ) -> Self
     {
         let mut b_tree_map = BTreeMap::new();
         //Creates a default pipeline from a default shader
 
         //the default inputs (all for the best visual graphics)
-        let default_pipeline = pipeline_builder::PipelineConfig::default(renderpass.clone());
+        let default_pipeline = pipeline_builder::PipelineConfig::default();
 
         let default_pipeline = Arc::new(
-            pipeline::Pipeline::new(device, default_pipeline)
+            pipeline::Pipeline::new(
+                device,
+                default_pipeline,
+                framebuffer::Subpass::from(renderpass.clone(), default_subpass).expect("failed to create subpass from renderpass"),
+                default_subpass
+            )
         );
 
         b_tree_map.insert(String::from("DefaultPipeline"), default_pipeline);
@@ -82,69 +104,92 @@ impl PipelineManager{
         self.get_default_pipeline()
     }
 
-    ///Adds a pipeline made for the specified properties. Returns a the name under which this pipeline was actually
-    ///created, as well as an Arc<T> clone of the vulkano-pipeline object
-    ///TODO make the shader specified
-    pub fn add_pipeline(&mut self, name: &str,device: Arc<vulkano::device::Device>,
-        renderpass: Arc<vulkano::framebuffer::RenderPassAbstract + Send + Sync>,
-    )
-    {
-        let pipeline_config = pipeline_builder::PipelineConfig::default(renderpass);
-
-        let tmp_pipeline = Arc::new(
-            pipeline::Pipeline::new(device, pipeline_config)
-        );
-        self.pipelines.insert(String::from(name), tmp_pipeline);
-    }
-
     ///Returns a pipeline which fulfills the `requirements`. If there is none one will be created.
+    /// if possible based on the `needed_configuration`. Anyways the pipeline will always be made for
+    /// the `needed_subpass_id` in the renderpass stored in this pipeline_manager.
     ///You can provide an optional `configuration` for the new pipeline.
     pub fn get_pipeline_by_requirements(
         &mut self,
         requirements: PipelineRequirements,
-        configuration: Option<pipeline_builder::PipelineConfig>,
-        device: Arc<vulkano::device::Device>
+        needed_configuration: Option<pipeline_builder::PipelineConfig>,
+        device: Arc<vulkano::device::Device>,
+        needed_subpass_id: u32
     ) -> Arc<pipeline::Pipeline> {
         //cycle thorugh the pipeline and match the types of the requirements with the pipeline
         //return if they are fulfilled or create a new one if not
 
-        for (_, pipeline) in self.pipelines.iter(){
-            //there is currently only one requirement to consider, otherwise we would have
-            //to add another branch.
-            if pipeline.pipeline_config.blending_operation == requirements.blend_type{
-                //test the culling parameter
-                if pipeline.pipeline_config.cull_mode == requirements.culling{
-                    return pipeline.clone()
+        //first test based on the requirements and the subpass id
+        for (_, pipe) in self.pipelines.iter(){
+            let current_self_req = PipelineRequirements{
+                blend_type: pipe.pipeline_config.blending_operation.clone(),
+                culling: pipe.pipeline_config.cull_mode.clone(),
+            };
+
+            if current_self_req.compare(&requirements){
+                if pipe.sub_pass == needed_subpass_id{
+                    println!("Found correct pipeline based on the requirements", );
+                    return pipe.clone();
                 }
             }
         }
 
-        //if we are here, there was no right pipeline, thats why we have to create a new one and return it
-        //first of all, see if we got a config, if yes use this one and overwrite it with the requirements,
-        // otherwise create a default config and overwrite it
+        //okay, we got no pipeline which matches the sub_pass id and the requirements.
+        //now we can have a look at the configuration, if there is no pipeline with this configuration
+        // as well we have to create one. If there is one, we can return it and if the pipeline has no
+        //config, we have to create it.
+
+        //test if the pipeline has requirements, if not we can early return the first pipeline with
+        // the needed subpass id
+
+        //a switch to drag if we should overwrite the config later by teh requirements
+        // or if we leave them
+        let mut overwrite_for_requirements = false;
+
         let mut pipeline_conf = {
-            match configuration{
-                Some(config) =>{
-                    config
+            match needed_configuration{
+                Some(conf) => {
+                    //found a config. searching for a pipeline based on the supplyied config,
+                    for (_, pipeline) in self.pipelines.iter(){
+                        if pipeline.pipeline_config.compare(&conf){
+                            //test the subpass
+                            if pipeline.sub_pass == needed_subpass_id{
+                                println!("Found the right pipeline based on the supplied config!", );
+                                return pipeline.clone()
+                            }
+                        }
+                    }
+                    conf
                 },
-                None =>{
-                    pipeline_builder::PipelineConfig::default(self.render_pass.clone())
-                },
+                None => {
+                    //well, if this happens it looks like we have to create a pipeline with only
+                    //the settings from the requirements
+                    overwrite_for_requirements = true;
+                    pipeline_builder::PipelineConfig::default()
+                }
             }
         };
+
 
         //clone two types needed for the name generation
         let blend_type = requirements.blend_type.clone();
         let poly_mode = pipeline_conf.polygone_mode.clone();
 
         //MAIN STAGE =======================================================
-        //now overwrite with new values
-        pipeline_conf = pipeline_conf.with_blending(requirements.blend_type);
-        pipeline_conf = pipeline_conf.with_cull_mode(requirements.culling);
+        //now overwrite with new values if needed
+        if overwrite_for_requirements{
+            println!("Creating pipeline for something new !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!", );
+            pipeline_conf = pipeline_conf.with_blending(requirements.blend_type);
+            pipeline_conf = pipeline_conf.with_cull_mode(requirements.culling);
+        }
         //END ==============================================================
 
         //now build the new pipeline and put it in an arc for cloning
-        let new_pipe = Arc::new(pipeline::Pipeline::new(device, pipeline_conf));
+        let new_pipe = Arc::new(pipeline::Pipeline::new(
+            device,
+            pipeline_conf,
+            framebuffer::Subpass::from(self.render_pass.clone(), needed_subpass_id).expect("failed to get subpass at pipeline creation"),
+            needed_subpass_id
+        ));
         //add it to the manager
         let pipe_name = {
             //create a nice name to indentify it later
@@ -196,6 +241,7 @@ impl PipelineManager{
             }
 
         };
+        println!("Inserting pipeline {} !!!!!!!!!!!!!!!!", pipe_name);
 
         self.pipelines.insert(pipe_name.clone(), new_pipe);
         //now return the new pipe

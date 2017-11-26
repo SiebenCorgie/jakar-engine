@@ -174,9 +174,10 @@ impl JakarEngine {
                 // the renderer and the gpu future. If something went wrong while creating the
                 // renderer we set the engine status to Err(message). This way we can ensure
                 // that the engine only starts if the renderer is created successfuly.
-                let render_builder = render::render_builder::RenderBuilder::new();
+                let mut render_builder = render::render_builder::RenderBuilder::new();
                 //Configure======================================
-
+                //render_builder.layer_loading = render::render_builder::LayerLoading::All;
+                //render_builder.vulkan_messages = vulkano::instance::debug::MessageTypes::errors_and_warnings();
                 //===============================================
                 //lock the input system for the creation
                 let mut input_sys = render_input_system
@@ -357,6 +358,7 @@ impl JakarEngine {
                         mpsc::TryRecvError::Disconnected => {
                             //while we already know that something went wrong, we try to get the message later
                             println!("Renderer crashed, getting message", );
+                            return Err(CreationErrors::FailedToCreateRenderer("Renderer Disconnected".to_string()));
                         },
                         mpsc::TryRecvError::Empty => {},
                     }

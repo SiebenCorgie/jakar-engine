@@ -14,6 +14,7 @@ use render;
 use render::pipeline_manager;
 use render::uniform_manager;
 use render::window;
+use render::frame_system;
 use core::render_settings;
 use core::engine_settings;
 use input::KeyMap;
@@ -70,7 +71,9 @@ impl RenderBuilder {
         };
         let layers = LayerLoading::NoLayer;
         let vulkan_messages = vulkano::instance::debug::MessageTypes::errors();
-        let minimal_features = vulkano::instance::Features::none();
+        let mut minimal_features = vulkano::instance::Features::none();
+        //test add sampling
+        minimal_features.sample_rate_shading = true;
 
 
         RenderBuilder{
@@ -119,7 +122,7 @@ impl RenderBuilder {
                         ret_list
                     },
                     LayerLoading::NoLayer => {
-                        let mut vec: Vec<String> = Vec::new();
+                        let vec: Vec<String> = Vec::new();
                         //vec.push("".to_string());
                         vec
                     },
@@ -174,7 +177,7 @@ impl RenderBuilder {
         let try_instance = vulkano::instance::Instance::new(
             Some(&app_info),
             &self.physical_extensions_needed, //TODO verify
-            None //&debug_layers
+            &debug_layers
         );
 
         //now unwarp our new instance
@@ -305,7 +308,7 @@ impl RenderBuilder {
         //select needed device extensions
         let device_ext = self.logical_extensions_needed;
 
-        //Ensre that each feture is supported
+        //Ensre that each feature is supported
         if !physical_device.supported_features().superset_of(&self.minimal_features){
             return Err("Not all features are supported!".to_string());
         }
@@ -359,94 +362,35 @@ impl RenderBuilder {
             println!("Images have samples: {}", i.samples());
         }
 
-        //Creates a buffer for the msaa image
-        let intermediary = AttachmentImage::transient_multisampled(device.clone(), images[0].dimensions(),
-        4, swapchain.format()).expect("failed to create msaa buffer!");
-
-
-        //Create a depth buffer
-        let depth_buffer = AttachmentImage::transient(
-            device.clone(), images[0].dimensions(), vulkano::format::D16Unorm)
-            .expect("failed to create depth buffer!");
-
-
-
+        //Create the uniform manager
         let uniform_manager_tmp = uniform_manager::UniformManager::new(
             device.clone()
         );
 
-
-        //TODO, create custom renderpass with different stages (light computing, final shading (how to loop?),
-        //postprogress) => Dig through docs.
-        //Create a simple renderpass
-        println!("Createing Render Pass with output format: {:?}", swapchain.format());
-        let renderpass = Arc::new(
-            ordered_passes_renderpass!(queue.device().clone(),
-            attachments: {
-
-                //the final image
-                color: {
-                    load: Clear,
-                    store: Store,
-                    format: swapchain.format(), //this needs to have the format which is presentable to the window
-                    samples: 1, //TODO msaa samples based on settings
-                },
-                // The first framebuffer attachment is the intermediary image.
-                /*
-                intermediary: {
-                    load: Clear,
-                    store: DontCare,
-                    format: swapchain.format(), //this needs to have the format which is presentable to the window,
-                    samples: 4,     // This has to match the image definition.
-                },
-                */
-                //the depth buffer
-                depth: {
-                    load: Clear,
-                    store: DontCare,
-                    format: Format::D16Unorm,
-                    samples: 1,
-                }
-            },
-            passes:[
-                {
-                    color: [color], //TODO change to msaa
-                    depth_stencil: {depth},
-                    input: []   //has no input, might get the light vec as input and the pre rendered light depth infos
-                    //resolve: [color],
-                }
-            ]
-        ).expect("failed to create render_pass")
-        );
-        println!("Finished renderpass", );
-
-        //Create the frame buffers from all images
-        let framebuffers = images.iter().map(|image| {
-            Arc::new(vulkano::framebuffer::Framebuffer::start(renderpass.clone())
-                //The color pass
-                .add(image.clone()).expect("failed to add image to frame buffer!")
-                //the msaa image
-                //.add(intermediary.clone()).expect("failed to add msaa image")
-                //and its depth pass
-                .add(depth_buffer.clone()).expect("failed to add depth to frame buffer!")
-                .build().expect("failed to build framebuffer!"))
-        }).collect::<Vec<_>>();
-
-        let mut store_framebuffer: Vec<Arc<FramebufferAbstract + Send + Sync>> = Vec::new();
-        for i in framebuffers{
-            store_framebuffer.push(i.clone());
-        }
-
+        //start the future chain
         let previous_frame = Box::new(vulkano::sync::now(device.clone())) as Box<GpuFuture>;
 
+
+        println!("Starting frame system", );
+        //now create us a default frame system
+        let frame_system = frame_system::FrameSystem::new(
+            (*(engine_settings.lock().expect("failed to lock settings in render builder"))).get_render_settings_cpy(),
+            device.clone(),
+            images[0].dimensions(),
+            queue.clone(),
+            swapchain.format()
+        );
+        println!("Finished the frame system", );
         //Creates the renderers pipeline manager
         let pipeline_manager = Arc::new(
             Mutex::new(
                 pipeline_manager::PipelineManager::new(
-                    device.clone(), renderpass.clone(),
+                    device.clone(), frame_system.get_renderpass(), 0 //default value atm
                 )
             )
         );
+
+
         println!("Finished Render Setup", );
         //Pass everthing to the struct
         let renderer = render::renderer::Renderer::create_for_builder(
@@ -458,12 +402,8 @@ impl RenderBuilder {
             queue,
             swapchain,
             images,
-            renderpass,
 
-            depth_buffer,
-            intermediary,
-
-            store_framebuffer,
+            frame_system,
 
             false,
 
@@ -472,7 +412,7 @@ impl RenderBuilder {
 
             Arc::new(Mutex::new(render::renderer::RendererState::WAITING)),
         );
-
+        println!("Finished renderer!", );
         Ok((renderer, previous_frame))
     }
 }

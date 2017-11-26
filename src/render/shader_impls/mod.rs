@@ -61,6 +61,7 @@ pub enum JakarShaders {
 ///
 ///NOTE: This type is only used for the configuration in the `PipelineConfiguration` struct.
 /// The final shader and its properties will be stored in an `JakarShaders` enum.
+#[derive(PartialEq)]
 pub enum ShaderTypes {
     PbrOpaque,
     Wireframe,

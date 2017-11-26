@@ -118,6 +118,11 @@ impl EngineSettings{
         self
     }
 
+    ///Returns a copy of the current render settings
+    pub fn get_render_settings_cpy(&self) -> render_settings::RenderSettings{
+        self.render_settings.clone()
+    }
+
 
     ///Sets the maximum updates per second value for the asset thread.
     #[inline]
