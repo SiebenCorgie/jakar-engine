@@ -5,6 +5,7 @@ use render::window;
 use render::render_helper;
 use render::frame_system;
 use render::post_progress;
+
 use core::engine_settings;
 use core::resources::camera::Camera;
 //use core::simple_scene_system::node_helper;
@@ -66,6 +67,7 @@ pub struct Renderer  {
     ///The post progresser
     post_progress: post_progress::PostProgress,
 
+
     //Is true if we need to recreate the swap chain
     recreate_swapchain: bool,
 
@@ -89,7 +91,9 @@ impl Renderer {
 
         //the used frame system
         frame_system: frame_system::FrameSystem,
+
         post_progress: post_progress::PostProgress,
+
 
         recreate_swapchain: bool,
         engine_settings: Arc<Mutex<engine_settings::EngineSettings>>,
@@ -109,6 +113,7 @@ impl Renderer {
             //framebuffers: framebuffers,
             frame_system: frame_system,
             post_progress: post_progress,
+
             recreate_swapchain: recreate_swapchain,
             engine_settings: engine_settings,
             uniform_manager: uniform_manager,
@@ -214,6 +219,7 @@ impl Renderer {
             }
         };
 
+
         //now we can actually start the frame
         //get all opaque meshes
         let opaque_meshes = asset_manager.get_all_meshes(
@@ -293,7 +299,6 @@ impl Renderer {
 
         println!("Ending frame", );
 
-
         //thanks firewater
         let real_cb = finished_command_buffer
         .end_render_pass().expect("failed to end command buffer")
@@ -343,7 +348,9 @@ impl Renderer {
         let command_buffer = {
             match frame_stage{
                 frame_system::FrameStage::Forward(cb) => cb,
-                _ => {panic!("Got wrong frame system stage while building command buffer")}
+                _ => {
+                    panic!("Got wrong frame system stage while building command buffer")
+                }
             }
         };
 
@@ -408,6 +415,7 @@ impl Renderer {
             .expect("Failed to draw in command buffer!");
 
             frame_system::FrameStage::Forward(new_cb)
+
     }
 
 
