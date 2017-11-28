@@ -174,9 +174,10 @@ impl JakarEngine {
                 // the renderer and the gpu future. If something went wrong while creating the
                 // renderer we set the engine status to Err(message). This way we can ensure
                 // that the engine only starts if the renderer is created successfuly.
-                let render_builder = render::render_builder::RenderBuilder::new();
+                let mut render_builder = render::render_builder::RenderBuilder::new();
                 //Configure======================================
-
+                //render_builder.layer_loading = render::render_builder::LayerLoading::All;
+                //render_builder.vulkan_messages = vulkano::instance::debug::MessageTypes::errors_and_warnings();
                 //===============================================
                 //lock the input system for the creation
                 let mut input_sys = render_input_system
@@ -357,6 +358,7 @@ impl JakarEngine {
                         mpsc::TryRecvError::Disconnected => {
                             //while we already know that something went wrong, we try to get the message later
                             println!("Renderer crashed, getting message", );
+                            return Err(CreationErrors::FailedToCreateRenderer("Renderer Disconnected".to_string()));
                         },
                         mpsc::TryRecvError::Empty => {},
                     }
@@ -552,22 +554,62 @@ impl JakarEngine {
         println!("Finished ending Engine, returning to main thread", );
     }
 
-    ///Returns the asset manager
+    ///Returns the asset manager as mutex guard.
+    /// **WARNING** the asset manager will be locked withing you function as long as the variable
+    /// is in scope. This can potentually lock up the engine. So dont do the following:
+    /// #Example
+    /// ```
+    /// 'game_loop: loop{
+    ///     let something_else = engine.get_asset_manager().get_something_else();
+    ///     something_else.do_something();
+    ///     thread::sleep_ms(100);  //the engine won't render a second frame for 100 ms because a
+    ///                             // "engine" is still borrowd in "something_else"
+    /// }
+    /// ```
+    /// **Instead do something like this:
+    /// ```
+    /// 'game_loop: loop{
+    ///     {
+    ///         let something_else = engine.get_asset_manager().get_something_else();
+    ///         something_else.do_something();
+    ///     }
+    ///     thread::sleep_ms(100);  //the engine won't render a second frame for 100 ms because a
+    ///                             // "engine" is still borrowd in "something_else"
+    /// }
+    /// ```
+    /// ** Or if you want to get a value **
+    /// ```
+    /// 'game_loop: loop{
+    ///     let value = {
+    ///         let something_else = engine.get_asset_manager().get_something_else();
+    ///         something_else.get_something()
+    ///     }
+    ///     thread::sleep_ms(100);  //the engine won't render a second frame for 100 ms because a
+    ///                             // "engine" is still borrowd in "something_else"
+    /// }
+    /// ```
+    /// This value can be of cause something `Arc<Mutex<T>>` for instance the engine_settings ;)
     pub fn get_asset_manager<'a>(&'a mut self) -> MutexGuard<'a, core::resource_management::asset_manager::AssetManager>{
         let asset_lock = self.asset_manager.lock().expect("failed to lock asset manager");
         asset_lock
     }
 
-    ///Returns the renderer
+    ///Returns the renderer, for usage have a look at `get_asset_manager()`
     pub fn get_renderer<'a>(&'a mut self) -> MutexGuard<'a, render::renderer::Renderer>{
         let render_lock = self.renderer.lock().expect("failed to lock asset manager");
         render_lock
     }
 
-    //Returns the input handler
+    ///Returns the input handler, for usage have a look at `get_asset_manager()`
     pub fn get_input_handler<'a>(&'a mut self) -> MutexGuard<'a, input::Input>{
         let input_lock = self.input_system.lock().expect("failed to lock input handler");
         input_lock
+    }
+
+    ///Returns a copy of the current settings. Can be used for instance to change the current graphics
+    /// settings like `exposure` or `gamma`.
+    pub fn get_settings(&self) -> Arc<Mutex<core::engine_settings::EngineSettings>>{
+        self.engine_settings.clone()
     }
 }
 

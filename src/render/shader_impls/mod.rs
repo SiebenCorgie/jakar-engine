@@ -2,7 +2,8 @@ use vulkano;
 use std::sync::Arc;
 
 use render::pipeline_builder;
-
+use core::resources::mesh::Vertex;
+use render::post_progress;
 
 
 ///The normal PBR fragment shader
@@ -36,6 +37,11 @@ pub mod pbr_texture_usage;
 ///Defines the texture sets usable in a pbr material
 pub mod pbr_texture_sets;
 
+///The default post progress vertex shader
+pub mod default_pstprg_vertex;
+///The default post progress fragment shader (does all the work)
+pub mod default_pstprg_fragment;
+
 
 ///Holds a list of all available shader types which can be loaded
 pub enum JakarShaders {
@@ -45,6 +51,7 @@ pub enum JakarShaders {
             pbr_vertex::Shader,
             pbr_fragment::Shader,
             pipeline_builder::PipelineInput,
+            vulkano::pipeline::vertex::SingleBufferDefinition::<Vertex>
         )
     ),
     ///Defines the default Wireframe shader
@@ -53,17 +60,27 @@ pub enum JakarShaders {
             wireframe_vertex::Shader,
             wireframe_fragment::Shader,
             pipeline_builder::PipelineInput,
+            vulkano::pipeline::vertex::SingleBufferDefinition::<Vertex>
         )
     ),
+    PostProgress(
+        (
+            default_pstprg_vertex::Shader,
+            default_pstprg_fragment::Shader,
+            vulkano::pipeline::vertex::SingleBufferDefinition::<post_progress::PostProgressVertex>
+        )
+    )
 }
 
 ///A list of loadable shader types.
 ///
 ///NOTE: This type is only used for the configuration in the `PipelineConfiguration` struct.
 /// The final shader and its properties will be stored in an `JakarShaders` enum.
+#[derive(PartialEq)]
 pub enum ShaderTypes {
     PbrOpaque,
     Wireframe,
+    PostProgress
 }
 
 ///Loads an shader from specified type and returns the shaders as well as an `PipelineInputs` struct
@@ -72,22 +89,38 @@ pub fn load_shader(device: Arc<vulkano::device::Device>, shader_type: ShaderType
     JakarShaders
 {
     match shader_type{
-        PbrOpaque => {
+        ShaderTypes::PbrOpaque => {
+            println!("Loading Post PbrOpaque shader ...", );
             //load shader
             let vs = pbr_vertex::Shader::load(device.clone()).expect("failed to load vertex pbr shader");
             let fs = pbr_fragment::Shader::load(device).expect("failed to load fragment pbr shader");
 
+            //Create the vertex buffer definition
+            let vbd = vulkano::pipeline::vertex::SingleBufferDefinition::<Vertex>::new();
+
             //Create needed inputs
             let inputs = pipeline_builder::PipelineInput::new_all();
             //now return them
-            JakarShaders::PbrOpaque((vs, fs, inputs))
+            JakarShaders::PbrOpaque((vs, fs, inputs, vbd))
         }
-        Wireframe => {
+        ShaderTypes::Wireframe => {
+            println!("Loading Post Wireframe shader ...", );
             let vs = wireframe_vertex::Shader::load(device.clone()).expect("failed to load vertex pbr shader");
             let fs = wireframe_fragment::Shader::load(device).expect("failed to load fragment pbr shader");
             let inputs = pipeline_builder::PipelineInput::with_none();
+            //Create the vertex buffer definition
+            let vbd = vulkano::pipeline::vertex::SingleBufferDefinition::<Vertex>::new();
 
-            JakarShaders::Wireframe((vs, fs, inputs))
+
+            JakarShaders::Wireframe((vs, fs, inputs, vbd))
+        }
+        ShaderTypes::PostProgress => {
+            println!("Loading Post progress shader ...", );
+            let vs = default_pstprg_vertex::Shader::load(device.clone()).expect("failed to load vertex pbr shader");
+            let fs = default_pstprg_fragment::Shader::load(device).expect("failed to load fragment pbr shader");
+            //Create the vertex buffer definition
+            let vbd = vulkano::pipeline::vertex::SingleBufferDefinition::<post_progress::PostProgressVertex>::new();
+            JakarShaders::PostProgress((vs, fs, vbd))
         }
     }
 }

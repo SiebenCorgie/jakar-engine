@@ -3,6 +3,8 @@ use render::uniform_manager;
 use core::resource_management::asset_manager;
 use render::window;
 use render::render_helper;
+use render::frame_system;
+use render::post_progress;
 use core::engine_settings;
 use core::resources::camera::Camera;
 //use core::simple_scene_system::node_helper;
@@ -50,6 +52,7 @@ pub struct Renderer  {
     queue: Arc<vulkano::device::Queue>,
     swapchain: Arc<vulkano::swapchain::Swapchain>,
     images: Vec<Arc<vulkano::image::SwapchainImage>>,
+    /*
     renderpass: Arc<RenderPassAbstract + Send + Sync>,
     //The buffer to which the depth gets written
     depth_buffer: Arc<ImageViewAccess + Send + Sync>,
@@ -57,6 +60,11 @@ pub struct Renderer  {
     msaa_image: Arc<ImageViewAccess + Send + Sync>,
 
     framebuffers: Vec<Arc<FramebufferAbstract + Send + Sync>>,
+    */
+    frame_system: frame_system::FrameSystem,
+
+    ///The post progresser
+    post_progress: post_progress::PostProgress,
 
     //Is true if we need to recreate the swap chain
     recreate_swapchain: bool,
@@ -77,12 +85,12 @@ impl Renderer {
         queue: Arc<vulkano::device::Queue>,
         swapchain: Arc<vulkano::swapchain::Swapchain>,
         images: Vec<Arc<vulkano::image::SwapchainImage>>,
-        renderpass: Arc<RenderPassAbstract + Send + Sync>,
+        //renderpass: Arc<RenderPassAbstract + Send + Sync>,
 
-        depth_buffer: Arc<ImageViewAccess + Send + Sync>,
-        msaa_image: Arc<ImageViewAccess + Send + Sync>,
+        //the used frame system
+        frame_system: frame_system::FrameSystem,
+        post_progress: post_progress::PostProgress,
 
-        framebuffers: Vec<Arc<FramebufferAbstract + Send + Sync>>,
         recreate_swapchain: bool,
         engine_settings: Arc<Mutex<engine_settings::EngineSettings>>,
         uniform_manager: Arc<Mutex<uniform_manager::UniformManager>>,
@@ -95,10 +103,12 @@ impl Renderer {
             queue: queue,
             swapchain: swapchain,
             images: images,
-            renderpass: renderpass,
-            depth_buffer: depth_buffer,
-            msaa_image: msaa_image,
-            framebuffers: framebuffers,
+            //renderpass: renderpass,
+            //depth_buffer: depth_buffer,
+            //msaa_image: msaa_image,
+            //framebuffers: framebuffers,
+            frame_system: frame_system,
+            post_progress: post_progress,
             recreate_swapchain: recreate_swapchain,
             engine_settings: engine_settings,
             uniform_manager: uniform_manager,
@@ -133,38 +143,8 @@ impl Renderer {
         mem::replace(&mut self.swapchain, new_swapchain);
         mem::replace(&mut self.images, new_images);
 
-        //Recreate depth buffer for new size
-        //Create a depth buffer
-        let dimensions = self.images[0].dimensions().width_height();
-
-
-        self.depth_buffer = AttachmentImage::transient(
-            self.device.clone(), dimensions, vulkano::format::D16Unorm)
-            .expect("failed to create depth buffer!");
-
-        //TODO recreate msaa as well
-        self.msaa_image = AttachmentImage::transient_multisampled(self.device.clone(),
-        dimensions,
-        4, self.swapchain.format()).expect("failed to create msaa buffer!");
-
-        // Because framebuffers contains an Arc on the old swapchain, we need to
-        // recreate framebuffers as well.
-        //Create the frame buffers from all images
-        let framebuffers = self.images.iter().map(|image| {
-            Arc::new(vulkano::framebuffer::Framebuffer::start(self.renderpass.clone())
-                //The color pass
-                .add(image.clone()).expect("failed to add image to frame buffer!")
-                //and its depth pass
-                .add(self.depth_buffer.clone()).expect("failed to add depth to frame buffer!")
-                .build().expect("failed to build framebuffer!"))
-        }).collect::<Vec<_>>();
-
-        let mut store_framebuffer: Vec<Arc<FramebufferAbstract + Send + Sync>> = Vec::new();
-        for i in framebuffers{
-            store_framebuffer.push(i.clone());
-        }
-
-        mem::replace(&mut self.framebuffers, store_framebuffer);
+        //with the new dimensions set in the setting, recreate the images of the frame system as well
+        self.frame_system.recreate_attachments();
 
         //Now when can mark the swapchain as "fine" again
         self.recreate_swapchain = false;
@@ -174,7 +154,6 @@ impl Renderer {
     ///Returns the image if the image state is outdated
     ///Panics if another error occures while pulling a new image
     pub fn check_image_state(&self) -> Result<(usize, SwapchainAcquireFuture), AcquireError>{
-        use std::time::Duration;
 
         match vulkano::swapchain::acquire_next_image(self.swapchain.clone(), None) {
             Ok(r) => {
@@ -255,20 +234,12 @@ impl Renderer {
         //Get the dimensions to fill the dynamic vieport setting per mesh.
         let dimensions = self.window.get_current_extend();
 
-        //start the command buffer
-        let mut command_buffer: AutoCommandBufferBuilder =
-            vulkano::command_buffer::AutoCommandBufferBuilder::new(
-                self.device.clone(),
-                self.queue.family()
-            )
-            .expect("failed to create tmp buffer!")
-            .begin_render_pass(
-                self.framebuffers[image_number].clone(), false,
-                vec![
-                    [0.1, 0.1, 0.1, 1.0].into(),
-                    1f32.into()
-                ]
-            ).expect("failed to clear");
+
+        //get out selfs the image we want to render to
+        //start the frame
+        let mut command_buffer = self.frame_system.new_frame(
+            self.images[image_number].clone()
+        );
 
         //we now have the start for a command buffer. In a later engine
         //stage at this point a compute command is added for the forward+ early depth pass.
@@ -295,11 +266,36 @@ impl Renderer {
             }
         }
 
-        //now we can end the frame. In the future this might be the time to add post processing
-        //etc. but not for now ;)
+        println!("Finished adding meshes", );
+
+        //finished the forward pass, change to the postprogressing pass
+        let post_progress_pass = self.frame_system.next_pass(command_buffer);
+
+        println!("Changed to subpass", );
+        //perform the post progressing
+        let after_pp = self.post_progress.execute(
+            post_progress_pass,
+            self.frame_system.get_msaa_image(),
+            self.frame_system.get_raw_render_depth()
+        );
+        println!("Added postprogress thingy", );
+        //now finish the frame
+        let in_finished_frame = self.frame_system.next_pass(after_pp);
+        let finished_command_buffer = {
+            match self.frame_system.finish_frame(in_finished_frame){
+                Ok(cb) => cb,
+                Err(er) =>{
+                    println!("{}", er);
+                    return previous_frame;
+                }
+            }
+        };
+
+        println!("Ending frame", );
+
 
         //thanks firewater
-        let real_cb = command_buffer
+        let real_cb = finished_command_buffer
         .end_render_pass().expect("failed to end command buffer")
         .build().expect("failed to build command buffer");
 
@@ -307,7 +303,7 @@ impl Renderer {
         let after_prev_and_aq = previous_frame.join(acquire_future);
 
         let before_present_frame = after_prev_and_aq.then_execute(self.queue.clone(), real_cb)
-        .unwrap();
+        .expect("failed to add execute to the frame");
 
         //test copy the depth buffer as the show image
 
@@ -318,13 +314,15 @@ impl Renderer {
             image_number
         );
         //now signal fences
-        let mut after_frame = after_present_frame.then_signal_fence_and_flush().unwrap();
+        let mut after_frame = after_present_frame.then_signal_fence_and_flush().expect("failed to signal and flush");
 
         //while the gpu is working, clean the old data
         //clean old frame
         after_frame.cleanup_finished();
 
         Box::new(after_frame)
+
+
 
 
     }
@@ -335,16 +333,24 @@ impl Renderer {
             next_tree::content::ContentType,
             next_tree::jobs::SceneJobs,
             next_tree::attributes::NodeAttributes>,
-        command_buffer: AutoCommandBufferBuilder,
+        frame_stage: frame_system::FrameStage,
         dimensions: [u32; 2])
-    -> AutoCommandBufferBuilder
+    -> frame_system::FrameStage
     where AutoCommandBufferBuilder: Sized + 'static
     {
+
+        //unwaraps the command_buffer_builder
+        let command_buffer = {
+            match frame_stage{
+                frame_system::FrameStage::Forward(cb) => cb,
+                _ => {panic!("Got wrong frame system stage while building command buffer")}
+            }
+        };
 
         //get the actual mesh as well as its pipeline an create the descriptor sets
         let mesh_locked = match node.value{
             next_tree::content::ContentType::Mesh(ref mesh) => mesh.clone(),
-            _ => return command_buffer, //is no mesh :(
+            _ => return frame_system::FrameStage::Forward(command_buffer), //is no mesh :(
         };
 
         let mesh = mesh_locked.lock().expect("failed to lock mesh in cb creation");
@@ -376,7 +382,7 @@ impl Renderer {
         };
 
         //extend the current command buffer by this mesh
-        command_buffer
+        let new_cb = command_buffer
             .draw_indexed(
                 pipeline,
 
@@ -399,7 +405,9 @@ impl Renderer {
                 (set_01, set_02, set_03, set_04), //descriptor sets (currently static)
                 ()
             )
-            .expect("Failed to draw in command buffer!")
+            .expect("Failed to draw in command buffer!");
+
+            frame_system::FrameStage::Forward(new_cb)
     }
 
 

@@ -118,6 +118,11 @@ impl EngineSettings{
         self
     }
 
+    ///Returns the current render settings
+    pub fn get_render_settings(&mut self) -> &mut render_settings::RenderSettings {
+        &mut self.render_settings
+    }
+
 
     ///Sets the maximum updates per second value for the asset thread.
     #[inline]

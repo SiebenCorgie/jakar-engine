@@ -22,6 +22,9 @@ extern crate winit;
 
 fn main() {
 
+    let graphics_settings = core::render_settings::RenderSettings::default()
+    .with_msaa_factor(4);
+
     let settings = core::engine_settings::EngineSettings::default()
     .with_dimensions(1600, 900)
     .with_name("Jakar Instance")
@@ -30,7 +33,7 @@ fn main() {
     .with_fullscreen_mode(false)
     .with_cursor_state(winit::CursorState::Grab)
     .with_cursor_visibility(winit::MouseCursor::NoneCursor)
-
+    .with_render_settings(graphics_settings)
     ;
 
     //Start the engine
@@ -54,8 +57,19 @@ fn main() {
     sun.set_intensity(25.0);
 
 
-    engine.get_asset_manager().get_active_scene().add_at_root(content::ContentType::DirectionalLight(sun), None);
+    //engine.get_asset_manager().get_active_scene().add_at_root(content::ContentType::DirectionalLight(sun), None);
     //SUN========================================================================
+    //add a matrix of lights
+    for x in -2..3{
+        let mut point = light::LightPoint::new("LightPoint");
+        point.set_intensity(( (x + 3) * 10) as f32);
+        point.set_color(Vector3::new(1.0, 1.0, 0.5));
+        point.set_location(Vector3::new(x as f32 * 3.0, 1.0, 5.0));
+
+        engine.get_asset_manager()
+        .get_active_scene()
+        .add_at_root(content::ContentType::PointLight(point), None);
+    }
 
 
 
@@ -109,19 +123,24 @@ fn main() {
             asset_manager.get_scene_manager().print_all_scenes();
         }
 
+        if engine.get_asset_manager().get_keymap().up{
+            let settings = engine.get_settings();
+            settings.lock().expect("fail up").get_render_settings().add_exposure(0.01);
+        }
 
+        if engine.get_asset_manager().get_keymap().down{
+            let settings = engine.get_settings();
+            settings.lock().expect("fail down").get_render_settings().add_exposure(-0.01);
+        }
 
 
         //test if a is pressed
         if engine.get_asset_manager().get_keymap().escape{
-            println!("Scene: ", );
-            engine.get_asset_manager().get_active_scene().print_tree();
+            //println!("Scene: ", );
+            //engine.get_asset_manager().get_active_scene().print_tree();
             engine.end();
             break;
         }
-
-
-
 
         thread::sleep(Duration::from_millis(10));
 

@@ -5,15 +5,16 @@
 /// - if you turn hdr off you won't have any bloom effects as well.
 #[derive(Clone)]
 pub struct RenderSettings {
+    ///Keeps track of the render settings status. Is true if something changed
+    has_changed: bool,
     ///filtering options, should be power of two between 1 and 16
     anisotropic_filtering: f32,
     ///Samples for each pixel, should be power of two between 1 and 16 (but can be higher)
     msaa: u32,
-    ///true if the engine should render in hdr mode. This will render the image in hdr
-    ///and the perform a converion to a normal 8 bit image.
-    hdr: bool,
-    ///true if it should be possible to perform a postprogressing shader on the render output
-    postprogress: bool,
+    ///Defines the current gamma correction on the output
+    gamma: f32,
+    ///Defines the exposure used to correct the HDR image down to LDR
+    exposure: f32,
 
     //TODO: add things like "max render distance" for objects
 }
@@ -21,14 +22,33 @@ pub struct RenderSettings {
 
 impl RenderSettings{
     ///Creates a default, medium good set of render settings:
-    /// TODO write default settings here
+    /// Defaults:
+    ///
+    /// - anisotropic_filtering: 1.0,
+    /// - msaa: 1,
+    /// - gamma: 2.2,
+    /// - exposure: 1.0
     pub fn default() -> Self{
         RenderSettings{
+            has_changed: false,
             anisotropic_filtering: 1.0,
             msaa: 1,
-            hdr: true,
-            postprogress: true,
+            gamma: 2.2,
+            exposure: 1.0
         }
+    }
+
+    ///Returns true if the render settings have changed but the renderer did not mark the changes
+    /// as resolved yet.
+    #[inline]
+    pub fn render_settings_changed(&self) -> bool{
+        self.has_changed
+    }
+
+    ///Sets the changes as resolved
+    #[inline]
+    pub fn resolved_settings(&mut self){
+        self.has_changed = false;
     }
 
     ///Setts the anisotropical filtering factor, leaves it at the current value if it isn't between
@@ -66,35 +86,82 @@ impl RenderSettings{
     pub fn get_msaa_factor(&self) -> u32{
         self.msaa
     }
-
-    ///Set the hdr state. If true the engine will render an 16bit hdr iamge first and then converts
-    /// it down to a 8bit image before presenting it to the swapchain. You should leave this on
-    /// for good lighing results
+    /* MSAA FACTOR IS SET IN RENDERPASS, NEEDS TO RESTART
+    ///Sets the current msaa factor to `new` and marks the settings as unresolved.
     #[inline]
-    pub fn with_hdr(mut self, hdr_state: bool) -> Self{
-        self.hdr = hdr_state;
+    pub fn set_msaa_factor(&mut self, new: u32){
+        if test_for_power_of_two(new){
+            self.msaa = new;
+            self.has_changed = true;
+        }
+    }
+    */
+    ///Sets up a custom gamma value.
+    #[inline]
+    pub fn with_gamma(mut self, gamma: f32) -> Self{
+        self.gamma = gamma;
         self
     }
-
-    ///Returns the current hdr state.
+    ///Returns the current gamma factor.
     #[inline]
-    pub fn has_hdr(&self) -> bool{
-        self.hdr
+    pub fn get_gamma(&self) -> f32{
+        self.gamma
     }
 
-    ///If set to true the engine will perform a postprogessing step after rendering the final
-    /// image.
+    ///Sets the current gamma factor to `new` and marks the settings as unresolved.
     #[inline]
-    pub fn with_post_progress(mut self, state: bool) -> Self{
-        self.postprogress = state;
+    pub fn set_gamma(&mut self, new: f32){
+        self.gamma = new;
+        self.has_changed = true;
+    }
+
+    ///Adds an ammount to gamma. NOTE: the gamma can't be below 0.0 all values beleow will
+    /// be clamped to 0.0
+    #[inline]
+    pub fn add_gamma(&mut self, offset: f32){
+
+        if self.gamma - offset >= 0.0{
+            self.gamma -= offset;
+        }else{
+            self.gamma = 0.0
+        }
+        self.has_changed = true;
+    }
+
+    ///Sets up a custom exposure value. When below 1.0 bright areas will be even brighter but dark
+    /// areas will be brighter as well.
+    /// When above 1.0 the dark areas might seam black but the bright areas are more defined.
+    #[inline]
+    pub fn with_exposure(mut self, exposure: f32) -> Self{
+        self.exposure = exposure;
         self
     }
-
-    ///Returns the current post progressing state.
+    ///Returns the current exposure.
     #[inline]
-    pub fn has_post_progress(&self) -> bool{
-        self.postprogress
+    pub fn get_exposure(&self) -> f32{
+        self.exposure
     }
+
+    ///Sets the current exposure to `new` and marks the settings as unresolved.
+    #[inline]
+    pub fn set_exposure(&mut self, new: f32){
+        self.exposure = new;
+        self.has_changed = true;
+    }
+
+    ///Adds an ammount to exposure. NOTE: the exposure can't be below 0.0 all values beleow will
+    /// be clamped to 0.0
+    #[inline]
+    pub fn add_exposure(&mut self, offset: f32){
+
+        if self.exposure - offset >= 0.0{
+            self.exposure -= offset;
+        }else{
+            self.exposure = 0.0
+        }
+        self.has_changed = true;
+    }
+
 
 }
 

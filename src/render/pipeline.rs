@@ -1,10 +1,12 @@
 use vulkano;
 use vulkano::pipeline;
-
+use vulkano::pipeline::GraphicsPipelineAbstract;
+use vulkano::framebuffer::RenderPassAbstract;
+use vulkano::framebuffer::Subpass;
 use std::sync::Arc;
 use core::resources::mesh;
 
-
+use render::post_progress;
 use render::shader_impls;
 use render::pipeline_builder::*;
 
@@ -23,22 +25,26 @@ pub struct Pipeline {
     ///Stores the config this pipeline was created from
     pub pipeline_config: PipelineConfig,
 
-    //defines several optional descriptor set pools, they depend on the `inputs` parameter
-
+    ///saves for which subpass in this renderpass the pipeline was made for
+    pub sub_pass: u32,
 }
 
 impl Pipeline{
-    ///Creates a pipeline for a 'shader_set' from a `pipeline_configuration`.
+    ///Creates a pipeline for a 'shader_set' from a `pipeline_configuration`, at a `sub_pass` id of the `target_subpass`
     ///
     /// NOTE:
     ///
     /// Some things are not configurable like the vertex buffer definition. They are set for this engine but
     /// this might change in the future if needed.
-    pub fn new(
+    pub fn new<R>(
         device: Arc<vulkano::device::Device>,
         pipeline_configuration: PipelineConfig,
+        target_subpass: Subpass<R>,
+        sub_pass: u32,
     )
         -> Self
+    where R: RenderPassAbstract + Send + Sync + 'static
+
     {
 
         //load the shader from configuration
@@ -55,27 +61,29 @@ impl Pipeline{
             //now return stuff depending on the loaded shader
             match pipeline_configuration.shader_set{
                 shader_impls::ShaderTypes::PbrOpaque => {
-
                     //load the shader based on the type the use wants to load
                     let shader = shader_impls::load_shader(device.clone(), shader_impls::ShaderTypes::PbrOpaque);
                     //extract some infos which doesnt need to be stored in an enum for the compiler
-
+                    println!("Generated PBR Shader", );
                     //build the return
                     shader
                 }
 
                 shader_impls::ShaderTypes::Wireframe => {
                     let shader = shader_impls::load_shader(device.clone(), shader_impls::ShaderTypes::Wireframe);
+                    println!("Generated Wireframe Shader", );
                     //build the return
+                    shader
+                }
+
+                shader_impls::ShaderTypes::PostProgress => {
+                    let shader = shader_impls::load_shader(device.clone(), shader_impls::ShaderTypes::PostProgress);
+                    println!("Generated PostProgress Shader", );
                     shader
                 }
             }
         };
 
-
-
-        //Create a pipeline vertex buffer definition
-        let vertex_buffer_definition = vulkano::pipeline::vertex::SingleBufferDefinition::<mesh::Vertex>::new();
 
         //Now start the pipeline and configure it based on the PipelineSettings
         //TODO make sure to get a: Option<Arc<pipeline::GraphicsPipelineAbstract + Send + Sync>>
@@ -83,20 +91,10 @@ impl Pipeline{
             vulkano::pipeline::GraphicsPipeline::start()
         );
 
-        //add the vertex buffer definition and create a new pipeline from it
-        let mut vertex_def_pipeline = {
-            Some(
-                pipeline
-                .take()
-                .expect("failed to get pipeline #1")
-                .vertex_input(vertex_buffer_definition)
-            )
-        };
-
         //set the topolgy type
         let mut topology_pipeline = {
             Some(
-                vertex_def_pipeline
+                pipeline
                 .take()
                 .expect("failed to get pipeline #1")
                 .primitive_topology(pipeline_configuration.topology_type)
@@ -338,28 +336,27 @@ impl Pipeline{
                 blending_pipeline
                 .take()
                 .expect("failed to get pipeline #1")
-                .render_pass(
-                    vulkano::framebuffer::Subpass::from(
-                        pipeline_configuration.render_pass.clone(), //extracted this one at the top of this function //TODO after deleting the old approach this can move here
-                        pipeline_configuration.sub_pass_id
-                    )
-                    .expect("failed to set supass for renderpass ")
-                )
+                .render_pass(target_subpass)
+                //.expect("failed to set supass for renderpass ")
             )
         };
 
 
         //Set vertex_shader, fragment shader, geometry shader and tesselation shader at once
         //and build the pipeline to an Arc<GraphicsPipelineAbstract> for easy storage
-        let (final_pipeline, pipeline_inputs) = {
+        let (final_pipeline, pipeline_inputs): (Arc<GraphicsPipelineAbstract + Send + Sync>, _) = {
             //sort the shaders and return generated Arc<GraphicsPipelineAbstract>
             match shader{
-                shader_impls::JakarShaders::PbrOpaque((vs, fs, inputs)) => {
-
+                shader_impls::JakarShaders::PbrOpaque((vs, fs, inputs, vbd)) => {
+                    println!("Building pipeline based on PbrOpaque shader and vertex ...", );
                     //take the current pipeline builder
                     let pipeline = renderpass_pipeline
                     .take()
                     .expect("failed to get pipeline #1")
+                    //settup the vertex buffer definition
+                    .vertex_input(
+                        vbd
+                    )
                     //now add the vertex and fragment shader, then return the new created pipeline and the inputs
                     .vertex_shader(vs.main_entry_point(), ())
                     .fragment_shader(fs.main_entry_point(), ())
@@ -370,21 +367,50 @@ impl Pipeline{
                     //Finally put this in an arc and return along the inputs
                     (Arc::new(pipeline), inputs)
                 },
-                shader_impls::JakarShaders::Wireframe((vs, fs, inputs)) => {
+                shader_impls::JakarShaders::Wireframe((vs, fs, inputs, vbd)) => {
                     //take the current pipeline builder
+                    println!("Building pipeline based on Wireframe shader and vertex ...", );
                     let pipeline = renderpass_pipeline
                     .take()
                     .expect("failed to get pipeline #1")
+                    //settup the vertex buffer definition
+                    .vertex_input(
+                        vbd
+                    )
                     //now add the vertex and fragment shader, then return the new created pipeline and the inputs
                     .vertex_shader(vs.main_entry_point(), ())
                     .fragment_shader(fs.main_entry_point(), ())
                     //now build
                     .build(device)
-                    .expect("failed to build pipeline for PBR-Opaque shader set!");
+                    .expect("failed to build pipeline for Wireframe shader set!");
 
                     //Finally put this in an arc and return along the inputs
                     (Arc::new(pipeline), inputs)
                 },
+                shader_impls::JakarShaders::PostProgress((vs, fs, vbd)) => {
+                    //take the current pipeline builder
+                    println!("Building pipeline based on PostProgress shader and vertex ...", );
+                    let pipeline = renderpass_pipeline
+                    .take()
+                    .expect("failed to get pipeline #1")
+                    //settup the vertex buffer definition
+                    .vertex_input(
+                        vbd
+                    )
+                    //now add the vertex and fragment shader, then return the new created pipeline and the inputs
+                    .vertex_shader(vs.main_entry_point(), ())
+                    .fragment_shader(fs.main_entry_point(), ())
+                    //now build
+                    .build(device)
+                    .expect("failed to build pipeline for PostProgress shader set!");
+
+                    let inputs = PipelineInput::with_none();
+
+                    //Finally put this in an arc and return along the inputs
+                    (Arc::new(pipeline), inputs)
+
+                }
+
             }
         };
 
@@ -393,7 +419,8 @@ impl Pipeline{
         Pipeline{
             pipeline: final_pipeline,
             inputs: pipeline_inputs,
-            pipeline_config: pipeline_configuration
+            pipeline_config: pipeline_configuration,
+            sub_pass: sub_pass
         }
     }
 
@@ -406,6 +433,21 @@ impl Pipeline{
     ///Returns the inputs needed to feed the pipeline correctly
     pub fn get_inputs(&self) -> PipelineInput{
         self.inputs
+    }
+
+    ///Prints the shader type the pipeline is based on for debug reasons
+    pub fn print_shader_name(&self){
+        match self.pipeline_config.shader_set{
+            shader_impls::ShaderTypes::PbrOpaque => {
+                println!("Using: Opaque shader set", );
+            },
+            shader_impls::ShaderTypes::Wireframe => {
+                println!("Using: Wireframe shader set", );
+            },
+            shader_impls::ShaderTypes::PostProgress => {
+                println!("Using: PostProgress shader set", );
+            },
+        }
     }
 
 }

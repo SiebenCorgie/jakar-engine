@@ -335,7 +335,7 @@ pub fn load_gltf_material(
         let mut pipeline_manager_lck = pipeline_manager.lock().expect("failed to lock pipe manager");
 
         let pipeline = (*pipeline_manager_lck).get_pipeline_by_requirements(
-            requirements, None, device.clone()
+            Some(requirements), None, device.clone(), 0 //TODO make this a bit noicer
         );
 
 
@@ -839,9 +839,6 @@ pub fn import_gltf(
     let manager_lck = managers.lock().expect("failed to lock managers");
     let scene_manager = (*manager_lck).scene_manager.clone();
     let mut scene_manager_inst = scene_manager.lock().expect("failed to lock scene manager");
-    println!("Adding tree: =================================================================", );
-    scene_tree.print_tree();
-
 
     (*scene_manager_inst).add_scene(scene_tree);
 }
