@@ -75,9 +75,14 @@ impl RenderBuilder {
         };
         let layers = LayerLoading::NoLayer;
         let vulkan_messages = vulkano::instance::debug::MessageTypes::errors();
-        let mut minimal_features = vulkano::instance::Features::none();
-        //test add sampling
-        minimal_features.sample_rate_shading = true;
+        //Setup the features needed for the engine to run properly
+        let minimal_features = vulkano::instance::Features {
+            sampler_anisotropy: true,
+            sample_rate_shading: true,
+            .. vulkano::instance::Features::none()
+        };
+
+
 
 
         RenderBuilder{

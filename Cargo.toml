@@ -22,4 +22,8 @@ jakar-tree = { path = "jakar-tree" }
 
 [[example]]
 name = "simple"
-path = "examples/simple_scene/src/main.rs"
+path = "examples/simple_scene/main.rs"
+
+[[example]]
+name = "t_speed"
+path = "examples/scene_tree_performance/main.rs"

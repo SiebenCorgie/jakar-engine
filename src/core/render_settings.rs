@@ -75,7 +75,7 @@ impl RenderSettings{
     /// it won't be used
     #[inline]
     pub fn with_msaa_factor(mut self, msaa_factor: u32) -> Self{
-        if !test_for_power_of_two(msaa_factor){
+        if !test_for_power_of_two(msaa_factor) || msaa_factor > 16{ //TODO verfy the size
             return self;
         }
         self.msaa = msaa_factor;

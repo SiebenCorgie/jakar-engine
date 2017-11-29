@@ -18,10 +18,21 @@ layout(set = 1, binding = 0) uniform hdr_settings{
 
 }u_hdr_settings;
 
+vec4 resolve_msaa(){
+  vec4 result = vec4(0.0);
+	for (int i = 0; i < u_hdr_settings.sampling_rate || i<= 16; i++)
+	{
+		vec4 val = subpassLoad(color_input, i);
+		result += val;
+	}
+	// Average resolved samples
+  return result / u_hdr_settings.sampling_rate;
+}
+
 
 void main()
 {
-  vec3 hdrColor = subpassLoad(color_input, u_hdr_settings.sampling_rate).rgb;
+  vec3 hdrColor = resolve_msaa().rgb;
 
   // Exposure tone mapping
   vec3 mapped = vec3(1.0) - exp(-hdrColor * u_hdr_settings.exposure);

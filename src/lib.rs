@@ -566,28 +566,31 @@ impl JakarEngine {
     ///                             // "engine" is still borrowd in "something_else"
     /// }
     /// ```
-    /// **Instead do something like this:
+    ///
+    /// Instead do something like this:
+    ///
     /// ```
     /// 'game_loop: loop{
     ///     {
     ///         let something_else = engine.get_asset_manager().get_something_else();
     ///         something_else.do_something();
     ///     }
-    ///     thread::sleep_ms(100);  //the engine won't render a second frame for 100 ms because a
-    ///                             // "engine" is still borrowd in "something_else"
+    ///     thread::sleep_ms(100);  //the engine block
     /// }
     /// ```
-    /// ** Or if you want to get a value **
+    ///
+    /// Or if you want to get a value
+    ///
     /// ```
     /// 'game_loop: loop{
     ///     let value = {
     ///         let something_else = engine.get_asset_manager().get_something_else();
     ///         something_else.get_something()
     ///     }
-    ///     thread::sleep_ms(100);  //the engine won't render a second frame for 100 ms because a
-    ///                             // "engine" is still borrowd in "something_else"
+    ///     thread::sleep_ms(100);  //the engine won't block
     /// }
     /// ```
+    ///
     /// This value can be of cause something `Arc<Mutex<T>>` for instance the engine_settings ;)
     pub fn get_asset_manager<'a>(&'a mut self) -> MutexGuard<'a, core::resource_management::asset_manager::AssetManager>{
         let asset_lock = self.asset_manager.lock().expect("failed to lock asset manager");
