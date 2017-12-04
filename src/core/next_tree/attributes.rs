@@ -9,19 +9,27 @@ pub struct NodeAttributes {
 
     ///Transform of this node in local space
     pub transform: Decomposed<Vector3<f32>, Quaternion<f32>>,
-    ///The bounds of this note, takes the `content` bound as well as the max and min values of
+    ///The bounds of this node, takes the `content` bound as well as the max and min values of
     ///all its children into consideration.
     pub bound: Aabb3<f32>,
+    ///The static bounds of this nodes value
+    pub value_bound: Aabb3<f32>,
+    ///The size of of its value, is used to determain if the node is drawn when far away etc.
+    pub size: f32,
+
 
 
     /// Can be turned off to disable shadow casting, usefull for many small objects
     pub cast_shadow: bool,
     /// Is used to determin at which point this object is rendered.
-    /// There is the first pass for opaque objects, as wella s msked objects, and the second one for
+    /// There is the first pass for opaque objects, as well as masked objects, and the second one for
     /// transparent ones.
     pub is_transparent: bool,
     /// If true the object won't be rendered if the engine is in gmae mode.
     pub hide_in_game: bool,
+    ///Can be used to determin only the "glowing" objects, like lights and objects with emessive
+    /// materials.
+    pub is_emessive: bool,
 }
 
 ///A custom implementation
@@ -48,6 +56,10 @@ impl NodeAttributes{
         &self.bound
     }
 
+    ///Returns the bound information of the value stored in this node
+    pub fn get_value_bound(&self) -> &Aabb3<f32>{
+        &self.value_bound
+    }
 
 }
 
@@ -71,10 +83,13 @@ impl Attribute<SceneJobs> for NodeAttributes{
                     rot: Quaternion::from(Euler::new(Deg(0.0), Deg(0.0), Deg(0.0))),
                     disp: Vector3::new(0.0, 0.0, 0.0),
             },
-            bound: Aabb3::new(Point3::new(0.0, 0.0, 0.0), Point3::new(0.0, 0.0, 0.0)),
+            bound: Aabb3::new(Point3::new(-0.5, -0.5, -0.5), Point3::new(0.5, 0.5, 0.5)),
+            value_bound: Aabb3::new(Point3::new(-0.5, -0.5, -0.5), Point3::new(0.5, 0.5, 0.5)),
+            size: 1.0,
             cast_shadow: true,
             is_transparent: false,
             hide_in_game: false,
+            is_emessive: false,
         }
     }
 
@@ -147,7 +162,7 @@ impl Attribute<SceneJobs> for NodeAttributes{
         for _ in 0..lvl + 1{
             print!("\t");
         }
-        println!("\tbound: from: {:?} to: {:?}", self.bound.min, self.bound.max);
+        println!("\tnode bound: from: {:?} to: {:?}", self.bound.min, self.bound.max);
 
         //print shadow flag
         for _ in 0..lvl + 1{
@@ -200,6 +215,26 @@ impl Attribute<SceneJobs> for NodeAttributes{
             None => {},
         }
 
+        //value bound
+        match comp.value_bound{
+            Some(bnd) => {
+                if bnd != self.value_bound{
+                    return false;
+                }
+            },
+            None => {},
+        }
+
+        //Size
+        match comp.size{
+            Some(bnd) => {
+                if bnd != self.size{
+                    return false;
+                }
+            },
+            None => {},
+        }
+
         //shadow
         match comp.cast_shadow{
             Some(cast) => {
@@ -227,6 +262,16 @@ impl Attribute<SceneJobs> for NodeAttributes{
                     return false;
                 }
             }
+            None => {},
+        }
+
+        //emessive
+        match comp.is_emessive{
+            Some(emessive) => {
+                if emessive != self.is_emessive{
+                    return false;
+                }
+            },
             None => {},
         }
 

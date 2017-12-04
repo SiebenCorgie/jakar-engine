@@ -8,6 +8,7 @@ use cgmath::*;
 use jakar_engine::*;
 use jakar_tree::*;
 use jakar_tree::node::Attribute;
+use core::next_tree::SceneTree;
 
 use std::time::*;
 
@@ -102,9 +103,14 @@ fn main(){
 	let _ = tree.join(&tree_cpy, "Ulf_Teddy_Nix".to_string());
 	time_needed_to_add = last_time.elapsed().subsec_nanos();
 	println!("Needed {} sec to join the trees", time_needed_to_add as f32/1_000_000_000.0);
-	tree.print_registry();
+	//tree.print_registry();
 
+	last_time = Instant::now();
+	let _ = tree.rebuild_bounds();
+	time_needed_to_add = last_time.elapsed().subsec_nanos();
+	println!("Needed {} sec to update bounds", time_needed_to_add as f32/1_000_000_000.0);
 
+	tree.print_tree();
 
 	println!("Hello World");
 }
