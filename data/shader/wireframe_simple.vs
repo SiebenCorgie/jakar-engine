@@ -6,13 +6,9 @@ layout(location = 2) in vec3 normal;
 layout(location = 3) in vec4 tangent;
 layout(location = 4) in vec4 color;
 
-layout(location = 0) out vec3 v_normal;
-layout(location = 1) out vec3 FragmentPosition;
-layout(location = 2) out vec2 v_TexCoord;
-layout(location = 3) out vec3 v_position;
-layout(location = 4) out mat3 v_TBN;
-
-
+layout(location = 0) out vec3 o_position;
+layout(location = 1) out vec2 o_tex_coord;
+layout(location = 2) out vec4 o_color;
 
 //Global uniforms
 layout(set = 0, binding = 0) uniform Data {
@@ -26,4 +22,9 @@ void main() {
   vec4 pos = u_main.model * vec4(position, 1.0);
   //The proj has been manipulated like here: https://matthewwellings.com/blog/the-new-vulkan-coordinate-system/
   gl_Position = u_main.proj * u_main.view * u_main.model * vec4(position, 1.0);
+
+  o_position = vec3(pos.xyz);
+  o_tex_coord = tex_coord;
+  o_color = color;
+
 }

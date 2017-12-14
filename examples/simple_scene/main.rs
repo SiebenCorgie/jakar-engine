@@ -135,6 +135,18 @@ fn main() {
             let settings = engine.get_settings();
             settings.lock().expect("fail down").get_render_settings().add_exposure(-0.01);
         }
+        //Set the debug settings
+        if engine.get_asset_manager().get_keymap().b{
+            let settings = engine.get_settings();
+            settings.lock().expect("fail debug true").get_render_settings().set_debug_bound(true);
+        }
+        //Set the debug settings
+        if engine.get_asset_manager().get_keymap().n{
+            let settings = engine.get_settings();
+            settings.lock().expect("fail debug false").get_render_settings().set_debug_bound(false);
+        }
+
+
 
 
         //test if a is pressed

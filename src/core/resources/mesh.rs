@@ -201,11 +201,13 @@ impl Mesh {
         queue: Arc<vulkano::device::Queue>)
     {
         let vertex_buffer = vulkano::buffer::cpu_access::CpuAccessibleBuffer
-                                    ::from_iter(device.clone(), vulkano::buffer::BufferUsage::all(), self.vertices.iter().cloned())
-                                    .expect("failed to create buffer");
+                                    ::from_iter(device.clone(), vulkano::buffer::BufferUsage::all(),
+                                    self.vertices.iter().cloned()
+                                ).expect("failed to create buffer");
         //self.vertex_buffer = vertex_buffer;
         self.vertex_buffer = vertex_buffer;
     }
+
 
     ///Returns a index bufffer for this mesh
     pub fn get_index_buffer(&self, device: Arc<vulkano::device::Device>,

@@ -5,6 +5,7 @@ use std::sync::Mutex;
 use std::collections::BTreeMap;
 
 use core::resources::*;
+use core::resources::camera::Camera;
 use render::shader_impls::lights;
 
 ///Describes the Value bit of this tree
@@ -209,8 +210,75 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
     ///Returns all meshse in the view frustum of `camera`
     /// NOTE: Each node is copied from the tree into a stand alone node without any childern!
     fn get_all_meshes_in_frustum(&self, camera: &camera::DefaultCamera, sorting: &Option<SceneComparer>) -> Vec<jakar_tree::node::Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>>{
-        println!("Getting in frustum is currently not supported", );
-        Vec::new()
+        //We test or self#s value_bound agains the camera. If all is nice we can add self to the
+        //vec.
+        //further we test the node bound as well. If the node bound is in, we test all the children
+        //otherwise we early return
+
+        let mut return_vec = Vec::new();
+
+        let camera_bound = camera.get_frustum_bound();
+        //We need to transform the bound into world space
+        let ws_bound = Aabb3::new(
+            self.attributes.transform.transform_point(self.attributes.get_value_bound().min),
+            self.attributes.transform.transform_point(self.attributes.get_value_bound().max)
+        );
+
+        match camera_bound.contains(&ws_bound){
+            Relation::Out => {
+                //Don't add
+            }
+            _ => {
+                //is at leas a little bit in
+                //match self's value type
+                match self.value{
+                    content::ContentType::Mesh(ref mesh) => {
+                        //now also test for the sorting parameter
+                        let mut sorting_flag = true;
+                        match sorting{
+                            &Some(ref comparer) => {
+                                //early return if self doesnt match the sorting
+                                if !self.attributes.compare(comparer){
+                                    sorting_flag = false;
+                                }
+                            },
+                            &None =>  {}, //all is nice, add the mesh
+                        }
+                        //only add if the attributes match
+                        if sorting_flag{
+                            let node_copy = jakar_tree::node::Node{
+                                name: self.name.clone(),
+                                value: content::ContentType::Mesh(mesh.clone()),
+                                children: BTreeMap::new(),
+                                jobs: Vec::new(),
+                                attributes: self.attributes.clone(),
+                            };
+                            return_vec.push(node_copy);
+                        }
+
+                    }
+                    _ => {}, //is no mesh
+                }
+            }
+        }
+
+        //now test if we should go further down
+        match camera_bound.contains(&self.attributes.bound){ //the bound should be in world space as well
+            Relation::Out => {
+                //Don't need to add children
+            }
+            _ => {
+                //need to search the children as well
+                for (_, child) in self.children.iter(){
+                    return_vec.append(&mut child.get_all_meshes_in_frustum(camera, sorting))
+                }
+            }
+        }
+
+
+
+
+        return_vec
     }
     ///Returns all point lights in the tree
     /// NOTE: Each node is copied from the tree into a stand alone node without any childern!
@@ -441,13 +509,13 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
                 maxs.z = child_maxs.z;
             }
         }
-        /*
+        
         //if this node has no children, use the value bounds translated by the transform instead
         if self.children.len() == 0{
             mins = self.attributes.transform.transform_point(self.attributes.get_value_bound().min);
             maxs = self.attributes.transform.transform_point(self.attributes.get_value_bound().max);
         }
-        */
+
         //finished the checks, update self
         self.attributes.bound = Aabb3::new(mins, maxs);
     }

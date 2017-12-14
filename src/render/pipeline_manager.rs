@@ -80,14 +80,15 @@ impl PipelineManager{
         }
     }
 
-    ///Returns the post progress pipeline
-    pub fn get_post_progress_pipeline(&mut self) -> Arc<pipeline::Pipeline>{
-        match self.pipelines.get_mut(&String::from("PostProgressPipeline")){
+    ///Should always return the normal PBR pipeline, if it panics, please file a bug report, this should not happen
+    pub fn get_default_pipeline(&mut self) -> Arc<pipeline::Pipeline>{
+
+        match self.pipelines.get_mut(&String::from("DefaultPipeline")){
             Some(pipe) => return pipe.clone(),
 
-            None =>rt_error("PIPELINE_MANAGER", "PIPELINE MANAGER: Could not find PostProgressPipeline this should not happen"),
+            None =>rt_error("PIPELINE_MANAGER", "PIPELINE MANAGER: Could not find default pipe this should not happen"),
         }
-        self.get_default_pipeline()
+        panic!("Crash could not get default pipeline!")
     }
 
 
@@ -100,16 +101,7 @@ impl PipelineManager{
         false
     }
 
-    ///Should always return the normal PBR pipeline, if it panics, please file a bug report, this should not happen
-    pub fn get_default_pipeline(&mut self) -> Arc<pipeline::Pipeline>{
 
-        match self.pipelines.get_mut(&String::from("DefaultPipeline")){
-            Some(pipe) => return pipe.clone(),
-
-            None =>rt_error("PIPELINE_MANAGER", "PIPELINE MANAGER: Could not find default pipe this should not happen"),
-        }
-        panic!("Crash could not get default pipeline!")
-    }
 
     ///Returns a pipeline by name, if not existend, returns the default pipeline
     pub fn get_pipeline_by_name(&mut self, name: &str) -> Arc<pipeline::Pipeline>{

@@ -16,6 +16,9 @@ pub struct RenderSettings {
     ///Defines the exposure used to correct the HDR image down to LDR
     exposure: f32,
 
+    ///The engine should render the bounds
+    debug_bounds: bool,
+
     //TODO: add things like "max render distance" for objects
 }
 
@@ -28,13 +31,17 @@ impl RenderSettings{
     /// - msaa: 1,
     /// - gamma: 2.2,
     /// - exposure: 1.0
+    ///
+    /// *No debug turned on*
     pub fn default() -> Self{
         RenderSettings{
             has_changed: false,
             anisotropic_filtering: 1.0,
             msaa: 1,
             gamma: 2.2,
-            exposure: 1.0
+            exposure: 1.0,
+
+            debug_bounds: false,
         }
     }
 
@@ -151,7 +158,7 @@ impl RenderSettings{
 
     ///Adds an ammount to exposure. NOTE: the exposure can't be below 0.0 all values beleow will
     /// be clamped to 0.0
-    #[inline]
+
     pub fn add_exposure(&mut self, offset: f32){
 
         if self.exposure - offset >= 0.0{
@@ -162,6 +169,16 @@ impl RenderSettings{
         self.has_changed = true;
     }
 
+    ///If `new` is `true`, the bounds of each renderable object are drawn.
+    #[inline]
+    pub fn set_debug_bound(&mut self, new: bool){
+        self.debug_bounds = new;
+    }
+
+    ///Returns true if the bounds should be drawn
+    pub fn draw_bounds(&self) -> bool{
+        self.debug_bounds
+    }
 
 }
 

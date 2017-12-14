@@ -2,6 +2,8 @@ use render::uniform_manager;
 use render::pipeline;
 use core::resources::texture;
 use render::shader_impls::pbr_fragment;
+use render::shader_impls::pbr_texture_factors;
+use render::shader_impls::pbr_texture_usage;
 
 use vulkano::descriptor::descriptor_set::PersistentDescriptorSet;
 use vulkano::descriptor::descriptor_set::DescriptorSet;
@@ -76,8 +78,8 @@ impl TextureUsageFlags{
         self
     }
 
-    pub fn to_shader_flags(self) -> pbr_fragment::ty::TextureUsageInfo{
-        pbr_fragment::ty::TextureUsageInfo{
+    pub fn to_shader_flags(self) -> pbr_texture_usage::ty::TextureUsageInfo{
+        pbr_texture_usage::ty::TextureUsageInfo{
             b_albedo: {
                 if self.albedo != 0{
                     1
@@ -196,8 +198,8 @@ impl MaterialFactors{
         self
     }
 
-    pub fn to_shader_factors(&self) -> pbr_fragment::ty::TextureFactors{
-        pbr_fragment::ty::TextureFactors{
+    pub fn to_shader_factors(&self) -> pbr_texture_factors::ty::TextureFactors{
+        pbr_texture_factors::ty::TextureFactors{
             albedo_factor: self.albedo_factor,
             normal_factor: self.normal_factor,
             emissive_factor: self.emissive_factor,
@@ -354,11 +356,11 @@ impl MaterialBuilder{
         //The TextureUsageFlags and Factor Info comes from the builder, we create a pool for
         //them...
         //Create a pool to allocate from
-        let usage_info_pool = vulkano::buffer::cpu_pool::CpuBufferPool::<pbr_fragment::ty::TextureUsageInfo>
+        let usage_info_pool = vulkano::buffer::cpu_pool::CpuBufferPool::<pbr_texture_usage::ty::TextureUsageInfo>
                                    ::new(device.clone(), vulkano::buffer::BufferUsage::all());
 
 
-        let material_factor_pool = vulkano::buffer::cpu_pool::CpuBufferPool::<pbr_fragment::ty::TextureFactors>
+        let material_factor_pool = vulkano::buffer::cpu_pool::CpuBufferPool::<pbr_texture_factors::ty::TextureFactors>
                                    ::new(device.clone(), vulkano::buffer::BufferUsage::all());
 
 
@@ -528,11 +530,11 @@ pub struct Material {
     //Usage flags of the different buffers, stored in a seperate set as well as material factors buffer
     set_03: Arc<DescriptorSet + Send + Sync>,
     //as shader usable struct
-    texture_usage_info: pbr_fragment::ty::TextureUsageInfo,
-    usage_info_pool: vulkano::buffer::cpu_pool::CpuBufferPool<pbr_fragment::ty::TextureUsageInfo>,
+    texture_usage_info: pbr_texture_usage::ty::TextureUsageInfo,
+    usage_info_pool: vulkano::buffer::cpu_pool::CpuBufferPool<pbr_texture_usage::ty::TextureUsageInfo>,
 
-    material_factors: pbr_fragment::ty::TextureFactors,
-    material_factor_pool: vulkano::buffer::cpu_pool::CpuBufferPool<pbr_fragment::ty::TextureFactors>,
+    material_factors: pbr_texture_factors::ty::TextureFactors,
+    material_factor_pool: vulkano::buffer::cpu_pool::CpuBufferPool<pbr_texture_factors::ty::TextureFactors>,
     //Responsible for lighting information
     set_04: Arc<DescriptorSet + Send + Sync>,
 }
@@ -668,12 +670,12 @@ impl Material {
         let pipeline_ref = self.pipeline.get_pipeline_ref();
 
         //println!("STATUS: MATERIAL: Trying to lock uniform manager", );
-        let mut uniform_manager_lck = self.uniform_manager.lock().expect("Failed to locj unfiorm_mng");
+        let mut uniform_manager_lck = self.uniform_manager.lock().expect("Failed to lock unfiorm_mng");
         //println!("STATUS: MATERIAL: Generation new set_01", );
         let new_set = Arc::new(PersistentDescriptorSet::start(
                 pipeline_ref.clone(), 0
             )
-            .add_buffer((*uniform_manager_lck).get_subbuffer_data(transform_matrix)).expect("Failed to create descriptor set")
+            .add_buffer(uniform_manager_lck.get_subbuffer_data(transform_matrix)).expect("Failed to create descriptor set")
             .build().expect("failed to build descriptor 01")
         );
         //println!("STATUS: MATERIAL: Returning new set to self", );
@@ -717,7 +719,7 @@ impl Material {
 
     ///Returns a subbuffer from the `usage_info_pool` to be used when adding a buffer to a set
     fn get_usage_info_subbuffer(&self) ->
-     vulkano::buffer::cpu_pool::CpuBufferPoolSubbuffer<pbr_fragment::ty::TextureUsageInfo,
+     vulkano::buffer::cpu_pool::CpuBufferPoolSubbuffer<pbr_texture_usage::ty::TextureUsageInfo,
      Arc<vulkano::memory::pool::StdMemoryPool>>
      {
         match self.usage_info_pool.next(self.texture_usage_info.clone()){
@@ -731,7 +733,7 @@ impl Material {
 
     ///Returns a subbuffer from the material_factor_pool to be used with the 3rd set
     fn get_material_factor_subbuffer(&self) ->
-    vulkano::buffer::cpu_pool::CpuBufferPoolSubbuffer<pbr_fragment::ty::TextureFactors,
+    vulkano::buffer::cpu_pool::CpuBufferPoolSubbuffer<pbr_texture_factors::ty::TextureFactors,
     Arc<vulkano::memory::pool::StdMemoryPool>>
     {
         match self.material_factor_pool.next(self.material_factors.clone()){

@@ -43,12 +43,6 @@ impl NodeAttributes{
     ///Returns the model matrix of this node
     pub fn get_matrix(&self) -> Matrix4<f32>{
         Matrix4::from(self.transform)
-        /*
-        Matrix4::from_translation(self.transform.disp)
-        // * Matrix4::from_scale(self.transform.scale)
-         * Matrix4::from(self.transform.rot)
-        */
-
     }
 
     /// Returns bound information of this node (**NOT THE MESH BOUND**)

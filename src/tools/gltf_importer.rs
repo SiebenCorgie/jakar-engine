@@ -750,6 +750,7 @@ pub fn load_gltf_node(
 
                     attrib.is_transparent = transparent;
                     attrib.bound = (*(prim.lock().expect("failed to lock mesh"))).get_bound();
+                    attrib.value_bound = (*(prim.lock().expect("failed to lock mesh"))).get_bound();
                     //return the correct mesh attributes
                     attrib
 

@@ -87,14 +87,13 @@ impl PostProgress{
         hdr_image: Arc<ImageViewAccess  + Send + Sync>,
         depth_buffer: Arc<ImageViewAccess  + Send + Sync>,
     ) -> FrameStage{
-
         //match the current stage, if wrong, panic
         match command_buffer{
             FrameStage::Postprogress(cb) => {
                 //debug
                 self.pipeline.print_shader_name();
                 //create the descriptor set for the current image
-                let attachments_ds = PersistentDescriptorSet::start(self.pipeline.get_pipeline_ref(), 0)
+                let attachments_ds = PersistentDescriptorSet::start(self.pipeline.get_pipeline_ref(), 0) //at binding 0
                     .add_image(hdr_image)
                     .expect("failed to add hdr_image to postprogress descriptor set")
                     .add_image(depth_buffer)
@@ -131,7 +130,7 @@ impl PostProgress{
                     }
                 };
 
-                let settings_buffer = PersistentDescriptorSet::start(self.pipeline.get_pipeline_ref(), 1)
+                let settings_buffer = PersistentDescriptorSet::start(self.pipeline.get_pipeline_ref(), 1) //At binding 1
                     .add_buffer(settings)
                     .expect("failed to add hdr image settings buffer to post progress attachment")
                     .build()

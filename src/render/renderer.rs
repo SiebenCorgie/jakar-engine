@@ -222,11 +222,11 @@ impl Renderer {
 
         //now we can actually start the frame
         //get all opaque meshes
-        let opaque_meshes = asset_manager.get_all_meshes(
+        let opaque_meshes = asset_manager.get_meshes_in_frustum(
             Some(next_tree::SceneComparer::new().without_transparency())
         );
         //get all translucent meshes
-        let translucent_meshes = asset_manager.get_all_meshes(
+        let translucent_meshes = asset_manager.get_meshes_in_frustum(
             Some(next_tree::SceneComparer::new().with_transparency())
         );
         //now send the translucent meshes to another thread for ordering
@@ -257,6 +257,21 @@ impl Renderer {
             command_buffer = self.add_node_to_command_buffer(opaque_mesh, command_buffer, dimensions);
         }
 
+        //now draw debug data of the meshes if turned on
+        if (self.engine_settings.lock().expect("failed to lock settings")).get_render_settings().draw_bounds(){
+            //draw the opaque bounds
+            for mesh in opaque_meshes.iter(){
+                command_buffer = render_helper::add_bound_draw(
+                     command_buffer,
+                     self.pipeline_manager.clone(),
+                     mesh,
+                     self.device.clone(),
+                     self.uniform_manager.clone(),
+                     &dimensions
+                 );
+            }
+        }
+
 
         //now try to get the ordered list of translucent meshes and add them as well
         match trans_recv.recv(){
@@ -266,11 +281,29 @@ impl Renderer {
                     command_buffer = self.add_node_to_command_buffer(translucent_mesh, command_buffer, dimensions);
                 }
 
+                //now draw debug data of the meshes if turned on
+                if (self.engine_settings.lock().expect("failed to lock settings")).get_render_settings().draw_bounds(){
+                    //draw the opaque bounds
+                    for mesh in ord_tr.iter(){
+                        command_buffer = render_helper::add_bound_draw(
+                             command_buffer,
+                             self.pipeline_manager.clone(),
+                             mesh,
+                             self.device.clone(),
+                             self.uniform_manager.clone(),
+                             &dimensions
+                         );
+                    }
+                }
+
             },
             Err(er) => {
                 println!("Something went wrong while ordering the translucent meshes: {}", er);
             }
         }
+
+
+
 
         println!("Finished adding meshes", );
 

@@ -19,6 +19,24 @@ pub enum FrameStage {
     Finished(AutoCommandBufferBuilder),
 }
 
+impl FrameStage{
+    ///Returns the id of this stage
+    pub fn get_id(&self) -> usize{
+        match self{
+            &FrameStage::Forward(_) =>{
+                0
+            },
+            &FrameStage::Postprogress(_) =>{
+                1
+            },
+            &FrameStage::Finished(_) =>{
+                2
+            },
+
+        }
+    }
+}
+
 
 
 ///Handles the frame attachment and attachment recreation based on settings. Can start a new
