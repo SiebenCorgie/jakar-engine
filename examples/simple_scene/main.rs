@@ -49,7 +49,7 @@ fn main() {
     };
 
 
-    engine.get_asset_manager().import_gltf("TestScene", "examples/simple_scene/TestScene/TestScene.gltf");
+    engine.get_asset_manager().import_gltf("TestScene", "examples/simple_scene/TestScenes/Cube_Plane.gltf");
 
 
     //SUN========================================================================

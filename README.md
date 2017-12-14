@@ -19,7 +19,7 @@ aspects of the engine and its systems.
 In addition the system will spawn threads for workloads like config-loading
 or mesh importing.
 Here is a little drawing to symbolize how it works, however its not finished and not constructed according to any standards.
-It's also outdated at the moment becuase I am shifting some functions to other modules.
+It's also outdated at the moment because I am shifting some functions to other modules.
 ![alt text](https://github.com/SiebenCorgie/jakar-engine/blob/master/media/Drawing_02_impress%20-%201.jpg "Architecture")
 
 

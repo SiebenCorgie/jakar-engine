@@ -333,9 +333,9 @@ pub fn load_gltf_material(
 
         //Get the pipeline based on the needs of this material
         let mut pipeline_manager_lck = pipeline_manager.lock().expect("failed to lock pipe manager");
-
+        //Build the pipeline by the requirements
         let pipeline = (*pipeline_manager_lck).get_pipeline_by_requirements(
-            Some(requirements), None, device.clone(), 0 //TODO make this a bit noicer
+            requirements, device.clone(), 0
         );
 
 

@@ -155,6 +155,49 @@ impl PipelineManager{
         arc_pipe
     }
 
+    ///Returns a pipeline which has this configuration. Creates the pipeline if needed
+    pub fn get_pipeline_by_config(
+        &mut self,
+        needed_configuration: pipeline_builder::PipelineConfig,
+        device: Arc<vulkano::device::Device>,
+        needed_subpass_id: u32
+    ) -> Arc<pipeline::Pipeline> {
+
+        //first of all test the available pipelines for this config
+        for (_, pipe) in self.pipelines.iter(){
+            //Test for the configuration
+            if pipe.pipeline_config.compare(&needed_configuration){
+                //test the subpass
+                if pipe.sub_pass == needed_subpass_id{
+                    println!("Found the right pipeline based on the supplied config!", );
+                    return pipe.clone()
+                }
+            }
+        }
+
+        //now we create a new pipeline
+        //CREATING_PIPE==============================================
+
+        let pipe_name = self.create_pipeline_name(
+            &needed_configuration.blending_operation, &needed_configuration.cull_mode
+        );
+
+        //now build the new pipeline and put it in an arc for cloning
+        let new_pipe = Arc::new(pipeline::Pipeline::new(
+            device,
+            needed_configuration,
+            framebuffer::Subpass::from(self.render_pass.clone(), needed_subpass_id)
+                .expect("failed to get subpass at pipeline creation"),
+            needed_subpass_id
+        ));
+
+        self.pipelines.insert(pipe_name.clone(), new_pipe);
+        //now return the new pipe
+        self.get_pipeline_by_name(&pipe_name)
+
+
+    }
+
 
     ///Returns a pipeline which fulfills the `requirements`. If there is none one will be created.
     /// if possible based on the `needed_configuration`. Anyways the pipeline will always be made for
@@ -162,86 +205,41 @@ impl PipelineManager{
     ///You can provide an optional `configuration` for the new pipeline.
     pub fn get_pipeline_by_requirements(
         &mut self,
-        requirements: Option<PipelineRequirements>,
-        needed_configuration: Option<pipeline_builder::PipelineConfig>,
+        requirements: PipelineRequirements,
         device: Arc<vulkano::device::Device>,
         needed_subpass_id: u32
     ) -> Arc<pipeline::Pipeline> {
+
         //cycle thorugh the pipeline and match the types of the requirements with the pipeline
         //return if they are fulfilled or create a new one if not
-        match requirements.clone(){
-            Some(req) => {
-                //first test based on the requirements and the subpass id
-                for (_, pipe) in self.pipelines.iter(){
-                    let current_self_req = PipelineRequirements{
-                        blend_type: pipe.pipeline_config.blending_operation.clone(),
-                        culling: pipe.pipeline_config.cull_mode.clone(),
-                    };
 
-                    if current_self_req.compare(&req){
-                        if pipe.sub_pass == needed_subpass_id{
-                            println!("Found correct pipeline based on the requirements", );
-                            return pipe.clone();
-                        }
-                    }
+        //first test based on the requirements and the subpass id
+        for (_, pipe) in self.pipelines.iter(){
+            let current_self_req = PipelineRequirements{
+                blend_type: pipe.pipeline_config.blending_operation.clone(),
+                culling: pipe.pipeline_config.cull_mode.clone(),
+            };
+
+            if current_self_req.compare(&requirements){
+                if pipe.sub_pass == needed_subpass_id{
+                    println!("Found correct pipeline based on the requirements", );
+                    return pipe.clone();
                 }
-            },
-            None => {}
+            }
         }
 
-
-
-        //okay, we got no pipeline which matches the sub_pass id and the requirements.
-        //now we can have a look at the configuration, if there is no pipeline with this configuration
-        // as well we have to create one. If there is one, we can return it and if the pipeline has no
-        //config, we have to create it.
-
-        //test if the pipeline has requirements, if not we can early return the first pipeline with
-        // the needed subpass id
-
-        let mut pipeline_conf = {
-            match needed_configuration{
-                Some(conf) => {
-                    //found a config. searching for a pipeline based on the supplyied config,
-                    for (_, pipeline) in self.pipelines.iter(){
-                        if pipeline.pipeline_config.compare(&conf){
-                            //test the subpass
-                            if pipeline.sub_pass == needed_subpass_id{
-                                println!("Found the right pipeline based on the supplied config!", );
-                                return pipeline.clone()
-                            }
-                        }
-                    }
-                    conf
-                },
-                None => {
-                    //well, if this happens it looks like we have to create a pipeline with only
-                    //the settings from the requirements
-                    pipeline_builder::PipelineConfig::default()
-                }
-            }
-        };
-
-
+        //We found no pipe with the required attributes. Thats why we'll create one with the required
+        // atribs.
+        let mut pipeline_conf = pipeline_builder::PipelineConfig::default();
         //get two variables to get the name and overwerite the default pipeline conf if needed
-        let (blend_type, poly_mode) = {
-            match requirements{
-                Some(ref rq) => {
-                    //overwrite with needed config
-                    pipeline_conf = pipeline_conf.with_blending(rq.blend_type.clone());
-                    pipeline_conf = pipeline_conf.with_cull_mode(rq.culling.clone());
-                    (rq.blend_type.clone(), pipeline_conf.polygone_mode.clone())
-                },
-                None => {
-                    //cant overwrite becuase we don't have anything, only return name bases
-                    (pipeline_conf.blending_operation.clone(), pipeline_conf.polygone_mode.clone())
-                }
-            }
+        let (blend_type, cull_mode) = {
+            //overwrite with needed config
+            pipeline_conf = pipeline_conf.with_blending(requirements.blend_type.clone());
+            pipeline_conf = pipeline_conf.with_cull_mode(requirements.culling.clone());
+            (requirements.blend_type, requirements.culling)
         };
 
-        //MAIN STAGE =======================================================
-        //now overwrite with new values if needed
-        //END ==============================================================
+        //CREATING_PIPE==============================================
 
         //now build the new pipeline and put it in an arc for cloning
         let new_pipe = Arc::new(pipeline::Pipeline::new(
@@ -251,42 +249,60 @@ impl PipelineManager{
                 .expect("failed to get subpass at pipeline creation"),
             needed_subpass_id
         ));
-        //add it to the manager
+
+        let pipe_name = self.create_pipeline_name(&blend_type, &cull_mode);
+
+        self.pipelines.insert(pipe_name.clone(), new_pipe);
+        //now return the new pipe
+        self.get_pipeline_by_name(&pipe_name)
+    }
+
+    ///A helper function to create nice pipeline names
+    fn create_pipeline_name(
+        &self,
+        blend_type: &pipeline_builder::BlendTypes,
+        cull_mode: &pipeline_builder::CullMode
+    ) -> String{
+
+        //Create a name
         let pipe_name = {
-            //create a nice name to indentify it later
+            //Create a blend string
             let blend_type_name = {
                 match blend_type{
-                    pipeline_builder::BlendTypes::BlendCollective(_) =>{
+                    &pipeline_builder::BlendTypes::BlendCollective(_) =>{
                         String::from("CustomBlending")
                     },
-                    pipeline_builder::BlendTypes::BlendPassThrough =>{
+                    &pipeline_builder::BlendTypes::BlendPassThrough =>{
                         String::from("PassThrough")
                     },
-                    pipeline_builder::BlendTypes::BlendAlphaBlending =>{
+                    &pipeline_builder::BlendTypes::BlendAlphaBlending =>{
                         String::from("AlphaBlending")
                     },
-                    pipeline_builder::BlendTypes::BlendLogicOp(_) =>{
+                    &pipeline_builder::BlendTypes::BlendLogicOp(_) =>{
                         String::from("LogicBlending")
                     },
                 }
             };
-
-            let poly_mode = {
-                match poly_mode{
-                    pipeline_builder::PolygoneMode::Fill =>{
-                        String::from("Filled")
+            //create a poly mode string
+            let cull_mode = {
+                match cull_mode{
+                    &pipeline_builder::CullMode::Disabled =>{
+                        String::from("NoCulling")
                     },
-                    pipeline_builder::PolygoneMode::Line(_) =>{
-                        String::from("Wireframe")
+                    &pipeline_builder::CullMode::Front =>{
+                        String::from("FrontCulling")
                     },
-                    pipeline_builder::PolygoneMode::Point =>{
-                        String::from("Points")
+                    &pipeline_builder::CullMode::Back =>{
+                        String::from("BackCulling")
+                    },
+                    &pipeline_builder::CullMode::FrontAndBack =>{
+                        String::from("FrontAndBackCulling")
                     },
                 }
             };
 
             //Now create a tmp string and decide the indice via a for loop till we found a nice one
-            let tmp_string = String::from("Pipeline_") + &poly_mode + "_" + &blend_type_name;
+            let tmp_string = String::from("Pipeline_") + &cull_mode + "_" + &blend_type_name;
 
             //check if this name already exists
             if self.pipelines.contains_key(&tmp_string){
@@ -300,13 +316,9 @@ impl PipelineManager{
             }else{
                 tmp_string
             }
-
         };
-        println!("Inserting pipeline {} !!!!!!!!!!!!!!!!", pipe_name);
 
-        self.pipelines.insert(pipe_name.clone(), new_pipe);
-        //now return the new pipe
-        self.get_pipeline_by_name(&pipe_name)
+        //Return it
+        pipe_name
     }
-
 }

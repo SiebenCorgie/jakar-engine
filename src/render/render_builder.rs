@@ -406,12 +406,12 @@ impl RenderBuilder {
         println!("Getting post progress pipeline", );
         let post_progress_pipeline = pipeline_manager_arc.lock()
         .expect("failed to lock new pipeline manager")
-        .get_pipeline_by_requirements(
-            None,
-            Some(pipeline_builder::PipelineConfig::default()
+        .get_pipeline_by_config(
+            pipeline_builder::PipelineConfig::default()
                 .with_shader(super::shader_impls::ShaderTypes::PostProgress)
-                .with_depth_and_stencil_settings(pipeline_builder::DepthStencilConfig::NoDepthNoStencil)
-            ),
+                .with_depth_and_stencil_settings(
+                    pipeline_builder::DepthStencilConfig::NoDepthNoStencil
+                ),
             device.clone(),
             frame_system.get_post_progress_id()
         );

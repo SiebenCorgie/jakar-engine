@@ -5,7 +5,7 @@ use std::sync::Mutex;
 use std::collections::BTreeMap;
 
 use core::resources::*;
-
+use render::shader_impls::lights;
 
 ///Describes the Value bit of this tree
 pub mod content;

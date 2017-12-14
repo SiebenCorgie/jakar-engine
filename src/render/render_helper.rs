@@ -7,6 +7,9 @@ use std::sync::mpsc;
 use std::collections::BTreeMap;
 use jakar_tree::*;
 use core::next_tree::*;
+use render::frame_system;
+use render::pipeline_manager;
+use render::pipeline_builder;
 
 
 use cgmath::*;
@@ -56,4 +59,20 @@ pub fn order_by_distance(
     //return the reciver for further working on the renderer
     reciver
 
+}
+
+///Function used to draw a line of bounds
+pub fn add_bound_draw(
+    command_buffer: frame_system::FrameStage,
+    pipeline_manager: Arc<Mutex<pipeline_manager::PipelineManager>>,
+    object_node: node::Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>
+) -> frame_system::FrameStage{
+    match command_buffer{
+        frame_system::FrameStage::Forward(cb) => {
+
+
+            frame_system::FrameStage::Forward(cb)
+        },
+        _ => { command_buffer }
+    }
 }
