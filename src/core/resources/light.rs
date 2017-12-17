@@ -69,7 +69,6 @@ impl LightPoint{
             color: Vector3::new(1.0, 1.0, 1.0),
             location: Vector3::new(1.0, 1.0, 1.0),
 
-
             bound: collision::Aabb3::new(min, max),
         }
     }

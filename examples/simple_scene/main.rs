@@ -24,8 +24,8 @@ fn main() {
 
     let graphics_settings = core::render_settings::RenderSettings::default()
     .with_msaa_factor(8)
-    .with_gamma(1.9)
-    .with_exposure(1.5)
+    .with_gamma(1.0)
+    .with_exposure(1.0)
     .with_anisotropical_filtering(16);
 
     let settings = core::engine_settings::EngineSettings::default()
@@ -103,10 +103,20 @@ fn main() {
                 Some(scene) => {
                     scene.add_job(jobs::SceneJobs::Rotate(Vector3::new(1.0, 0.0, 0.0)));
                 }
-                None => {println!("Could not find TestScene :( !0!0!0!=!=!=!0!=!=!=!=!=!0!0!0", );}, //get on with it
+                None => {println!("Could not find TestScene", );}, //get on with it
             }
         }
 
+        //test if a is pressed
+        if engine.get_asset_manager().get_keymap().j{
+
+            match engine.get_asset_manager().get_active_scene().get_node("TestScene".to_string()){
+                Some(scene) => {
+                    scene.add_job(jobs::SceneJobs::Rotate(Vector3::new(0.0, 1.0, 0.0)));
+                }
+                None => {println!("Could not find TestScene", );}, //get on with it
+            }
+        }
         /*
         //test if a is pressed
         if engine.get_asset_manager().get_keymap().g{

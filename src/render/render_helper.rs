@@ -92,8 +92,8 @@ pub fn add_bound_draw(
             let pipeline = pipeline_lck.get_pipeline_by_config(pipeline_needed, device.clone(), id as u32);
             //now we get out self the points of the bound and create a vertex buffer form it
 
-            let mut min = object_node.attributes.transform.transform_point(object_node.attributes.get_value_bound().min);
-            let mut max = object_node.attributes.transform.transform_point(object_node.attributes.get_value_bound().max);
+            let mut min = object_node.attributes.get_value_bound().min; //already in worldspace
+            let mut max = object_node.attributes.get_value_bound().max; //already in worldspace
             //Now we transform them to match the object scale and location
             let value_vertices = create_vertex_buffer_for_bound(min, max, [1.0, 1.0, 0.0, 1.0]);
             let node_vertices = create_vertex_buffer_for_bound(

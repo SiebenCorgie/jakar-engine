@@ -144,7 +144,7 @@ impl AssetManager {
             //Updating camera from camera transform
             camera_position: self.camera.position.clone().into(),
             _dummy0: [0; 4],
-            //This is getting a dummy value which is updated right bevore set cretion via the new
+            //This is getting a dummy value which is updated right bevore set creation via the new
             //model provided transform matrix. There might be a better way though.
             model: mat_4.into(),
             view: self.get_camera().get_view_matrix().into(),
@@ -292,6 +292,8 @@ impl AssetManager {
         self.camera.update_view();
         //and finally update the tree
         self.active_main_scene.update();
+        //also update the bounds for the current scene.
+        self.active_main_scene.rebuild_bounds();
 
     }
 

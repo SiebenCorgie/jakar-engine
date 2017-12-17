@@ -7,6 +7,8 @@ use std::collections::BTreeMap;
 use core::resources::*;
 use core::resources::camera::Camera;
 use render::shader_impls::lights;
+use core::ReturnBoundInfo;
+
 
 ///Describes the Value bit of this tree
 pub mod content;
@@ -218,13 +220,8 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
         let mut return_vec = Vec::new();
 
         let camera_bound = camera.get_frustum_bound();
-        //We need to transform the bound into world space
-        let ws_bound = Aabb3::new(
-            self.attributes.transform.transform_point(self.attributes.get_value_bound().min),
-            self.attributes.transform.transform_point(self.attributes.get_value_bound().max)
-        );
 
-        match camera_bound.contains(&ws_bound){
+        match camera_bound.contains(&self.attributes.value_bound){
             Relation::Out => {
                 //Don't add
             }
@@ -479,14 +476,30 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
             child.rebuild_bounds();
         }
 
-        //now get selfs min and max values in world space
-        let mut mins = self.attributes.transform.transform_point(self.attributes.get_value_bound().min);
-        let mut maxs = self.attributes.transform.transform_point(self.attributes.get_value_bound().max);
+        //Calculate new mins and maxs value from the object bounds
+        let object_bound = self.value.get_bound();
+        let points = object_bound.to_corners();
 
+        //Transform the points to worldspace
+        let mut transformed_points = Vec::new();
+        for point in points.iter(){
+            //transform the point in worldspace
+            transformed_points.push(
+                self.attributes.transform.transform_point(point.clone())
+            );
+        }
+        let (mut mins, mut maxs) = get_min_max(transformed_points);
+        //Now its time to overwrite the value bounds for the new transformation, after this we'll
+        //test out new bounds agains the children and create a new node extend which is used for
+        //hierachy sorting etc.
+        self.attributes.value_bound = Aabb3::new(mins.clone(), maxs.clone());
+
+
+        //now get selfs min and max values in world space build by the object bound transformed by world space
         for (_, child) in self.children.iter(){
             //get child min and max values
-            let child_mins = child.attributes.get_bound().min;
-            let child_maxs = child.attributes.get_bound().max;
+            let child_mins = child.attributes.bound.min;
+            let child_maxs = child.attributes.bound.max;
             //check mins
             if child_mins.x < mins.x{
                 mins.x = child_mins.x;
@@ -509,15 +522,10 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
                 maxs.z = child_maxs.z;
             }
         }
-        
-        //if this node has no children, use the value bounds translated by the transform instead
-        if self.children.len() == 0{
-            mins = self.attributes.transform.transform_point(self.attributes.get_value_bound().min);
-            maxs = self.attributes.transform.transform_point(self.attributes.get_value_bound().max);
-        }
 
         //finished the checks, update self
         self.attributes.bound = Aabb3::new(mins, maxs);
+
     }
 }
 
@@ -670,7 +678,41 @@ impl SaveUnwrap for Vec<jakar_tree::node::Node<content::ContentType, jobs::Scene
     }
 }
 
+///Calculates the maximal values and minimal values for a set of 3D points. Returns `(min, max)`
+/// as points.
+/// There might be a better place for this function, but I only use it here so...
+pub fn get_min_max(points: Vec<Point3<f32>>) -> (Point3<f32>, Point3<f32>){
+    let mut mins = points[0];
+    let mut maxs = points[0];
 
+    //Go through the values and comapre each axis with the current determined mins and maxs
+    for point in points.iter(){
+        //check mins
+        if point.x < mins.x{
+            mins.x = point.x;
+        }
+        if point.y < mins.y{
+            mins.y = point.y;
+        }
+        if point.z < mins.z{
+            mins.z = point.z;
+        }
+
+        //check max
+        if point.x > maxs.x{
+            maxs.x = point.x;
+        }
+        if point.y > maxs.y{
+            maxs.y = point.y;
+        }
+        if point.z > maxs.z{
+            maxs.z = point.z;
+        }
+    }
+
+    (mins, maxs)
+
+}
 
 
 //TODO Custom impls on node for:

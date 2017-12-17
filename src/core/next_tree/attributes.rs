@@ -11,8 +11,10 @@ pub struct NodeAttributes {
     pub transform: Decomposed<Vector3<f32>, Quaternion<f32>>,
     ///The bounds of this node, takes the `content` bound as well as the max and min values of
     ///all its children into consideration.
+    /// This is in worldspace.
     pub bound: Aabb3<f32>,
-    ///The static bounds of this nodes value
+    ///The static bounds of this nodes value. In worldspace as well. If you want to get the object
+    /// space bound, call `get_bound()` on the `value`.
     pub value_bound: Aabb3<f32>,
     ///The size of of its value, is used to determain if the node is drawn when far away etc.
     pub size: f32,
@@ -96,7 +98,9 @@ impl Attribute<SceneJobs> for NodeAttributes{
                 SceneJobs::Move(t)
             } ,
             &SceneJobs::Rotate(r) => {
-                self.transform.rot += Quaternion::from(Euler::new(Deg(r.x), Deg(r.y), Deg(r.z)));
+                self.transform.rot = Quaternion::from(
+                    Euler::new(Deg(r.x), Deg(r.y), Deg(r.z))
+                ) * self.transform.rot;
                 //if we rotate self, we want to rotate the children around self's location
                 SceneJobs::RotateAroundPoint(r, self.transform.disp)
             }
@@ -112,13 +116,13 @@ impl Attribute<SceneJobs> for NodeAttributes{
                 });
 
                 //go to the point
-                self.transform.disp -= point;
+                //self.transform.disp -= point;
                 //do rotation
-                self.transform.rot = self.transform.rot * q_rotation;
+                self.transform.rot = q_rotation * self.transform.rot;
                 //rotate selfs disp to match the rotation at the point
                 self.transform.disp = q_rotation.rotate_vector(self.transform.disp);
                 //move back to the new origin
-                self.transform.disp += point;
+                //self.transform.disp += point;
                 //All other children should be rotated the same
                 SceneJobs::RotateAroundPoint(rotation, point)
             }
