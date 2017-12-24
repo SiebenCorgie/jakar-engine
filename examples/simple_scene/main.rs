@@ -10,6 +10,7 @@ use jakar_engine::core::resources::*;
 use jakar_engine::core::resources::camera::Camera;
 use jakar_engine::core::resources::light;
 use jakar_engine::core::next_tree::*;
+use jakar_tree::node::Attribute;
 
 use std::thread;
 use std::sync::{Arc, Mutex};
@@ -52,10 +53,15 @@ fn main() {
     engine.get_asset_manager().import_gltf("TestScene", "examples/simple_scene/TestScenes/Cube_Plane.gltf");
 
 
+    let mut light_tree =jakar_tree::tree::Tree::new(
+        jakar_engine::core::next_tree::content::ContentType::Empty(core::resources::empty::Empty::new("LightsRoot")),
+        jakar_engine::core::next_tree::attributes::NodeAttributes::default()
+    );
+
+
     //SUN========================================================================
     let mut sun = light::LightDirectional::new("Sun");
     //looking down in vulkan space
-    sun.set_direction(Vector3::new(1.0, -0.5, 0.0));
     sun.set_color(Vector3::new(1.0, 0.75, 0.75));
     sun.set_intensity(25.0);
 
@@ -67,15 +73,24 @@ fn main() {
         let mut point = light::LightPoint::new("LightPoint");
         point.set_intensity(( (x + 3) * 10) as f32);
         point.set_color(Vector3::new(1.0, 1.0, 0.5));
-        point.set_location(Vector3::new(x as f32 * 3.0, 1.0, 5.0));
+        //point.set_location(Vector3::new(x as f32 * 3.0, 1.0, 5.0));
 
-        engine.get_asset_manager()
-        .get_active_scene()
+        let node_name = light_tree
         .add_at_root(content::ContentType::PointLight(point), None);
+
+        //Set the location
+        match light_tree.get_node(&node_name.unwrap()){
+            Some(scene) => {
+                scene.add_job(jobs::SceneJobs::Move(Vector3::new(x as f32 * 3.0, 1.0, 5.0)));
+            }
+            None => {println!("Could not find Light", );}, //get on with it
+        }
+
     }
 
-
-
+    light_tree.update();
+    engine.get_asset_manager().get_active_scene().join_at_root(&light_tree);
+    engine.get_asset_manager().get_active_scene().update();
 
     engine.get_asset_manager().get_active_scene().print_tree();
 
@@ -99,7 +114,7 @@ fn main() {
         //test if a is pressed
         if engine.get_asset_manager().get_keymap().h{
 
-            match engine.get_asset_manager().get_active_scene().get_node("TestScene".to_string()){
+            match engine.get_asset_manager().get_active_scene().get_node("TestScene"){
                 Some(scene) => {
                     scene.add_job(jobs::SceneJobs::Rotate(Vector3::new(1.0, 0.0, 0.0)));
                 }
@@ -110,25 +125,33 @@ fn main() {
         //test if a is pressed
         if engine.get_asset_manager().get_keymap().j{
 
-            match engine.get_asset_manager().get_active_scene().get_node("TestScene".to_string()){
+            match engine.get_asset_manager().get_active_scene().get_node("TestScene"){
                 Some(scene) => {
                     scene.add_job(jobs::SceneJobs::Rotate(Vector3::new(0.0, 1.0, 0.0)));
                 }
                 None => {println!("Could not find TestScene", );}, //get on with it
             }
         }
-        /*
-        //test if a is pressed
-        if engine.get_asset_manager().get_keymap().g{
 
-            match engine.get_asset_manager().get_active_scene().get_node("TestScene_node_7".to_string()){
-                Some(scene) => {
-                    scene.add_job(jobs::SceneJobs::Rotate(Vector3::new(1.0, 0.0, 0.0)));
-                }
-                None => {println!("Could not find TestScene :( !0!0!0!=!=!=!0!=!=!=!=!=!0!0!0", );}, //get on with it
+        //Rotate the lights around 0.0.0
+        if engine.get_asset_manager().get_keymap().r{
+
+            let light_names = engine.get_asset_manager().get_active_scene().all_point_light_names();
+            for i in light_names.into_iter(){
+                //Get the light (unwarp is save)
+                let mut engine_lock = engine.get_asset_manager();
+                let mut light = engine_lock.get_active_scene().get_node(&i).unwrap();
+
+
+                light.add_job(jobs::SceneJobs::RotateAroundPoint(
+                    Vector3::new(0.0, 1.0, 0.0), Vector3::new(0.0, 0.0, 0.0))
+                );
+                //light.add_job(jobs::SceneJobs::Move(Vector3::new(10.0, 10.0, 10.0)));
+
+                println!("Light location: {:?}!", light.attributes.transform.disp);
             }
         }
-        */
+
 
 
         if engine.get_asset_manager().get_keymap().q{

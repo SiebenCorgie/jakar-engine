@@ -73,7 +73,7 @@ pub fn add_bound_draw(
     object_node: &node::Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>,
     device: Arc<vulkano::device::Device>,
     uniform_manager: Arc<Mutex<uniform_manager::UniformManager>>,
-    dimensions: &[u32; 2]
+    dynamic_state: &vulkano::command_buffer::DynamicState,
 ) -> frame_system::FrameStage{
 
     //get the current command buffer stage id
@@ -158,15 +158,7 @@ pub fn add_bound_draw(
             //draw the value bound
             let mut new_cb = cb.draw_indexed(
                 pipeline.get_pipeline_ref(),
-                vulkano::command_buffer::DynamicState{
-                    line_width: None,
-                    viewports: Some(vec![vulkano::pipeline::viewport::Viewport {
-                        origin: [0.0, 0.0],
-                        dimensions: [dimensions[0] as f32, dimensions[1] as f32],
-                        depth_range: 0.0 .. 1.0,
-                    }]),
-                    scissors: None,
-                },
+                dynamic_state.clone(),
                 vec![value_vertex_buffer],
                 index_buffer.clone(),
                 (attachments_ds_value),  //now descriptor sets for now
@@ -176,15 +168,7 @@ pub fn add_bound_draw(
             //draw the node bound
             new_cb = new_cb.draw_indexed(
                 pipeline.get_pipeline_ref(),
-                vulkano::command_buffer::DynamicState{
-                    line_width: None,
-                    viewports: Some(vec![vulkano::pipeline::viewport::Viewport {
-                        origin: [0.0, 0.0],
-                        dimensions: [dimensions[0] as f32, dimensions[1] as f32],
-                        depth_range: 0.0 .. 1.0,
-                    }]),
-                    scissors: None,
-                },
+                dynamic_state.clone(),
                 vec![node_vertex_buffer],
                 index_buffer,
                 (attachments_ds_node),  //now descriptor sets for now

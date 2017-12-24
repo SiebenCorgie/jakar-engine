@@ -45,11 +45,16 @@ impl FrameStage{
 pub struct FrameSystem {
     engine_settings:  Arc<Mutex<engine_settings::EngineSettings>>,
 
-    //stores the post progressing.
+    //Stores the dynamic render states used for this frame
+    /*TODO:
+    * It would be nice to be able to configure the dynamic state. Things like "reversed" depth
+    (from 1.0 - 0.0) or something like configuring wireframe line width. But that would be a nice
+    to have.
+    */
+    dynamic_state: vulkano::command_buffer::DynamicState,
+
 
     renderpass: Arc<RenderPassAbstract + Send + Sync>,
-    //The buffer to which the depth gets written
-    depth_buffer: Arc<ImageViewAccess + Send + Sync>,
     //The buffer to which the multi sampled depth gets written
     raw_render_depth_buffer: Arc<ImageViewAccess + Send + Sync>,
     //this holds a multi sampled image (later hdr)
@@ -105,11 +110,6 @@ impl FrameSystem{
         //Create a multisampled depth buffer depth buffer
         let raw_render_depth_buffer = AttachmentImage::transient_multisampled_input_attachment(
             device.clone(), current_dimensions, static_msaa_factor, vulkano::format::D16Unorm)
-            .expect("failed to create depth buffer!");
-
-        //Create a depth buffer
-        let depth_buffer = AttachmentImage::transient_input_attachment(
-            device.clone(), current_dimensions, vulkano::format::D16Unorm)
             .expect("failed to create depth buffer!");
 
 
@@ -170,19 +170,32 @@ impl FrameSystem{
             ]
 
         ).expect("failed to create render_pass")
-
         );
+        //At this point we build the state, now we have to create the configuration for it as well
+        //to be used, dynmaicly while drawing
+        let dynamic_state = vulkano::command_buffer::DynamicState{
+            line_width: None,
+            viewports: Some(vec![vulkano::pipeline::viewport::Viewport {
+                origin: [0.0, 0.0],
+                dimensions: [current_dimensions[0] as f32, current_dimensions[1] as f32],
+                depth_range: 0.0 .. 1.0,
+            }]),
+            scissors: None,
+        };
+
 
         println!("Finished renderpass", );
 
         FrameSystem{
+
+            dynamic_state: dynamic_state,
+
             engine_settings: settings,
 
             renderpass: renderpass,
             //The buffer to which the depth gets written
-            depth_buffer: depth_buffer,
             raw_render_depth_buffer: raw_render_depth_buffer,
-            //this holds a multi sampled image (later hdr)
+            //this holds a multi sampled image in hdr format
             msaa_image: raw_render_color,
 
             static_msaa_factor: static_msaa_factor,
@@ -214,27 +227,38 @@ impl FrameSystem{
         self.raw_render_depth_buffer = AttachmentImage::transient_multisampled_input_attachment(
             self.device.clone(), new_dimensions, 4, vulkano::format::D16Unorm)
             .expect("failed to create depth buffer!");
-        /*
-        //Create a depth buffer
-        self.depth_buffer = AttachmentImage::transient_input_attachment(
-            self.device.clone(), new_dimensions, 4, vulkano::format::D16Unorm)
-            .expect("failed to create depth buffer!");
-        */
+
+
+
+
+        //After all, create the frame dynamic states
+        let current_dimensions = {
+            self.engine_settings
+            .lock()
+            .expect("failed to lock settings for frame creation")
+            .get_dimensions()
+        };
+
+        self.dynamic_state = vulkano::command_buffer::DynamicState{
+            line_width: None,
+            viewports: Some(vec![vulkano::pipeline::viewport::Viewport {
+                origin: [0.0, 0.0],
+                dimensions: [current_dimensions[0] as f32, current_dimensions[1] as f32],
+                depth_range: 0.0 .. 1.0,
+            }]),
+            scissors: None,
+        };
     }
 
     ///Starts a new frame by taking a target image and starting a command buffer for it
     pub fn new_frame<I>(&mut self, target_image: I) -> FrameStage
     where I: ImageAccess + ImageViewAccess + Clone + Send + Sync + 'static
     {
-        /* doing this now in the check_images() function of the renderer
+        //Recreate images if needed:
+        //doing this now in the check_images() function of the renderer
         //check the frame dimensions, if changed (happens if the swapchain changes),
         //recreate all attachments
-        let img_dims = ImageAccess::dimensions(&target_image).width_height();
 
-        if self.last_dimensions != img_dims{
-            self.recreate_attachments(img_dims);
-        }
-        */
 
         //Create the frame buffer
         let frame_buffer = {
@@ -304,36 +328,14 @@ impl FrameSystem{
         self.raw_render_depth_buffer.clone()
     }
 
-    /*
-    ///Ends the first render pass
-    pub fn preform_post_progress(&self, old_stage: FrameStage) -> AutoCommandBufferBuilder{
-        //take the command buffer, ends the first stage and add the drawing call for the post progress
-        // shader.
-        match old_stage{
-            FrameStage::First(cb) => {
-                //wrap the system up
-
-                //change to the next subpass
-                let second_pass = cb.next_subpass(false);
-                //now add the drawing command for the screen filling post progress triangle
-                second_pass.draw(
-                    pipeline: Gp,
-                    dynamic: DynamicState,
-                    vertices: V,
-                    sets: S,
-                    constants: Pc
-                ).expect("failed to draw post_progress_triangle");
-
-                return cb
-            }
-            _ => panic!("Got wrong command buffer while preforming hdr")
-        }
-
-    }
-    */
     ///Returns the currently used renderpass layout
     pub fn get_renderpass(&self) -> Arc<RenderPassAbstract + Send + Sync>{
         self.renderpass.clone()
+    }
+
+    ///Returns the current, up to date dynamic state. Should be used for every onscreen rendering.
+    pub fn get_dynamic_state(&self) -> &vulkano::command_buffer::DynamicState{
+        &self.dynamic_state
     }
 
     ///Returns the id of the object pass

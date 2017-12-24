@@ -106,7 +106,6 @@ impl Attribute<SceneJobs> for NodeAttributes{
             }
 
             &SceneJobs::RotateAroundPoint(rotation, point) => {
-                //FIXME reimplemt from https://gamedev.stackexchange.com/questions/16719/what-is-the-correct-order-to-multiply-scale-rotation-and-translation-matrices-f
                 //move to point
                 //create a rotation Quaternion from the angles in rotation.xyz
                 let q_rotation = Quaternion::from(Euler {

@@ -15,7 +15,6 @@ pub struct LightPoint {
     pub name: String,
     intensity: f32,
     color: Vector3<f32>,
-    location: Vector3<f32>,
 
     bound: collision::Aabb3<f32>,
 }
@@ -28,8 +27,6 @@ pub struct LightDirectional {
     pub name: String,
     intensity: f32,
     color: Vector3<f32>,
-    location: Vector3<f32>,
-    direction: Vector3<f32>,
 
     bound: collision::Aabb3<f32>,
 }
@@ -42,9 +39,6 @@ pub struct LightSpot {
     pub name: String,
     intensity: f32,
     color: Vector3<f32>,
-    location: Vector3<f32>,
-
-    direction: Vector3<f32>,
 
     outer_radius: f32,
     inner_radius: f32,
@@ -67,16 +61,15 @@ impl LightPoint{
             name: String::from(name),
             intensity: 1.0,
             color: Vector3::new(1.0, 1.0, 1.0),
-            location: Vector3::new(1.0, 1.0, 1.0),
 
             bound: collision::Aabb3::new(min, max),
         }
     }
     ///Returns this lught as its shader-useable instance
-    pub fn as_shader_info(&self) -> lights::ty::PointLight{
+    pub fn as_shader_info(&self, location: &Vector3<f32>) -> lights::ty::PointLight{
         //convert to a Vec4 for 128 bit padding in the shader
         let color_type: [f32; 3] = self.color.into();
-        let location_type: [f32; 3] = self.location.into();
+        let location_type: [f32; 3] = location.clone().into();
         //Return a native vulkano struct
         lights::ty::PointLight{
             color: color_type,
@@ -98,18 +91,6 @@ impl LightPoint{
     #[inline]
     pub fn get_intensity(&mut self) -> &mut f32{
         &mut self.intensity
-    }
-
-    ///Returns the location reference
-    #[inline]
-    pub fn get_location(&mut self) -> &mut Vector3<f32>{
-        &mut self.location
-    }
-
-    ///Returns the location reference
-    #[inline]
-    pub fn set_location(&mut self, new_location: Vector3<f32>){
-        self.location = new_location
     }
 
     ///Sets its color, the value gets normalized, set the intensity via `set_intensity`
@@ -195,54 +176,24 @@ impl LightDirectional{
 
             intensity: 1.0,
             color: Vector3::new(1.0, 1.0, 1.0),
-            location: Vector3::new(1.0, 1.0, 1.0),
-
-            direction: direction,
 
             bound: collision::Aabb3::new(min, max),
         }
     }
 
     ///Returns this lught as its shader-useable instance
-    pub fn as_shader_info(&self) -> lights::ty::DirectionalLight{
+    pub fn as_shader_info(&self, rotation: &Quaternion<f32>) -> lights::ty::DirectionalLight{
 
         let tmp_color: [f32;3] = self.color.into();
-        let tmp_direction: [f32;3] = self.direction.into();
-        let location_type: [f32; 3] = self.location.into();
+        let tmp_direction: [f32;3] = rotation.rotate_vector(Vector3::new(1.0, 0.0, 0.0)).into(); //Using a rotated unit vector
 
         //Return a native vulkano struct
         lights::ty::DirectionalLight{
             color: tmp_color,
             direction: tmp_direction,
-            location: location_type,
             intensity: self.intensity,
             _dummy0: [0; 4],
-            _dummy1: [0; 4],
         }
-    }
-
-    ///Change the direction
-    #[inline]
-    pub fn set_direction(&mut self, new_direction: Vector3<f32>){
-        self.direction = new_direction;
-    }
-
-    ///Returns the direction reference
-    #[inline]
-    pub fn get_direction(&mut self) -> &mut Vector3<f32>{
-        &mut self.direction
-    }
-
-    ///Returns the location reference
-    #[inline]
-    pub fn get_location(&mut self) -> &mut Vector3<f32>{
-        &mut self.location
-    }
-
-    ///Returns the location reference
-    #[inline]
-    pub fn set_location(&mut self, new_location: Vector3<f32>){
-        self.location = new_location
     }
 
     ///set intensity
@@ -333,7 +284,6 @@ impl LightSpot{
         let min = Point3::new(-0.5, -0.5, -0.5, );
         let max = Point3::new(0.5, 0.5, 0.5, );
 
-        let direction = Vector3::new(1.0, 1.0, 1.0);
         let outer_radius = 50.0;
         let inner_radius = 40.0;
 
@@ -341,9 +291,6 @@ impl LightSpot{
             name: String::from(name),
             intensity: 1.0,
             color: Vector3::new(1.0, 1.0, 1.0),
-            location: Vector3::new(1.0, 1.0, 1.0),
-
-            direction: direction,
 
             outer_radius: outer_radius,
             inner_radius: inner_radius,
@@ -353,11 +300,11 @@ impl LightSpot{
     }
 
     ///Returns this lught as its shader-useable instance
-    pub fn as_shader_info(&self) -> lights::ty::SpotLight{
+    pub fn as_shader_info(&self, rotation: &Quaternion<f32>, location: &Vector3<f32>) -> lights::ty::SpotLight{
 
         let tmp_color: [f32;3] = self.color.into();
-        let tmp_direction: [f32;3] = self.direction.into();
-        let location_type: [f32; 3] = self.location.into();
+        let tmp_direction: [f32;3] = rotation.rotate_vector(Vector3::new(1.0, 0.0, 0.0)).into(); //Using a rotated unit vector
+        let location_type: [f32; 3] = location.clone().into();
 
         lights::ty::SpotLight{
             color: tmp_color,
@@ -372,30 +319,6 @@ impl LightSpot{
             _dummy1: [0; 4],
             _dummy2: [0; 8],
         }
-    }
-
-    ///Change the direction
-    #[inline]
-    pub fn set_direction(&mut self, new_direction: Vector3<f32>){
-        self.direction = new_direction;
-    }
-
-    ///Returns the direction reference
-    #[inline]
-    pub fn get_direction(&mut self) -> &mut Vector3<f32>{
-        &mut self.direction
-    }
-
-    ///Returns the location reference
-    #[inline]
-    pub fn get_location(&mut self) -> &mut Vector3<f32>{
-        &mut self.location
-    }
-
-    ///Returns the location reference
-    #[inline]
-    pub fn set_location(&mut self, new_location: Vector3<f32>){
-        self.location = new_location
     }
 
     ///set intensity

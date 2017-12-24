@@ -82,10 +82,8 @@ impl UniformManager{
             let empty_light = lights::ty::DirectionalLight{
                 color: [1.0; 3],
                 direction: [1.0; 3],
-                location: [0.0; 3],
                 intensity: 0.0,
                 _dummy0: [0; 4],
-                _dummy1: [0; 4],
             };
             let add_array = [empty_light.clone(); 6];
 

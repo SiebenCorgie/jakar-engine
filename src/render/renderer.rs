@@ -107,10 +107,8 @@ impl Renderer {
             queue: queue,
             swapchain: swapchain,
             images: images,
-            //renderpass: renderpass,
-            //depth_buffer: depth_buffer,
-            //msaa_image: msaa_image,
-            //framebuffers: framebuffers,
+            //Helper systems, the frame system handles... well a frame, the post progress writes the
+            //static post_progress pass.AcquireError
             frame_system: frame_system,
             post_progress: post_progress,
 
@@ -267,7 +265,7 @@ impl Renderer {
                      mesh,
                      self.device.clone(),
                      self.uniform_manager.clone(),
-                     &dimensions
+                     &self.frame_system.get_dynamic_state()
                  );
             }
         }
@@ -291,7 +289,7 @@ impl Renderer {
                              mesh,
                              self.device.clone(),
                              self.uniform_manager.clone(),
-                             &dimensions
+                             &self.frame_system.get_dynamic_state()
                          );
                     }
                 }
@@ -425,19 +423,10 @@ impl Renderer {
         let new_cb = command_buffer
             .draw_indexed(
                 pipeline,
+                self.frame_system.get_dynamic_state().clone(),
 
-                vulkano::command_buffer::DynamicState{
-                    line_width: None,
-                    viewports: Some(vec![vulkano::pipeline::viewport::Viewport {
-                        origin: [0.0, 0.0],
-                        dimensions: [dimensions[0] as f32, dimensions[1] as f32],
-                        depth_range: 0.0 .. 1.0,
-                    }]),
-                    scissors: None,
-                },
                 mesh
                 .get_vertex_buffer(), //vertex buffer (static usually)
-
                 mesh
                 .get_index_buffer(
                     self.device.clone(), self.queue.clone()

@@ -147,6 +147,11 @@ J: Clone, A: jakar_tree::node::Attribute<J> + Clone
     ///Returns all meshse in the view frustum of `camera`
     /// NOTE: Each node is copied from the tree into a stand alone node without any childern!
     fn get_all_meshes_in_frustum(&self, camera: &camera::DefaultCamera, sorting: &Option<SceneComparer>) -> Vec<jakar_tree::node::Node<T, J, A>>;
+    //Returns a list of all point light names, can be used to get each of them by name and add a job.
+    fn all_point_light_names(&self) -> Vec<String>;
+
+    ///Returns a vector of references to all point light nodes
+    //fn borrow_all_point_lights(&mut self, sorting: &Option<SceneComparer>) -> Vec<&mut jakar_tree::node::Node<T, J, A>>;
     ///Returns all point lights in the tree
     /// NOTE: Each node is copied from the tree into a stand alone node without any childern!
     fn get_all_point_lights(&self, sorting: &Option<SceneComparer>) -> Vec<jakar_tree::node::Node<T, J, A>>;
@@ -277,6 +282,66 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
 
         return_vec
     }
+
+    ///Returns a list off all point light names, can be used for instance to add a job to each of them.
+    fn all_point_light_names(&self) -> Vec<String>{
+        let mut return_vec = Vec::new();
+
+        for (_, child) in self.children.iter(){
+            return_vec.append(&mut child.all_point_light_names());
+        }
+
+        //Check self for adding
+        match self.value{
+            content::ContentType::PointLight(ref light) => {
+                return_vec.push(self.name.clone());
+            }
+            _ => {
+                //no pointlight
+            }
+        }
+
+        return_vec
+    }
+
+/*
+    ///Returns a collection of references to all point_light nodes
+    fn borrow_all_point_lights(&mut self, sorting: &Option<SceneComparer>) -> Vec<&mut jakar_tree::node::Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>>{
+        //going recrusivly through each child (from the bottom), with each adding up to the whole.
+        let mut return_vec = Vec::new();
+        for (_, child) in self.children.iter_mut(){
+            return_vec.append(&mut child.borrow_all_point_lights(&sorting));
+        }
+
+        //first of all test if self has the right attributes, if not we can already return the child
+        // vector
+        match sorting{
+            &Some(ref comparer) => {
+                //early return if self doesnt match the sorting
+                if !self.attributes.compare(comparer){
+                    return return_vec;
+                }
+            },
+            &None =>  {}, //all is nice, add the mesh
+        }
+
+        //check self
+        let mut add_self = false;
+        match self.value{
+            content::ContentType::PointLight(ref light) => {
+                add_self = true;
+            },
+            _ => {}, //self is no mesh only going doing nothing
+        }
+
+        if add_self{
+            return_vec.push(self);
+        }
+
+        return_vec
+    }
+*/
+
     ///Returns all point lights in the tree
     /// NOTE: Each node is copied from the tree into a stand alone node without any childern!
     fn get_all_point_lights(&self, sorting: &Option<SceneComparer>) -> Vec<jakar_tree::node::Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>>{
@@ -545,6 +610,19 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
     fn get_all_meshes_in_frustum(&self, camera: &camera::DefaultCamera, sorting: &Option<SceneComparer>) -> Vec<jakar_tree::node::Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>>{
         self.root_node.get_all_meshes_in_frustum(camera, sorting)
     }
+
+    ///Returns a list off all point light names, can be used for instance to add a job to each of them.
+    fn all_point_light_names(&self) -> Vec<String>{
+        self.root_node.all_point_light_names()
+    }
+
+/*
+    ///Borrows all point lights of this tree
+    fn borrow_all_point_lights(&mut self, sorting: &Option<SceneComparer>) -> Vec<&mut jakar_tree::node::Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>>{
+        self.root_node.borrow_all_point_lights(sorting)
+    }
+*/
+
     ///Returns all point lights in the tree
     /// NOTE: Each node is copied from the tree into a stand alone node without any childern!
     fn get_all_point_lights(&self, sorting: &Option<SceneComparer>) -> Vec<jakar_tree::node::Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>>{
@@ -579,27 +657,27 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
 ///unwraps the vector into a vector of meshes
 pub trait SaveUnwrap{
     ///turns self into a vector of mutex guarded meshes
-    fn into_meshes(self) -> Vec<Arc<Mutex<mesh::Mesh>>>;
+    fn into_meshes(&self) -> Vec<Arc<Mutex<mesh::Mesh>>>;
     ///turns self into a vector of point lights
-    fn into_point_light(self) -> Vec<light::LightPoint>;
+    fn into_point_light(&self) -> Vec<light::LightPoint>;
     ///turns self into a vector of directional lights
-    fn into_directional_light(self) -> Vec<light::LightDirectional>;
+    fn into_directional_light(&self) -> Vec<light::LightDirectional>;
     ///turns self into a vector of spot lights
-    fn into_spot_light(self) -> Vec<light::LightSpot>;
+    fn into_spot_light(&self) -> Vec<light::LightSpot>;
     ///turns self into a vector of emptys
-    fn into_emptys(self) -> Vec<empty::Empty>;
+    fn into_emptys(&self) -> Vec<empty::Empty>;
     ///turns self into a vector of cameras
-    fn into_cameras(self) -> Vec<camera::DefaultCamera>;
+    fn into_cameras(&self) -> Vec<camera::DefaultCamera>;
 }
 
 impl SaveUnwrap for Vec<jakar_tree::node::Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>>{
     ///turns self into a vector of mutex guarded meshes
-    fn into_meshes(self) -> Vec<Arc<Mutex<mesh::Mesh>>>{
+    fn into_meshes(&self) -> Vec<Arc<Mutex<mesh::Mesh>>>{
         let mut return_vector = Vec::new();
         for mesh in self.into_iter(){
             //test and push
             match mesh.value{
-                content::ContentType::Mesh(mesh) => return_vector.push(mesh),
+                content::ContentType::Mesh(ref mesh) => return_vector.push(mesh.clone()),
                 _ => {}, //do nothing
             }
         }
@@ -607,13 +685,13 @@ impl SaveUnwrap for Vec<jakar_tree::node::Node<content::ContentType, jobs::Scene
         return_vector
     }
     ///turns self into a vector of point lights
-    fn into_point_light(self) -> Vec<light::LightPoint>{
+    fn into_point_light(&self) -> Vec<light::LightPoint>{
         let mut return_vector = Vec::new();
 
         for node in self.into_iter(){
             //test and push
             match node.value{
-                content::ContentType::PointLight(light) => return_vector.push(light),
+                content::ContentType::PointLight(ref light) => return_vector.push(light.clone()),
                 _ => {}, //do nothing
             }
         }
@@ -621,13 +699,13 @@ impl SaveUnwrap for Vec<jakar_tree::node::Node<content::ContentType, jobs::Scene
         return_vector
     }
     ///turns self into a vector of point lights
-    fn into_directional_light(self) -> Vec<light::LightDirectional>{
+    fn into_directional_light(&self) -> Vec<light::LightDirectional>{
         let mut return_vector = Vec::new();
 
         for node in self.into_iter(){
             //test and push
             match node.value{
-                content::ContentType::DirectionalLight(light) => return_vector.push(light),
+                content::ContentType::DirectionalLight(ref light) => return_vector.push(light.clone()),
                 _ => {}, //do nothing
             }
         }
@@ -635,13 +713,13 @@ impl SaveUnwrap for Vec<jakar_tree::node::Node<content::ContentType, jobs::Scene
         return_vector
     }
     ///turns self into a vector of point lights
-    fn into_spot_light(self) -> Vec<light::LightSpot>{
+    fn into_spot_light(&self) -> Vec<light::LightSpot>{
         let mut return_vector = Vec::new();
 
         for node in self.into_iter(){
             //test and push
             match node.value{
-                content::ContentType::SpotLight(light) => return_vector.push(light),
+                content::ContentType::SpotLight(ref light) => return_vector.push(light.clone()),
                 _ => {}, //do nothing
             }
         }
@@ -649,13 +727,13 @@ impl SaveUnwrap for Vec<jakar_tree::node::Node<content::ContentType, jobs::Scene
         return_vector
     }
     ///turns self into a vector of emptys
-    fn into_emptys(self) -> Vec<empty::Empty>{
+    fn into_emptys(&self) -> Vec<empty::Empty>{
         let mut return_vector = Vec::new();
 
         for node in self.into_iter(){
             //test and push
             match node.value{
-                content::ContentType::Empty(empty) => return_vector.push(empty),
+                content::ContentType::Empty(ref empty) => return_vector.push(empty.clone()),
                 _ => {}, //do nothing
             }
         }
@@ -663,13 +741,13 @@ impl SaveUnwrap for Vec<jakar_tree::node::Node<content::ContentType, jobs::Scene
         return_vector
     }
     ///turns self into a vector of cameras
-    fn into_cameras(self) -> Vec<camera::DefaultCamera>{
+    fn into_cameras(&self) -> Vec<camera::DefaultCamera>{
         let mut return_vector = Vec::new();
 
         for node in self.into_iter(){
             //test and push
             match node.value{
-                content::ContentType::Camera(cam) => return_vector.push(cam),
+                content::ContentType::Camera(ref cam) => return_vector.push(cam.clone()),
                 _ => {}, //do nothing
             }
         }

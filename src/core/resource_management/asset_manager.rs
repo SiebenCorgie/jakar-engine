@@ -159,14 +159,14 @@ impl AssetManager {
         //after getting all lights, create the shader-usable shader infos
         let point_shader_info = {
 
-            let all_point_lights = self.active_main_scene.get_all_point_lights(&None).into_point_light();
+            let all_point_lights = self.active_main_scene.get_all_point_lights(&None);
+            let all_point_light_primitive = all_point_lights.into_point_light();
 
             let mut return_vec = Vec::new();
             //transform into shader infos
-            for light in all_point_lights.iter(){
-                //let light_inst = light.clone();
-                //let light_lck = light_inst.lock().expect("failed to lock light");
-                return_vec.push(light.as_shader_info());
+            for light_index in 0..all_point_lights.len(){
+                let location = &all_point_lights[light_index].attributes.transform.disp;
+                return_vec.push(all_point_light_primitive[light_index].as_shader_info(location));
             }
 
             let empty_light = lights::ty::PointLight{
@@ -194,23 +194,21 @@ impl AssetManager {
         };
 
         let directional_shader_info = {
-            let all_directional_lights = self.active_main_scene.get_all_directional_lights(&None).into_directional_light();
+            let all_directional_lights = self.active_main_scene.get_all_directional_lights(&None);
+            let directional_primitive = all_directional_lights.into_directional_light();
 
             let mut return_vec = Vec::new();
             //transform into shader infos
-            for light in all_directional_lights.iter(){
-                //let light_inst = light.clone();
-                //let light_lck = light_inst.lock().expect("failed to lock light");
-                return_vec.push(light.as_shader_info());
+            for light_index in 0..all_directional_lights.len(){
+                let direction = &all_directional_lights[light_index].attributes.transform.rot;
+                return_vec.push(directional_primitive[light_index].as_shader_info(direction));
             }
 
             let empty_light = lights::ty::DirectionalLight{
                 color: [0.0; 3],
                 direction: [1.0; 3],
-                location: [0.0; 3],
                 intensity: 0.0,
                 _dummy0: [0; 4],
-                _dummy1: [0; 4],
             };
             let mut add_array = [empty_light.clone(); 6];
 
@@ -230,13 +228,15 @@ impl AssetManager {
 
         let spot_shader_info = {
             let mut return_vec = Vec::new();
-            let all_spot_lights = self.active_main_scene.get_all_spot_lights(&None).into_spot_light();
+            let all_spot_lights = self.active_main_scene.get_all_spot_lights(&None);
+            let spot_primitve = all_spot_lights.into_spot_light();
 
             //transform into shader infos
-            for light in all_spot_lights.iter(){
-                //let light_inst = light.clone();
-                //let light_lck = light_inst.lock().expect("failed to lock light");
-                return_vec.push(light.as_shader_info());
+            for light_index in 0..all_spot_lights.len(){
+                let location = &all_spot_lights[light_index].attributes.transform.disp;
+                let rotation = &all_spot_lights[light_index].attributes.transform.rot;
+
+                return_vec.push(spot_primitve[light_index].as_shader_info(rotation, location));
             }
 
             let empty_light = lights::ty::SpotLight{
