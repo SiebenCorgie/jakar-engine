@@ -159,7 +159,7 @@ impl AssetManager {
         //after getting all lights, create the shader-usable shader infos
         let point_shader_info = {
 
-            let all_point_lights = self.active_main_scene.get_all_point_lights(&None);
+            let all_point_lights = self.active_main_scene.copy_all_point_lights(&None);
             let all_point_light_primitive = all_point_lights.into_point_light();
 
             let mut return_vec = Vec::new();
@@ -194,7 +194,7 @@ impl AssetManager {
         };
 
         let directional_shader_info = {
-            let all_directional_lights = self.active_main_scene.get_all_directional_lights(&None);
+            let all_directional_lights = self.active_main_scene.copy_all_directional_lights(&None);
             let directional_primitive = all_directional_lights.into_directional_light();
 
             let mut return_vec = Vec::new();
@@ -228,7 +228,7 @@ impl AssetManager {
 
         let spot_shader_info = {
             let mut return_vec = Vec::new();
-            let all_spot_lights = self.active_main_scene.get_all_spot_lights(&None);
+            let all_spot_lights = self.active_main_scene.copy_all_spot_lights(&None);
             let spot_primitve = all_spot_lights.into_spot_light();
 
             //transform into shader infos
@@ -349,10 +349,10 @@ impl AssetManager {
     ///Returns a raw copy of the meshes in the current active scene tree. They can be sorted by
     /// `Some(attributes)` or if no sorting is needed by `None`.
     #[inline]
-    pub fn get_all_meshes(
+    pub fn copy_all_meshes(
         &mut self, mesh_parameter: Option<next_tree::SceneComparer>
     ) -> Vec<node::Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>>{
-        self.active_main_scene.get_all_meshes(&mesh_parameter)
+        self.active_main_scene.copy_all_meshes(&mesh_parameter)
     }
 
     ///Returns all meshes in the view frustum of the currently active camera
@@ -360,7 +360,7 @@ impl AssetManager {
     pub fn get_meshes_in_frustum(
         &mut self, sort_options: Option<next_tree::SceneComparer>
     ) -> Vec<node::Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>>{
-        self.active_main_scene.get_all_meshes_in_frustum(&self.camera, &sort_options)
+        self.active_main_scene.copy_all_meshes_in_frustum(&self.camera, &sort_options)
     }
 
     ///Imports a new gltf scene file to a new scene with `name` as name from `path`

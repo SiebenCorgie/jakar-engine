@@ -723,7 +723,7 @@ impl GenericNode{
 
     ///Gets all meshes from this node down, you can provide a set of settings for which can be sorted
     /// or you provide `None`, then every mesh will be returned.
-    pub fn get_all_meshes(&mut self, mesh_parameter: Option<node_helper::SortAttributes>) -> Vec<(Arc<Mutex<mesh::Mesh>>, Matrix4<f32>)>{
+    pub fn copy_all_meshes(&mut self, mesh_parameter: Option<node_helper::SortAttributes>) -> Vec<(Arc<Mutex<mesh::Mesh>>, Matrix4<f32>)>{
         let mut return_vector = Vec::new();
 
         match self.content{
@@ -751,13 +751,13 @@ impl GenericNode{
         //println!("Returning tanslation of: {:?}", self.get_transform_matrix());
         //Go down the tree
         for (_, i) in self.children.iter_mut(){
-            return_vector.append(&mut i.get_all_meshes(mesh_parameter.clone()));
+            return_vector.append(&mut i.copy_all_meshes(mesh_parameter.clone()));
         }
         return_vector
     }
 
     ///Gets all LightPoint from this node down
-    pub fn get_all_point_lights(&mut self) -> Vec<core::resources::light::LightPoint>{
+    pub fn copy_all_point_lights(&mut self) -> Vec<core::resources::light::LightPoint>{
         let mut return_vector = Vec::new();
 
         //Check self
@@ -768,13 +768,13 @@ impl GenericNode{
 
         //Go down the tree
         for (_, i) in self.children.iter_mut(){
-            return_vector.append(&mut i.get_all_point_lights());
+            return_vector.append(&mut i.copy_all_point_lights());
         }
         return_vector
     }
 
     ///Gets all LightPoint from this node down
-    pub fn get_all_directional_lights(&mut self) -> Vec<core::resources::light::LightDirectional>{
+    pub fn copy_all_directional_lights(&mut self) -> Vec<core::resources::light::LightDirectional>{
         let mut return_vector = Vec::new();
 
         //Check self
@@ -785,13 +785,13 @@ impl GenericNode{
 
         //Go down the tree
         for (_, i) in self.children.iter_mut(){
-            return_vector.append(&mut i.get_all_directional_lights());
+            return_vector.append(&mut i.copy_all_directional_lights());
         }
         return_vector
     }
 
     ///Gets all LightSpot from this node down
-    pub fn get_all_spot_lights(&mut self) -> Vec<core::resources::light::LightSpot>{
+    pub fn copy_all_spot_lights(&mut self) -> Vec<core::resources::light::LightSpot>{
         let mut return_vector = Vec::new();
         //Check self
         //Check self
@@ -800,7 +800,7 @@ impl GenericNode{
             _ => {},
         }
         for (_, i) in self.children.iter_mut(){
-            return_vector.append(&mut i.get_all_spot_lights());
+            return_vector.append(&mut i.copy_all_spot_lights());
         }
         return_vector
     }

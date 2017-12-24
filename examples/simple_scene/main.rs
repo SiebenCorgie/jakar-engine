@@ -136,7 +136,7 @@ fn main() {
         //Rotate the lights around 0.0.0
         if engine.get_asset_manager().get_keymap().r{
 
-            let light_names = engine.get_asset_manager().get_active_scene().all_point_light_names();
+            let light_names = engine.get_asset_manager().get_active_scene().all_point_light_names(&None);
             for i in light_names.into_iter(){
                 //Get the light (unwarp is save)
                 let mut engine_lock = engine.get_asset_manager();

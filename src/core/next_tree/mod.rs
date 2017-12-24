@@ -6,8 +6,6 @@ use std::collections::BTreeMap;
 
 use core::resources::*;
 use core::resources::camera::Camera;
-use render::shader_impls::lights;
-use core::ReturnBoundInfo;
 
 
 ///Describes the Value bit of this tree
@@ -141,47 +139,95 @@ pub trait SceneTree<
 T: jakar_tree::node::NodeContent + Clone,
 J: Clone, A: jakar_tree::node::Attribute<J> + Clone
 > {
+    ///Returns a list of all mesh names, can be used to get each of them by name and add a job.
+    fn all_mesh_names(&self, sorting: &Option<SceneComparer>) -> Vec<String>;
     ///Returns all meshes in the tree
     /// NOTE: Each node is copied from the tree into a stand alone node without any childern!
-    fn get_all_meshes(&self, sorting: &Option<SceneComparer>) -> Vec<jakar_tree::node::Node<T, J, A>>;
+    fn copy_all_meshes(&self, sorting: &Option<SceneComparer>) -> Vec<jakar_tree::node::Node<T, J, A>>;
+
+    ///Returns a list of names of all meshes in the specified frustum, can be used to get each of them by name and add a job.
+    fn all_meshes_in_frustum_names(&self, camera: &camera::DefaultCamera, sorting: &Option<SceneComparer>) -> Vec<String>;
     ///Returns all meshse in the view frustum of `camera`
     /// NOTE: Each node is copied from the tree into a stand alone node without any childern!
-    fn get_all_meshes_in_frustum(&self, camera: &camera::DefaultCamera, sorting: &Option<SceneComparer>) -> Vec<jakar_tree::node::Node<T, J, A>>;
-    //Returns a list of all point light names, can be used to get each of them by name and add a job.
-    fn all_point_light_names(&self) -> Vec<String>;
+    fn copy_all_meshes_in_frustum(&self, camera: &camera::DefaultCamera, sorting: &Option<SceneComparer>) -> Vec<jakar_tree::node::Node<T, J, A>>;
 
-    ///Returns a vector of references to all point light nodes
-    //fn borrow_all_point_lights(&mut self, sorting: &Option<SceneComparer>) -> Vec<&mut jakar_tree::node::Node<T, J, A>>;
+    ///Returns a list of all point light names, can be used to get each of them by name and add a job.
+    fn all_point_light_names(&self, sorting: &Option<SceneComparer>) -> Vec<String>;
     ///Returns all point lights in the tree
     /// NOTE: Each node is copied from the tree into a stand alone node without any childern!
-    fn get_all_point_lights(&self, sorting: &Option<SceneComparer>) -> Vec<jakar_tree::node::Node<T, J, A>>;
+    fn copy_all_point_lights(&self, sorting: &Option<SceneComparer>) -> Vec<jakar_tree::node::Node<T, J, A>>;
+
+    ///Returns a list of all directional light names, can be used to get each of them by name and add a job.
+    fn all_directional_light_names(&self, sorting: &Option<SceneComparer>) -> Vec<String>;
     ///Returns all directional lights
     /// NOTE: Each node is copied from the tree into a stand alone node without any childern!
-    fn get_all_directional_lights(&self, sorting: &Option<SceneComparer>) -> Vec<jakar_tree::node::Node<T, J, A>>;
+    fn copy_all_directional_lights(&self, sorting: &Option<SceneComparer>) -> Vec<jakar_tree::node::Node<T, J, A>>;
+
+    ///Returns a list of all spot light names, can be used to get each of them by name and add a job.
+    fn all_spot_light_names(&self, sorting: &Option<SceneComparer>) -> Vec<String>;
     ///Returns all spot lights
     /// NOTE: Each node is copied from the tree into a stand alone node without any childern!
-    fn get_all_spot_lights(&self, sorting: &Option<SceneComparer>) -> Vec<jakar_tree::node::Node<T, J, A>>;
+    fn copy_all_spot_lights(&self, sorting: &Option<SceneComparer>) -> Vec<jakar_tree::node::Node<T, J, A>>;
+
+    ///Returns a list of all "Empty" names, can be used to get each of them by name and add a job.
+    fn all_empty_names(&self, sorting: &Option<SceneComparer>) -> Vec<String>;
     ///Returns all empts
     /// NOTE: Each node is copied from the tree into a stand alone node without any childern!
-    fn get_all_emptys(&self, sorting: &Option<SceneComparer>) -> Vec<jakar_tree::node::Node<T, J, A>>;
+    fn copy_all_emptys(&self, sorting: &Option<SceneComparer>) -> Vec<jakar_tree::node::Node<T, J, A>>;
+
+    ///Returns a list of all camera names, can be used to get each of them by name and add a job.
+    fn all_camera_names(&self, sorting: &Option<SceneComparer>) -> Vec<String>;
     ///Returns all cameras
     /// NOTE: Each node is copied from the tree into a stand alone node without any childern!
-    fn get_all_cameras(&self, sorting: &Option<SceneComparer>) -> Vec<jakar_tree::node::Node<T, J, A>>;
+    fn copy_all_cameras(&self, sorting: &Option<SceneComparer>) -> Vec<jakar_tree::node::Node<T, J, A>>;
+
     ///Rebuilds the bounds for the whole tree
-    /// NOTE: Each node is copied from the tree into a stand alone node without any childern!
     fn rebuild_bounds(&mut self);
 }
 
 impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>
     for jakar_tree::node::Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>{
-    ///Returns all meshes in this tree.
-    /// NOTE: Each node is copied from the tree into a stand alone node without any childern!
-    ///TODO actually implement
-    fn get_all_meshes(&self, sorting: &Option<SceneComparer>) -> Vec<jakar_tree::node::Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>>{
+
+    ///Returns a list of all mesh names, can be used to get each of them by name and add a job.
+    fn all_mesh_names(&self, sorting: &Option<SceneComparer>) -> Vec<String>{
         //going recrusivly through each child (from the bottom), with each adding up to the whole.
         let mut return_vec = Vec::new();
         for (_, child) in self.children.iter(){
-            return_vec.append(&mut child.get_all_meshes(sorting)); //append all children
+            return_vec.append(&mut child.all_mesh_names(sorting)); //append all children
+        }
+        //first of all test if self has the right attributes, if not we can already return the child
+        // vector
+        match sorting{
+            &Some(ref comparer) => {
+                //early return if self doesnt match the sorting
+                if !self.attributes.compare(comparer){
+                    return return_vec;
+                }
+            },
+            &None =>  {}, //all is nice, add the mesh
+        }
+
+
+
+        //check self
+        match self.value{
+            content::ContentType::Mesh(_) => {
+                return_vec.push(self.name.clone());
+            },
+            _ => {}, //self is no mesh only going doing nothing
+        }
+
+        return_vec
+    }
+
+    ///Returns all meshes in this tree.
+    /// NOTE: Each node is copied from the tree into a stand alone node without any childern!
+    ///TODO actually implement
+    fn copy_all_meshes(&self, sorting: &Option<SceneComparer>) -> Vec<jakar_tree::node::Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>>{
+        //going recrusivly through each child (from the bottom), with each adding up to the whole.
+        let mut return_vec = Vec::new();
+        for (_, child) in self.children.iter(){
+            return_vec.append(&mut child.copy_all_meshes(sorting)); //append all children
         }
         //first of all test if self has the right attributes, if not we can already return the child
         // vector
@@ -214,9 +260,62 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
 
         return_vec
     }
+
+    ///Returns a list of names of all meshes in the specified frustum, can be used to get each of them by name and add a job.
+    fn all_meshes_in_frustum_names(&self, camera: &camera::DefaultCamera, sorting: &Option<SceneComparer>) -> Vec<String>{
+        //For how it works, see "copy_all_meshes_in_frustum"
+        let mut return_vec = Vec::new();
+        let camera_bound = camera.get_frustum_bound();
+        match camera_bound.contains(&self.attributes.value_bound){
+            Relation::Out => {
+                //Don't add
+            }
+            _ => {
+                //is at leas a little bit in
+                //match self's value type
+                match self.value{
+                    content::ContentType::Mesh(_) => {
+                        //now also test for the sorting parameter
+                        let mut sorting_flag = true;
+                        match sorting{
+                            &Some(ref comparer) => {
+                                //early return if self doesnt match the sorting
+                                if !self.attributes.compare(comparer){
+                                    sorting_flag = false;
+                                }
+                            },
+                            &None =>  {}, //all is nice, add the mesh
+                        }
+                        //only add if the attributes match
+                        if sorting_flag{
+                            return_vec.push(self.name.clone());
+                        }
+
+                    }
+                    _ => {}, //is no mesh
+                }
+            }
+        }
+
+        //now test if we should go further down
+        match camera_bound.contains(&self.attributes.bound){ //the bound should be in world space as well
+            Relation::Out => {
+                //Don't need to add children
+            }
+            _ => {
+                //need to search the children as well
+                for (_, child) in self.children.iter(){
+                    return_vec.append(&mut child.all_meshes_in_frustum_names(camera, sorting))
+                }
+            }
+        }
+        return_vec
+    }
+
+
     ///Returns all meshse in the view frustum of `camera`
     /// NOTE: Each node is copied from the tree into a stand alone node without any childern!
-    fn get_all_meshes_in_frustum(&self, camera: &camera::DefaultCamera, sorting: &Option<SceneComparer>) -> Vec<jakar_tree::node::Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>>{
+    fn copy_all_meshes_in_frustum(&self, camera: &camera::DefaultCamera, sorting: &Option<SceneComparer>) -> Vec<jakar_tree::node::Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>>{
         //We test or self#s value_bound agains the camera. If all is nice we can add self to the
         //vec.
         //further we test the node bound as well. If the node bound is in, we test all the children
@@ -272,49 +371,20 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
             _ => {
                 //need to search the children as well
                 for (_, child) in self.children.iter(){
-                    return_vec.append(&mut child.get_all_meshes_in_frustum(camera, sorting))
+                    return_vec.append(&mut child.copy_all_meshes_in_frustum(camera, sorting))
                 }
             }
         }
-
-
-
-
         return_vec
     }
 
-    ///Returns a list off all point light names, can be used for instance to add a job to each of them.
-    fn all_point_light_names(&self) -> Vec<String>{
-        let mut return_vec = Vec::new();
-
-        for (_, child) in self.children.iter(){
-            return_vec.append(&mut child.all_point_light_names());
-        }
-
-        //Check self for adding
-        match self.value{
-            content::ContentType::PointLight(ref light) => {
-                return_vec.push(self.name.clone());
-            }
-            _ => {
-                //no pointlight
-            }
-        }
-
-        return_vec
-    }
-
-/*
-    ///Returns a collection of references to all point_light nodes
-    fn borrow_all_point_lights(&mut self, sorting: &Option<SceneComparer>) -> Vec<&mut jakar_tree::node::Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>>{
+    ///Returns a list of all point light names, can be used to get each of them by name and add a job.
+    fn all_point_light_names(&self, sorting: &Option<SceneComparer>) -> Vec<String>{
         //going recrusivly through each child (from the bottom), with each adding up to the whole.
         let mut return_vec = Vec::new();
-        for (_, child) in self.children.iter_mut(){
-            return_vec.append(&mut child.borrow_all_point_lights(&sorting));
+        for (_, child) in self.children.iter(){
+            return_vec.append(&mut child.all_point_light_names(&sorting));
         }
-
-        //first of all test if self has the right attributes, if not we can already return the child
-        // vector
         match sorting{
             &Some(ref comparer) => {
                 //early return if self doesnt match the sorting
@@ -326,29 +396,22 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
         }
 
         //check self
-        let mut add_self = false;
         match self.value{
-            content::ContentType::PointLight(ref light) => {
-                add_self = true;
+            content::ContentType::PointLight(_) => {
+                return_vec.push(self.name.clone());
             },
             _ => {}, //self is no mesh only going doing nothing
         }
-
-        if add_self{
-            return_vec.push(self);
-        }
-
         return_vec
     }
-*/
 
     ///Returns all point lights in the tree
     /// NOTE: Each node is copied from the tree into a stand alone node without any childern!
-    fn get_all_point_lights(&self, sorting: &Option<SceneComparer>) -> Vec<jakar_tree::node::Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>>{
+    fn copy_all_point_lights(&self, sorting: &Option<SceneComparer>) -> Vec<jakar_tree::node::Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>>{
         //going recrusivly through each child (from the bottom), with each adding up to the whole.
         let mut return_vec = Vec::new();
         for (_, child) in self.children.iter(){
-            return_vec.append(&mut child.get_all_point_lights(&sorting));
+            return_vec.append(&mut child.copy_all_point_lights(&sorting));
         }
 
         //first of all test if self has the right attributes, if not we can already return the child
@@ -380,13 +443,42 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
 
         return_vec
     }
-    ///Returns all directional lights
-    /// NOTE: Each node is copied from the tree into a stand alone node without any childern!
-    fn get_all_directional_lights(&self, sorting: &Option<SceneComparer>) -> Vec<jakar_tree::node::Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>>{
+
+    ///Returns a list of all directional light names, can be used to get each of them by name and add a job.
+    fn all_directional_light_names(&self, sorting: &Option<SceneComparer>) -> Vec<String>{
         //going recrusivly through each child (from the bottom), with each adding up to the whole.
         let mut return_vec = Vec::new();
         for (_, child) in self.children.iter(){
-            return_vec.append(&mut child.get_all_directional_lights(sorting));
+            return_vec.append(&mut child.all_directional_light_names(sorting));
+        }
+
+        match sorting{
+            &Some(ref comparer) => {
+                //early return if self doesnt match the sorting
+                if !self.attributes.compare(comparer){
+                    return return_vec;
+                }
+            },
+            &None =>  {}, //all is nice, add the mesh
+        }
+        //check self
+        match self.value{
+            content::ContentType::DirectionalLight(_) => {
+                return_vec.push(self.name.clone());
+            },
+            _ => {}, //self is no mesh only going doing nothing
+        }
+
+        return_vec
+    }
+
+    ///Returns all directional lights
+    /// NOTE: Each node is copied from the tree into a stand alone node without any childern!
+    fn copy_all_directional_lights(&self, sorting: &Option<SceneComparer>) -> Vec<jakar_tree::node::Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>>{
+        //going recrusivly through each child (from the bottom), with each adding up to the whole.
+        let mut return_vec = Vec::new();
+        for (_, child) in self.children.iter(){
+            return_vec.append(&mut child.copy_all_directional_lights(sorting));
         }
 
         //first of all test if self has the right attributes, if not we can already return the child
@@ -418,13 +510,45 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
 
         return_vec
     }
-    ///Returns all spot lights
-    /// NOTE: Each node is copied from the tree into a stand alone node without any childern!
-    fn get_all_spot_lights(&self, sorting: &Option<SceneComparer>) -> Vec<jakar_tree::node::Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>>{
+
+    ///Returns a list of all spot light names, can be used to get each of them by name and add a job.
+    fn all_spot_light_names(&self, sorting: &Option<SceneComparer>) -> Vec<String>{
         //going recrusivly through each child (from the bottom), with each adding up to the whole.
         let mut return_vec = Vec::new();
         for (_, child) in self.children.iter(){
-            return_vec.append(&mut child.get_all_spot_lights(sorting));
+            return_vec.append(&mut child.all_spot_light_names(sorting));
+        }
+
+        //first of all test if self has the right attributes, if not we can already return the child
+        // vector
+        match sorting{
+            &Some(ref comparer) => {
+                //early return if self doesnt match the sorting
+                if !self.attributes.compare(comparer){
+                    return return_vec;
+                }
+            },
+            &None =>  {}, //all is nice, add the mesh
+        }
+
+        //check self
+        match self.value{
+            content::ContentType::SpotLight(_) => {
+                return_vec.push(self.name.clone());
+            },
+            _ => {}, //self is no mesh only going doing nothing
+        }
+
+        return_vec
+    }
+
+    ///Returns all spot lights
+    /// NOTE: Each node is copied from the tree into a stand alone node without any childern!
+    fn copy_all_spot_lights(&self, sorting: &Option<SceneComparer>) -> Vec<jakar_tree::node::Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>>{
+        //going recrusivly through each child (from the bottom), with each adding up to the whole.
+        let mut return_vec = Vec::new();
+        for (_, child) in self.children.iter(){
+            return_vec.append(&mut child.copy_all_spot_lights(sorting));
         }
 
         //first of all test if self has the right attributes, if not we can already return the child
@@ -456,13 +580,45 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
 
         return_vec
     }
-    ///Returns all empts
-    /// NOTE: Each node is copied from the tree into a stand alone node without any childern!
-    fn get_all_emptys(&self, sorting: &Option<SceneComparer>) -> Vec<jakar_tree::node::Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>>{
+
+    ///Returns a list of all "Empty" names, can be used to get each of them by name and add a job.
+    fn all_empty_names(&self, sorting: &Option<SceneComparer>) -> Vec<String>{
         //going recrusivly through each child (from the bottom), with each adding up to the whole.
         let mut return_vec = Vec::new();
         for (_, child) in self.children.iter(){
-            return_vec.append(&mut child.get_all_emptys(sorting));
+            return_vec.append(&mut child.all_empty_names(sorting));
+        }
+
+        //first of all test if self has the right attributes, if not we can already return the child
+        // vector
+        match sorting{
+            &Some(ref comparer) => {
+                //early return if self doesnt match the sorting
+                if !self.attributes.compare(comparer){
+                    return return_vec;
+                }
+            },
+            &None =>  {}, //all is nice, add the mesh
+        }
+
+        //check self
+        match self.value{
+            content::ContentType::Empty(_) => {
+                return_vec.push(self.name.clone());
+            },
+            _ => {}, //self is no mesh only going doing nothing
+        }
+
+        return_vec
+    }
+
+    ///Returns all empts
+    /// NOTE: Each node is copied from the tree into a stand alone node without any childern!
+    fn copy_all_emptys(&self, sorting: &Option<SceneComparer>) -> Vec<jakar_tree::node::Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>>{
+        //going recrusivly through each child (from the bottom), with each adding up to the whole.
+        let mut return_vec = Vec::new();
+        for (_, child) in self.children.iter(){
+            return_vec.append(&mut child.copy_all_emptys(sorting));
         }
 
         //first of all test if self has the right attributes, if not we can already return the child
@@ -494,13 +650,41 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
 
         return_vec
     }
+
+    ///Returns a list of all camera names, can be used to get each of them by name and add a job.
+    fn all_camera_names(&self, sorting: &Option<SceneComparer>) -> Vec<String>{
+         let mut return_vec = Vec::new();
+         for (_, child) in self.children.iter(){
+             return_vec.append(&mut child.all_camera_names(sorting));
+         }
+         match sorting{
+             &Some(ref comparer) => {
+                 //early return if self doesnt match the sorting
+                 if !self.attributes.compare(comparer){
+                     return return_vec;
+                 }
+             },
+             &None =>  {}, //all is nice, add the mesh
+         }
+
+         //check self
+         match self.value{
+             content::ContentType::Camera(_) => {
+                 return_vec.push(self.name.clone());
+             },
+             _ => {}, //self is no mesh only going doing nothing
+         }
+
+         return_vec
+    }
+
     ///Returns all cameras
     /// NOTE: Each node is copied from the tree into a stand alone node without any childern!
-    fn get_all_cameras(&self, sorting: &Option<SceneComparer>) -> Vec<jakar_tree::node::Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>>{
+    fn copy_all_cameras(&self, sorting: &Option<SceneComparer>) -> Vec<jakar_tree::node::Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>>{
         //going recrusivly through each child (from the bottom), with each adding up to the whole.
         let mut return_vec = Vec::new();
         for (_, child) in self.children.iter(){
-            return_vec.append(&mut child.get_all_cameras(sorting));
+            return_vec.append(&mut child.copy_all_cameras(sorting));
         }
 
         //first of all test if self has the right attributes, if not we can already return the child
@@ -532,6 +716,7 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
 
         return_vec
     }
+
     ///rebuilds the bounds for the whole tree
     fn rebuild_bounds(&mut self){
         //first of all rebuild the bounds for the children, then, based on the current
@@ -598,55 +783,78 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
 impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>
  for jakar_tree::tree::Tree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>{
 
+
+     ///Returns a list of all mesh names, can be used to get each of them by name and add a job.
+     fn all_mesh_names(&self, sorting: &Option<SceneComparer>) -> Vec<String>{
+         self.root_node.all_mesh_names(sorting)
+     }
+
     ///Returns all meshes in this tree.
     /// NOTE: Each node is copied from the tree into a stand alone node without any childern!
     ///TODO actually implement
-    fn get_all_meshes(&self, sorting: &Option<SceneComparer>) -> Vec<jakar_tree::node::Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>>{
+    fn copy_all_meshes(&self, sorting: &Option<SceneComparer>) -> Vec<jakar_tree::node::Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>>{
         //going recrusivly through each child (from the bottom), with each adding up to the whole.
-        self.root_node.get_all_meshes(sorting)
+        self.root_node.copy_all_meshes(sorting)
+    }
+
+    ///Returns a list of names of all meshes in the specified frustum, can be used to get each of them by name and add a job.
+    fn all_meshes_in_frustum_names(&self, camera: &camera::DefaultCamera, sorting: &Option<SceneComparer>) -> Vec<String>{
+        self.root_node.all_meshes_in_frustum_names(camera, sorting)
     }
     ///Returns all meshse in the view frustum of `camera`
     /// NOTE: Each node is copied from the tree into a stand alone node without any childern!
-    fn get_all_meshes_in_frustum(&self, camera: &camera::DefaultCamera, sorting: &Option<SceneComparer>) -> Vec<jakar_tree::node::Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>>{
-        self.root_node.get_all_meshes_in_frustum(camera, sorting)
+    fn copy_all_meshes_in_frustum(&self, camera: &camera::DefaultCamera, sorting: &Option<SceneComparer>) -> Vec<jakar_tree::node::Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>>{
+        self.root_node.copy_all_meshes_in_frustum(camera, sorting)
     }
 
-    ///Returns a list off all point light names, can be used for instance to add a job to each of them.
-    fn all_point_light_names(&self) -> Vec<String>{
-        self.root_node.all_point_light_names()
+    ///Returns a list of all point light names, can be used to get each of them by name and add a job.
+    fn all_point_light_names(&self, sorting: &Option<SceneComparer>) -> Vec<String>{
+        self.root_node.all_point_light_names(sorting)
     }
-
-/*
-    ///Borrows all point lights of this tree
-    fn borrow_all_point_lights(&mut self, sorting: &Option<SceneComparer>) -> Vec<&mut jakar_tree::node::Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>>{
-        self.root_node.borrow_all_point_lights(sorting)
-    }
-*/
-
     ///Returns all point lights in the tree
     /// NOTE: Each node is copied from the tree into a stand alone node without any childern!
-    fn get_all_point_lights(&self, sorting: &Option<SceneComparer>) -> Vec<jakar_tree::node::Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>>{
-        self.root_node.get_all_point_lights(sorting)
+    fn copy_all_point_lights(&self, sorting: &Option<SceneComparer>) -> Vec<jakar_tree::node::Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>>{
+        self.root_node.copy_all_point_lights(sorting)
+    }
+
+    ///Returns a list of all directional light names, can be used to get each of them by name and add a job.
+    fn all_directional_light_names(&self, sorting: &Option<SceneComparer>) -> Vec<String>{
+        self.root_node.all_directional_light_names(sorting)
     }
     ///Returns all directional lights
     /// NOTE: Each node is copied from the tree into a stand alone node without any childern!
-    fn get_all_directional_lights(&self, sorting: &Option<SceneComparer>) -> Vec<jakar_tree::node::Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>>{
-        self.root_node.get_all_directional_lights(sorting)
+    fn copy_all_directional_lights(&self, sorting: &Option<SceneComparer>) -> Vec<jakar_tree::node::Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>>{
+        self.root_node.copy_all_directional_lights(sorting)
+    }
+
+    ///Returns a list of all spot light names, can be used to get each of them by name and add a job.
+    fn all_spot_light_names(&self, sorting: &Option<SceneComparer>) -> Vec<String>{
+        self.root_node.all_spot_light_names(sorting)
     }
     ///Returns all spot lights
     /// NOTE: Each node is copied from the tree into a stand alone node without any childern!
-    fn get_all_spot_lights(&self, sorting: &Option<SceneComparer>) -> Vec<jakar_tree::node::Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>>{
-        self.root_node.get_all_spot_lights(sorting)
+    fn copy_all_spot_lights(&self, sorting: &Option<SceneComparer>) -> Vec<jakar_tree::node::Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>>{
+        self.root_node.copy_all_spot_lights(sorting)
+    }
+
+    ///Returns a list of all "Empty" names, can be used to get each of them by name and add a job.
+    fn all_empty_names(&self, sorting: &Option<SceneComparer>) -> Vec<String>{
+        self.root_node.all_empty_names(sorting)
     }
     ///Returns all empts
     /// NOTE: Each node is copied from the tree into a stand alone node without any childern!
-    fn get_all_emptys(&self, sorting: &Option<SceneComparer>) -> Vec<jakar_tree::node::Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>>{
-        self.root_node.get_all_emptys(sorting)
+    fn copy_all_emptys(&self, sorting: &Option<SceneComparer>) -> Vec<jakar_tree::node::Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>>{
+        self.root_node.copy_all_emptys(sorting)
+    }
+
+    ///Returns a list of all camera names, can be used to get each of them by name and add a job.
+    fn all_camera_names(&self, sorting: &Option<SceneComparer>) -> Vec<String>{
+        self.root_node.all_camera_names(sorting)
     }
     ///Returns all cameras
     /// NOTE: Each node is copied from the tree into a stand alone node without any childern!
-    fn get_all_cameras(&self, sorting: &Option<SceneComparer>) -> Vec<jakar_tree::node::Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>>{
-        self.root_node.get_all_cameras(sorting)
+    fn copy_all_cameras(&self, sorting: &Option<SceneComparer>) -> Vec<jakar_tree::node::Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>>{
+        self.root_node.copy_all_cameras(sorting)
     }
     ///rebuilds the bounds for the whole tree
     fn rebuild_bounds(&mut self){
@@ -799,7 +1007,7 @@ rebuild_bounds
 get_bound_min
 get_bound_max
 get_bound
-get_all_spot_lights/meshes/cameras
+copy_all_spot_lights/meshes/cameras
 get_meshes_in_frustum
 get_meshes_in_volume
 */
