@@ -67,6 +67,8 @@ pub struct FrameSystem {
     //a copy of the queue
     queue: Arc<vulkano::device::Queue>,
 
+    image_hdr_msaa_fromat: Format,
+    image_msaa_depth_fromat: Format,
     swapchain_fromat: Format,
 
 
@@ -99,17 +101,19 @@ impl FrameSystem{
 
         let static_msaa_factor = render_settings.get_msaa_factor();
 
+        let hdr_msaa_format = vulkano::format::Format::R16G16B16A16Sfloat;
+        let msaa_depth_format = vulkano::format::Format::D16Unorm;
 
         //Create the first images
         //Creates a buffer for the msaa image
         let raw_render_color = AttachmentImage::transient_multisampled_input_attachment(device.clone(),
         current_dimensions, static_msaa_factor,
-        vulkano::format::Format::R16G16B16A16Sfloat).expect("failed to create msaa buffer!");
+        hdr_msaa_format).expect("failed to create msaa buffer!");
 
 
         //Create a multisampled depth buffer depth buffer
         let raw_render_depth_buffer = AttachmentImage::transient_multisampled_input_attachment(
-            device.clone(), current_dimensions, static_msaa_factor, vulkano::format::D16Unorm)
+            device.clone(), current_dimensions, static_msaa_factor, msaa_depth_format)
             .expect("failed to create depth buffer!");
 
 
@@ -123,14 +127,14 @@ impl FrameSystem{
                 raw_render_color: {
                     load: Clear,
                     store: Store,
-                    format: vulkano::format::Format::R16G16B16A16Sfloat, //Defined that it works by the vulkan implementation
+                    format: hdr_msaa_format, //Defined that it works by the vulkan implementation
                     samples: static_msaa_factor,     // This has to match the image definition.
                 },
                 //the second one is the msaa depth buffer
                 raw_render_depth: {
                     load: Clear,
                     store: DontCare,
-                    format: Format::D16Unorm, //works per vulkan definition
+                    format: msaa_depth_format, //works per vulkan definition
                     samples: static_msaa_factor,
                 },
 
@@ -200,6 +204,8 @@ impl FrameSystem{
 
             static_msaa_factor: static_msaa_factor,
 
+            image_hdr_msaa_fromat: hdr_msaa_format,
+            image_msaa_depth_fromat: msaa_depth_format,
             swapchain_fromat: swapchain_fromat,
             device: device,
             queue: target_queue,
@@ -217,33 +223,22 @@ impl FrameSystem{
             .get_dimensions()
         };
 
-
-
         self.msaa_image = AttachmentImage::transient_multisampled_input_attachment(
             self.device.clone(),
-            new_dimensions, 4, self.swapchain_fromat).expect("failed to create msaa buffer!");
+            new_dimensions, self.static_msaa_factor, self.image_hdr_msaa_fromat).expect("failed to create msaa buffer!");
 
         //Create a multisampled depth buffer depth buffer
         self.raw_render_depth_buffer = AttachmentImage::transient_multisampled_input_attachment(
-            self.device.clone(), new_dimensions, 4, vulkano::format::D16Unorm)
+            self.device.clone(), new_dimensions, self.static_msaa_factor, self.image_msaa_depth_fromat)
             .expect("failed to create depth buffer!");
 
-
-
-
         //After all, create the frame dynamic states
-        let current_dimensions = {
-            self.engine_settings
-            .lock()
-            .expect("failed to lock settings for frame creation")
-            .get_dimensions()
-        };
 
         self.dynamic_state = vulkano::command_buffer::DynamicState{
             line_width: None,
             viewports: Some(vec![vulkano::pipeline::viewport::Viewport {
                 origin: [0.0, 0.0],
-                dimensions: [current_dimensions[0] as f32, current_dimensions[1] as f32],
+                dimensions: [new_dimensions[0] as f32, new_dimensions[1] as f32],
                 depth_range: 0.0 .. 1.0,
             }]),
             scissors: None,

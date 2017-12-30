@@ -45,6 +45,8 @@ pub struct EngineSettings {
     ///Debug settings:
     pub build_mode: BuildType,
 
+    pub capture_frame: bool,
+
     ///Graphics settings:
     pub render_settings: render_settings::RenderSettings,
 
@@ -103,6 +105,8 @@ impl EngineSettings{
             main_monitor: 0,
             //graphics debuging
             build_mode: BuildType::Debug,
+            //should usally not capture the frame
+            capture_frame: false,
             //Graphics settings
             render_settings: render_settings::RenderSettings::default(),
 
@@ -111,6 +115,8 @@ impl EngineSettings{
             max_fps: 700,
         }
     }
+
+
 
     ///Adds custom render settings to self
     pub fn with_render_settings(mut self, settings: render_settings::RenderSettings) -> Self{
@@ -121,6 +127,16 @@ impl EngineSettings{
     ///Returns the current render settings
     pub fn get_render_settings(&mut self) -> &mut render_settings::RenderSettings {
         &mut self.render_settings
+    }
+
+    ///Can be turned on, if so, the engine prints render infos, like time needed for ... for the next frame
+    pub fn capture_next_frame(&mut self){
+        self.capture_frame = true;
+    }
+
+    ///Can be used to turn of the capturing, is used anyways after caturing one frame
+    pub fn stop_capture(&mut self){
+        self.capture_frame = false;
     }
 
 

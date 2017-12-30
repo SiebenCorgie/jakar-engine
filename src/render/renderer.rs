@@ -27,7 +27,7 @@ use vulkano::instance::debug::{DebugCallback, MessageTypes};
 
 
 use std::sync::{Arc,Mutex};
-use std::time::{Instant};
+use std::time::{Instant,Duration};
 use std::mem;
 
 ///An enum describing states of the renderer
@@ -123,16 +123,25 @@ impl Renderer {
     ///Returns true if successfully recreated chain
     pub fn recreate_swapchain(&mut self) -> bool{
         //get new dimmensions etc
-        let mut engine_settings_lck = self.engine_settings
-        .lock()
-        .expect("Faield to lock settings");
 
-        let c_d = self.window.get_current_extend();
-        let (new_width, new_height) = (c_d[0], c_d[1]);
-        (*engine_settings_lck).set_dimensions(new_width, new_height);
+        println!("Getting new window dimensions", );
+
+        //Update the widow dimensions in scope to prevent locking
+        let new_dimensions = {
+            let mut engine_settings_lck = self.engine_settings
+            .lock()
+            .expect("Faield to lock settings");
+
+            let c_d = self.window.get_current_extend();
+            let (new_width, new_height) = (c_d[0], c_d[1]);
+            engine_settings_lck.set_dimensions(new_width, new_height);
+            engine_settings_lck.get_dimensions()
+        };
+
+        println!("Generating new swpachain and images", );
 
         let (new_swapchain, new_images) =
-        match self.swapchain.recreate_with_dimension(engine_settings_lck.get_dimensions()) {
+        match self.swapchain.recreate_with_dimension(new_dimensions) {
             Ok(r) => r,
             // This error tends to happen when the user is manually resizing the window.
             // Simply restarting the loop is the easiest way to fix this issue.
@@ -142,10 +151,12 @@ impl Renderer {
             Err(err) => panic!("{:?}", err)
         };
 
+        println!("Replacing swapchain and images", );
         //Now repace
         mem::replace(&mut self.swapchain, new_swapchain);
         mem::replace(&mut self.images, new_images);
 
+        println!("Recreating image attachments", );
         //with the new dimensions set in the setting, recreate the images of the frame system as well
         self.frame_system.recreate_attachments();
 
@@ -204,6 +215,17 @@ impl Renderer {
         previous_frame: Box<GpuFuture>,
     ) -> Box<GpuFuture>{
 
+        //First of all we get info if we should debug anything, if so this bool will be true
+        let (should_capture, mut time_step, start_time) = {
+            let cap_bool = self.engine_settings.lock().expect("failed to lock settings").capture_frame;
+            let time_step = Instant::now();
+            let start_time = Instant::now();
+            (cap_bool, time_step, start_time)
+        };
+
+        //println!("Starting Frame", );
+
+
         let (image_number, acquire_future) = {
             match self.check_pipeline(){
                 Ok(k) => {
@@ -217,6 +239,9 @@ impl Renderer {
             }
         };
 
+        if should_capture{
+            time_step = Instant::now();
+        }
 
         //now we can actually start the frame
         //get all opaque meshes
@@ -232,11 +257,14 @@ impl Renderer {
             translucent_meshes, asset_manager.get_camera()
         );
 
+        if should_capture{
+            let time_needed = time_step.elapsed().subsec_nanos();
+            println!("RENDER INFO: ", );
+            println!("\tNedded {} nsec to get all opaque meshes", time_needed as f32 / 1_000_000_000.0);
+        }
+
         //While the cpu is gathering the the translucent meshes based on the distance to the
         //camera, we start to build the command buffer for the opaque meshes, unordered actually.
-        //1st.:get the dimensions of the current image and start a command buffer builder for it
-        //Get the dimensions to fill the dynamic vieport setting per mesh.
-        let dimensions = self.window.get_current_extend();
 
 
         //get out selfs the image we want to render to
@@ -252,7 +280,7 @@ impl Renderer {
         //add all opaque meshes to the command buffer
 
         for opaque_mesh in opaque_meshes.iter(){
-            command_buffer = self.add_node_to_command_buffer(opaque_mesh, command_buffer, dimensions);
+            command_buffer = self.add_node_to_command_buffer(opaque_mesh, command_buffer);
         }
 
         //now draw debug data of the meshes if turned on
@@ -276,7 +304,9 @@ impl Renderer {
             Ok(ord_tr) => {
 
                 for translucent_mesh in ord_tr.iter(){
-                    command_buffer = self.add_node_to_command_buffer(translucent_mesh, command_buffer, dimensions);
+                    command_buffer = self.add_node_to_command_buffer(
+                        translucent_mesh, command_buffer
+                    );
                 }
 
                 //now draw debug data of the meshes if turned on
@@ -302,20 +332,29 @@ impl Renderer {
 
 
 
+        if should_capture{
+            println!("\tFinished adding meshes", );
+        }
 
-        println!("Finished adding meshes", );
 
         //finished the forward pass, change to the postprogressing pass
         let post_progress_pass = self.frame_system.next_pass(command_buffer);
 
-        println!("Changed to subpass", );
+        if should_capture{
+            println!("\tChanged to subpass", );
+        }
+
         //perform the post progressing
         let after_pp = self.post_progress.execute(
             post_progress_pass,
             self.frame_system.get_msaa_image(),
             self.frame_system.get_raw_render_depth()
         );
-        println!("Added postprogress thingy", );
+
+        if should_capture{
+            println!("\tAdded postprogress thingy", );
+        }
+
         //now finish the frame
         let in_finished_frame = self.frame_system.next_pass(after_pp);
         let finished_command_buffer = {
@@ -328,7 +367,10 @@ impl Renderer {
             }
         };
 
-        println!("Ending frame", );
+        if should_capture{
+            println!("\tEnding frame", );
+        }
+
 
         //thanks firewater
         let real_cb = finished_command_buffer
@@ -356,6 +398,15 @@ impl Renderer {
         //clean old frame
         after_frame.cleanup_finished();
 
+
+        //Resetting debug options
+        if should_capture{
+            let frame_time = start_time.elapsed().subsec_nanos();
+            println!("FrameTime: {}ms", frame_time as f32/1_000_000.0);
+            println!("Which is {}fps", 1.0/(frame_time as f32/1_000_000_000.0));
+            self.engine_settings.lock().expect("failed to lock settings").stop_capture();
+        }
+
         Box::new(after_frame)
 
 
@@ -369,8 +420,7 @@ impl Renderer {
             next_tree::content::ContentType,
             next_tree::jobs::SceneJobs,
             next_tree::attributes::NodeAttributes>,
-        frame_stage: frame_system::FrameStage,
-        dimensions: [u32; 2])
+        frame_stage: frame_system::FrameStage)
     -> frame_system::FrameStage
     where AutoCommandBufferBuilder: Sized + 'static
     {

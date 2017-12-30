@@ -439,13 +439,13 @@ impl Pipeline{
     pub fn print_shader_name(&self){
         match self.pipeline_config.shader_set{
             shader_impls::ShaderTypes::PbrOpaque => {
-                println!("Using: Opaque shader set", );
+                //println!("Using: Opaque shader set", );
             },
             shader_impls::ShaderTypes::Wireframe => {
-                println!("Using: Wireframe shader set", );
+                //println!("Using: Wireframe shader set", );
             },
             shader_impls::ShaderTypes::PostProgress => {
-                println!("Using: PostProgress shader set", );
+                //println!("Using: PostProgress shader set", );
             },
         }
     }

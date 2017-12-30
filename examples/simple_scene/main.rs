@@ -35,7 +35,7 @@ fn main() {
     .in_release_mode()
     .with_input_poll_speed(400)
     .with_fullscreen_mode(false)
-    .with_cursor_state(winit::CursorState::Grab)
+    .with_cursor_state(winit::CursorState::Normal)
     .with_cursor_visibility(winit::MouseCursor::NoneCursor)
     .with_render_settings(graphics_settings)
     ;
@@ -157,6 +157,11 @@ fn main() {
         if engine.get_asset_manager().get_keymap().q{
             let mut asset_manager = engine.get_asset_manager();
             asset_manager.get_scene_manager().print_all_scenes();
+        }
+
+        if engine.get_asset_manager().get_keymap().p{
+            let settings = engine.get_settings();
+            settings.lock().expect("fail up").capture_next_frame();
         }
 
         if engine.get_asset_manager().get_keymap().up{

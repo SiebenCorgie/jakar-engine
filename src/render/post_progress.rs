@@ -136,11 +136,6 @@ impl PostProgress{
                     .build()
                     .expect("failed to build settings attachment for postprogress pass");
 
-
-
-
-
-                println!("Adding post progress cb", );
                 //perform the post progress
                 let mut command_buffer = cb;
                 command_buffer = command_buffer.draw(
@@ -158,7 +153,6 @@ impl PostProgress{
                     (attachments_ds, settings_buffer),
                     ()
                 ).expect("failed to add draw call for the post progress plane");
-                println!("Returning post progress cb", );
                 return FrameStage::Postprogress(command_buffer);
             },
             _ => {

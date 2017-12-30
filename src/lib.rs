@@ -324,12 +324,12 @@ impl JakarEngine {
                 sleep_rest_time(last_time, max_fps);
 
 
-                let fps_time = fps_time_start.elapsed().subsec_nanos();
+                //let fps_time = fps_time_start.elapsed().subsec_nanos();
 
-                let fps = 1.0/ (fps_time as f32 / 1_000_000_000.0);
-                println!("This Frame: {}", fps);
+                //let fps = 1.0/ (fps_time as f32 / 1_000_000_000.0);
+                //println!("This Frame: {}", fps);
 
-                fps_time_start = Instant::now();
+                //fps_time_start = Instant::now();
 
             }
         });
