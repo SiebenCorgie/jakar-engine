@@ -35,9 +35,10 @@ fn main() {
     .in_release_mode()
     .with_input_poll_speed(400)
     .with_fullscreen_mode(false)
-    .with_cursor_state(winit::CursorState::Normal)
+    .with_cursor_state(winit::CursorState::Grab)
     .with_cursor_visibility(winit::MouseCursor::NoneCursor)
     .with_render_settings(graphics_settings)
+    .with_max_fps(10000)
     ;
 
     //Start the engine
@@ -58,18 +59,9 @@ fn main() {
         jakar_engine::core::next_tree::attributes::NodeAttributes::default()
     );
 
-
-    //SUN========================================================================
-    let mut sun = light::LightDirectional::new("Sun");
-    //looking down in vulkan space
-    sun.set_color(Vector3::new(1.0, 0.75, 0.75));
-    sun.set_intensity(25.0);
-
-
-    //engine.get_asset_manager().get_active_scene().add_at_root(content::ContentType::DirectionalLight(sun), None);
     //SUN========================================================================
     //add a matrix of lights
-    for x in -2..3{
+    for x in -3..50{
         let mut point = light::LightPoint::new("LightPoint");
         point.set_intensity(( (x + 3) * 10) as f32);
         point.set_color(Vector3::new(1.0, 1.0, 0.5));
@@ -87,6 +79,20 @@ fn main() {
         }
 
     }
+
+    //Now add a sun
+    let mut sun = light::LightDirectional::new("Sunny");
+    sun.set_intensity(25.0);
+    sun.set_color(Vector3::new(1.0, 0.85, 0.9));
+    let sun_node = light_tree.add_at_root(content::ContentType::DirectionalLight(sun), None);
+    //Now rotate it a bit on x
+    match light_tree.get_node("Sunny"){
+        Some(sun)=> {
+            sun.add_job(jobs::SceneJobs::Rotate(Vector3::new(0.0, 0.0, 0.0)));
+        },
+        None => {println!("Could not find sun", );}
+    }
+
 
     light_tree.update();
     engine.get_asset_manager().get_active_scene().join_at_root(&light_tree);
@@ -107,6 +113,16 @@ fn main() {
                     println!("Could not find TestScene", );
                 }
             }
+
+            //Scale by .1
+            match engine.get_asset_manager().get_active_scene().get_node("TestScene"){
+                Some(scene) => {
+                    println!("Scaling!", );
+                    //scene.add_job(jobs::SceneJobs::Scale(Vector3::new(0.01, 0.01, 0.01)));
+                }
+                None => {println!("Could not find TestScene", );}, //get on with it
+            }
+
         }
 
         //try to get the TestScene and move it if a key is pressed
@@ -153,12 +169,25 @@ fn main() {
         }
 
 
+        //Rotate the lights sun
+        if engine.get_asset_manager().get_keymap().t{
 
-        if engine.get_asset_manager().get_keymap().q{
+            match engine.get_asset_manager().get_active_scene().get_node("Sunny"){
+                Some(scene) => {
+                    scene.add_job(jobs::SceneJobs::Rotate(Vector3::new(0.0, 1.0, 0.0)));
+                    println!("SunRot: {:?}!", scene.attributes.transform.disp);
+                }
+                None => {println!("Could not find TestScene", );}, //get on with it
+            }
+        }
+
+
+        /*
+        if engine.get_asset_manager().get_keymap().t{
             let mut asset_manager = engine.get_asset_manager();
             asset_manager.get_scene_manager().print_all_scenes();
         }
-
+        */
         if engine.get_asset_manager().get_keymap().p{
             let settings = engine.get_settings();
             settings.lock().expect("fail up").capture_next_frame();

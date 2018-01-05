@@ -14,6 +14,15 @@ pub enum BuildType {
     ReleaseWithDebugMessages,
 }
 
+///Some global camera settings which are applyied to the currently active camera.
+#[derive(Clone)]
+pub struct CameraSettings{
+    ///The max distance of the frustum from pov
+    pub far_plane: f32,
+    ///The min distance from pov
+    pub near_plane: f32,
+}
+
 
 ///The struc with the information
 #[derive(Clone)]
@@ -59,6 +68,9 @@ pub struct EngineSettings {
     pub max_fps: u32,
 
 
+    ///The camera settings
+    pub camera: CameraSettings,
+
 
 
 }
@@ -68,13 +80,12 @@ impl EngineSettings{
     /// You can change some of them like this at creation time:
     /// # Examples
     ///  ```
-    /// use ori-engine::core::engine_settings;
+    /// use jakar-engine::core::engine_settings;
     ///
     /// let settings = core::engine_settings::EngineSettings::new()
     ///     .with_dimensions(800, 600)
     ///     .with_name("Teddy the bear")
-    ///     .set_vulkan_silent()
-    ///     ));
+    ///     ;
     ///  ```
     pub fn default() -> Self{
         EngineSettings{
@@ -113,6 +124,11 @@ impl EngineSettings{
             max_input_speed: 60,
             max_asset_updates: 120,
             max_fps: 700,
+
+            camera: CameraSettings{
+                far_plane: 100.0,
+                near_plane: 1.0,
+            }
         }
     }
 
@@ -128,6 +144,19 @@ impl EngineSettings{
     pub fn get_render_settings(&mut self) -> &mut render_settings::RenderSettings {
         &mut self.render_settings
     }
+
+    ///Sets the camera settings to `new`. Keep in mind that you can get "z-fighting" if the difference
+    /// between near and far plane is too big.
+    pub fn with_camera_settings(mut self, new: CameraSettings) -> Self{
+        self.camera = new;
+        self
+    }
+
+    ///see `with_camera_settings()`
+    pub fn set_camera_settings(mut self, new: CameraSettings){
+        self.camera = new;
+    }
+
 
     ///Can be turned on, if so, the engine prints render infos, like time needed for ... for the next frame
     pub fn capture_next_frame(&mut self){
@@ -156,7 +185,7 @@ impl EngineSettings{
 
     ///Sets the maximum frames per second value for the render thread.
     #[inline]
-    pub fn with_fps(mut self, fps: u32) -> Self{
+    pub fn with_max_fps(mut self, fps: u32) -> Self{
         self.max_fps = fps;
         self
     }

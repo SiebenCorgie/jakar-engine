@@ -190,13 +190,6 @@ impl JakarEngine {
                     (*input_sys).get_key_map()
                 );
 
-                /*
-                let render_build = render::renderer::Renderer::new(
-                    (*input_sys).get_events_loop(),
-                    render_settings.clone(),
-                    (*input_sys).get_key_map(),
-                );
-                */
                 //now we match the craetion status, if sucessful, we can return the renderer
                 // and the gpu future. If not, we set the Engine status to
                 // CreationErrors::FailedToCreateRenderer(Message)
@@ -315,21 +308,21 @@ impl JakarEngine {
                     println!("Renderer should end", );
                     //engine is stoping, ending loop
                     //wait a second for the gpu to finish its last work, then clean up the future
-                    thread::sleep_ms(60);
+                    thread::sleep(Duration::from_millis(60));
                     //end frame on gpu
                     gpu_future.cleanup_finished();
                     break;
                 }
                 //now sleep the rest if needed
-                sleep_rest_time(last_time, max_fps);
+                last_time = sleep_rest_time(last_time, max_fps);
 
 
-                //let fps_time = fps_time_start.elapsed().subsec_nanos();
+                let fps_time = fps_time_start.elapsed().subsec_nanos();
 
-                //let fps = 1.0/ (fps_time as f32 / 1_000_000_000.0);
-                //println!("This Frame: {}", fps);
+                let fps = 1.0/ (fps_time as f32 / 1_000_000_000.0);
+                println!("This Frame after waiting: {}", fps);
 
-                //fps_time_start = Instant::now();
+                fps_time_start = Instant::now();
 
             }
         });
@@ -648,31 +641,26 @@ pub fn rt_error(location: &str, content: &str){
 /// the `last_time` the thread was active and the `current_time`
 ///then actually returns after this time with a new `last_time`
 fn sleep_rest_time(last_time: Instant, max_speed: u32) -> Instant{
-    //Before restarting the asset loop we might have to wait to be not too fast
+    //The max speed is given in "iterations per second" so we create a duration from this
+    //by deviding it by one and multiplying it by 1_000.0 this way we computed a duration in milliseconds
+    //we then test if we still have to wait some time. If yes, we do so, otherwise we just return the
+    //current time
+    let min_mills_per_iter = Duration::from_millis(((1.0 / max_speed as f64) * 1_000.0) as u64);
+    //Now match what happens if we test the duration agains the duration since we started the loop
+    //(last_time)
 
-    //Calculate the time to wait
-    //get difference between last time and now
-    let difference = last_time.elapsed();
+    let time_since_start = last_time.elapsed();
 
-    //test if the difference is smaller then the max_polling_speed
-    //if yes the thread was too fast and we need to sleep for the rest of time till
-    //we get the time to compleate the polling
-    let compare_time = Duration::new(0, ((1.0 / max_speed as f32) * 1_000_000_000.0) as u32);
-    //println!("Max_speed: {:?}", compare_time.clone());
-    //println!("Difference: {:?}", difference.clone());
-
-    if  (difference.subsec_nanos() as f64) <
-        (compare_time.subsec_nanos() as f64) {
-
-        //Sleep the rest time till we finish the max time in f64
-        let time_to_sleep =
-        compare_time.subsec_nanos() as f64 - difference.subsec_nanos() as f64;
-        //calc a duration
-        let sleep_duration = Duration::new(0, time_to_sleep as u32);
-        //and sleep it
-        //println!("Sleeping {:?} ...", sleep_duration);
-        thread::sleep(sleep_duration);
+    if time_since_start < min_mills_per_iter{
+        //We have to wait the rest time till we pass the min time
+        match min_mills_per_iter.checked_sub(time_since_start){
+            Some(time_to_wait) => thread::sleep(time_to_wait),
+            None => {println!("Failed to calculate time to wait for thread.", );} //do nothing then... but print a message just in case there is a permanent bug
+        }
+    }else{
+        //DO noting as well
     }
 
+    //Return new "last_time"
     Instant::now()
 }

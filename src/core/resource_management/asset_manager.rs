@@ -175,12 +175,12 @@ impl AssetManager {
                 intensity: 0.0,
                 _dummy0: [0; 4],
             };
-            let mut add_array = [empty_light.clone(); 6];
+            let mut add_array = [empty_light.clone(); 512];
 
             let mut index = 0;
             //Todo make the bound configurable
             //configure the array to hold the forst six lights
-            while (index < 6) & (index < return_vec.len()) {
+            while (index < 512) & (index < return_vec.len()) {
                 add_array[index] = return_vec[index];
                 index += 1;
                 c_point += 1;
@@ -251,12 +251,12 @@ impl AssetManager {
                 _dummy2: [0; 8],
             };
 
-            let mut add_array = [empty_light.clone(); 6];
+            let mut add_array = [empty_light.clone(); 512];
 
             let mut index = 0;
             //Todo make the bound configurable
             //configure the array to hold the forst six lights
-            while (index < 6) & (index < return_vec.len()) {
+            while (index < 512) & (index < return_vec.len()) {
                 add_array[index] = return_vec[index];
                 index += 1;
                 c_spot +=1;

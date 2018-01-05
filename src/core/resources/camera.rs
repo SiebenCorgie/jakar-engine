@@ -40,8 +40,6 @@ pub trait Camera {
     fn set_position(&mut self, new_pos: Vector3<f32>);
     ///Sets Fov on this camera
     fn set_fov(&mut self, new_fov: f32);
-    ///Sets the far, and near planes of the frustum
-    fn set_frustum_planes(&mut self, near: f32, far: f32);
     ///Returns the perspective matrix based on the window settings
     fn get_perspective(&self) -> Matrix4<f32>;
     ///Returns an view projection matrix which is corrected for vulkans view space
@@ -65,9 +63,6 @@ pub struct DefaultCamera {
 
     //Setting
     fov: f32,
-    near_plane: f32,
-    far_plane: f32,
-
     speed: f32,
 
     settings: Arc<Mutex<engine_settings::EngineSettings>>,
@@ -96,8 +91,6 @@ impl Camera for DefaultCamera{
         let pitch: f32 = 0.0;
 
         let fov = 45.0;
-        let near_plane = 0.1;
-        let far_plane = 100.0;
 
         DefaultCamera {
             position: position,
@@ -109,9 +102,6 @@ impl Camera for DefaultCamera{
             yaw: yaw,
             pitch: pitch,
             fov: fov,
-
-            near_plane: near_plane,
-            far_plane: far_plane,
 
             speed: 25.0,
 
@@ -136,8 +126,6 @@ impl Camera for DefaultCamera{
     ) -> Self{
 
         let fov = 45.0;
-        let near_plane = 0.1;
-        let far_plane = 100.0;
 
         let mut new_cam = DefaultCamera {
             position: position,
@@ -149,8 +137,6 @@ impl Camera for DefaultCamera{
             yaw: yaw,
             pitch: pitch,
             fov: fov,
-            near_plane: near_plane,
-            far_plane: far_plane,
 
             speed: speed,
 
@@ -294,21 +280,16 @@ impl Camera for DefaultCamera{
         self.fov = new_fov;
     }
 
-    ///Sets the frustum far and near plane
-    #[inline]
-    fn set_frustum_planes(&mut self, near: f32, far: f32) {
-        self.far_plane = far;
-        self.near_plane = near;
-    }
-
     //Calculates the perspective based on the engine and camera settings
     fn get_perspective(&self) -> Matrix4<f32>{
-        let (width, height) = {
+        let (width, height, near_plane, far_plane) = {
             let engine_settings_lck = self.settings.lock().expect("Faield to lock settings");
 
             (
-                (*engine_settings_lck).get_dimensions()[0],
-                (*engine_settings_lck).get_dimensions()[1]
+                engine_settings_lck.get_dimensions()[0],
+                engine_settings_lck.get_dimensions()[1],
+                engine_settings_lck.camera.near_plane,
+                engine_settings_lck.camera.far_plane
             )
         };
         //from https://matthewwellings.com/blog/the-new-vulkan-coordinate-system/
@@ -322,7 +303,7 @@ impl Camera for DefaultCamera{
         //(+y is down and depth is -1.0 - 1.0)
         bias * perspective(Deg(self.fov),
         (width as f32 / height as f32),
-        self.near_plane, self.far_plane)
+        near_plane, far_plane)
     }
 
     ///Returns the frustum bound of this camera as a AABB

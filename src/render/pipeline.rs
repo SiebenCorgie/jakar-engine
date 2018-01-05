@@ -3,12 +3,15 @@ use vulkano::pipeline;
 use vulkano::pipeline::GraphicsPipelineAbstract;
 use vulkano::framebuffer::RenderPassAbstract;
 use vulkano::framebuffer::Subpass;
-use std::sync::Arc;
+
 use core::resources::mesh;
+use core::engine_settings;
 
 use render::post_progress;
 use render::shader_impls;
 use render::pipeline_builder::*;
+
+use std::sync::{Arc, Mutex};
 
 ///Definition of a single pipeline together with its creation and deleting behavoir
 ///
@@ -39,6 +42,7 @@ impl Pipeline{
     pub fn new<R>(
         device: Arc<vulkano::device::Device>,
         pipeline_configuration: PipelineConfig,
+        engine_settings: Arc<Mutex<engine_settings::EngineSettings>>,
         target_subpass: Subpass<R>,
         sub_pass: u32,
     )
@@ -349,6 +353,17 @@ impl Pipeline{
             match shader{
                 shader_impls::JakarShaders::PbrOpaque((vs, fs, inputs, vbd)) => {
                     println!("Building pipeline based on PbrOpaque shader and vertex ...", );
+
+                    //for the pbr shader we need information about the max light counts, we
+                    //use the info from the render settings for that.
+                    let specialisation = {
+                        engine_settings
+                        .lock()
+                        .expect("failed to lock engine settings while getting specialistaion constants")
+                        .get_render_settings().get_light_specialisation()
+
+                    };
+
                     //take the current pipeline builder
                     let pipeline = renderpass_pipeline
                     .take()
@@ -359,7 +374,7 @@ impl Pipeline{
                     )
                     //now add the vertex and fragment shader, then return the new created pipeline and the inputs
                     .vertex_shader(vs.main_entry_point(), ())
-                    .fragment_shader(fs.main_entry_point(), ())
+                    .fragment_shader(fs.main_entry_point(), ()) //Gets as specialisation the max light count
                     //now build
                     .build(device)
                     .expect("failed to build pipeline for PBR-Opaque shader set!");
@@ -379,7 +394,7 @@ impl Pipeline{
                     )
                     //now add the vertex and fragment shader, then return the new created pipeline and the inputs
                     .vertex_shader(vs.main_entry_point(), ())
-                    .fragment_shader(fs.main_entry_point(), ())
+                    .fragment_shader(fs.main_entry_point(), ()) //Doen't need the max light count
                     //now build
                     .build(device)
                     .expect("failed to build pipeline for Wireframe shader set!");
@@ -399,7 +414,7 @@ impl Pipeline{
                     )
                     //now add the vertex and fragment shader, then return the new created pipeline and the inputs
                     .vertex_shader(vs.main_entry_point(), ())
-                    .fragment_shader(fs.main_entry_point(), ())
+                    .fragment_shader(fs.main_entry_point(), ()) //This doen't need any specialisation constants
                     //now build
                     .build(device)
                     .expect("failed to build pipeline for PostProgress shader set!");

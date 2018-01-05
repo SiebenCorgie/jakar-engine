@@ -1,3 +1,7 @@
+use vulkano::pipeline::shader::SpecializationConstants;
+use vulkano::pipeline::shader::SpecializationMapEntry;
+
+
 ///Descibes settings the renderer can have. Most of the values can't be changed after
 /// starting the engine.
 ///Things to keep in mind:
@@ -11,6 +15,9 @@ pub struct RenderSettings {
     anisotropic_filtering: f32,
     ///Samples for each pixel, should be power of two between 1 and 16 (but can be higher)
     msaa: u32,
+    ///Is true if a "fifo" presentmode of the swapchain should be forced.
+    v_sync: bool,
+
     ///Defines the current gamma correction on the output
     gamma: f32,
     ///Defines the exposure used to correct the HDR image down to LDR
@@ -20,6 +27,15 @@ pub struct RenderSettings {
     debug_bounds: bool,
 
     //TODO: add things like "max render distance" for objects
+
+    ///Describes the max values for each light, ** can only be changed before starting the engine **
+    max_lights: LightSpecConstants,
+    //turns false when the lights value is first read. From this time no changes can
+    //be made to the max light values, to prevent wrong or changing constant types.
+    first_light_getter: bool,
+
+
+
 }
 
 
@@ -29,19 +45,32 @@ impl RenderSettings{
     ///
     /// - anisotropic_filtering: 1.0,
     /// - msaa: 1,
+    /// - v_sync: false,
     /// - gamma: 2.2,
     /// - exposure: 1.0
-    ///
+    /// - max_point_lights: 512,
+    /// - max_dir_lights: 6,
+    /// - max_spot_lights: 512,
+
     /// *No debug turned on*
     pub fn default() -> Self{
         RenderSettings{
             has_changed: false,
             anisotropic_filtering: 1.0,
             msaa: 1,
+            v_sync: false,
             gamma: 2.2,
             exposure: 1.0,
 
             debug_bounds: false,
+
+            max_lights: LightSpecConstants{
+                max_point_lights: 512,
+                max_dir_lights: 6,
+                max_spot_lights: 512
+            },
+
+            first_light_getter: true,
         }
     }
 
@@ -93,16 +122,31 @@ impl RenderSettings{
     pub fn get_msaa_factor(&self) -> u32{
         self.msaa
     }
-    /* MSAA FACTOR IS SET IN RENDERPASS, NEEDS TO RESTART
-    ///Sets the current msaa factor to `new` and marks the settings as unresolved.
+
+    ///set the v_sync falue to either true or false. However the engine will check if
+    /// Vulkans Immidiate present mode is supported, if v_sync is turned of. If it is not, V_Sync
+    /// will be used (always supported).
     #[inline]
-    pub fn set_msaa_factor(&mut self, new: u32){
-        if test_for_power_of_two(new){
-            self.msaa = new;
-            self.has_changed = true;
-        }
+    pub fn with_vsync(mut self, value: bool) -> Self{
+        self.v_sync = value;
+        self
     }
-    */
+
+    ///Sets the vsync mode at runtime. However this won't have an effect if the renderer has already
+    /// been started.
+    pub fn set_vsync(&mut self, value: bool){
+        self.v_sync = value;
+    }
+
+    ///Returns the current v_sync status. Will be changed to false at runtime if non-vsync presenting
+    /// is not supported.
+    #[inline]
+    pub fn get_vsync(&self) -> bool{
+        self.v_sync
+    }
+
+
+
     ///Sets up a custom gamma value.
     #[inline]
     pub fn with_gamma(mut self, gamma: f32) -> Self{
@@ -169,6 +213,64 @@ impl RenderSettings{
         self.has_changed = true;
     }
 
+    ///Returns the light specialisation constants
+    pub fn get_light_specialisation(&mut self) -> LightSpecConstants{
+        self.max_lights.clone()
+    }
+
+    ///Sets a new max value for point lights, does nothing if the max values have been read before
+    pub fn with_max_point_lights(mut self, new_max: u32) -> Self{
+        if self.first_light_getter{
+            self.max_lights.max_point_lights = new_max as i32;
+        }
+
+        self
+    }
+
+    ///Sets a new max value for directional lights, does nothing if the max values have been read before
+    pub fn with_max_directional_lights(mut self, new_max: u32) -> Self{
+        if self.first_light_getter{
+            self.max_lights.max_dir_lights = new_max as i32;
+        }
+
+        self
+    }
+
+    ///Sets a new max value for spot lights, does nothing if the max values have been read before
+    pub fn with_max_spot_lights(mut self, new_max: u32) -> Self{
+        if self.first_light_getter{
+            self.max_lights.max_spot_lights = new_max as i32;
+        }
+
+        self
+    }
+
+    ///Returns the max value for point lights, this is static after engine inizialisation.
+    pub fn get_max_point_lights(&mut self) -> i32{
+        if self.first_light_getter{
+            self.first_light_getter = false;
+        }
+        self.max_lights.max_point_lights
+    }
+
+    ///Returns the max value for directional lights, this is static after engine inizialisation.
+    pub fn get_max_directional_lights(&mut self) -> i32{
+        if self.first_light_getter{
+            self.first_light_getter = false;
+        }
+        self.max_lights.max_point_lights
+    }
+
+    ///Returns the max value for spot lights, this is static after engine inizialisation.
+    pub fn get_max_spot_lights(&mut self) -> i32{
+        if self.first_light_getter{
+            self.first_light_getter = false;
+        }
+        self.max_lights.max_point_lights
+    }
+
+
+
     ///If `new` is `true`, the bounds of each renderable object are drawn.
     #[inline]
     pub fn set_debug_bound(&mut self, new: bool){
@@ -180,6 +282,17 @@ impl RenderSettings{
         self.debug_bounds
     }
 
+}
+
+
+
+// `#[repr(C)]` guarantees that the struct has a specific layout
+#[repr(C)]
+#[derive(Clone)]
+pub struct LightSpecConstants {
+    max_point_lights: i32,
+    max_dir_lights: i32,
+    max_spot_lights: i32,
 }
 
 ///Tests for power of two

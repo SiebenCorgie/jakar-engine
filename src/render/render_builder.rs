@@ -338,7 +338,7 @@ impl RenderBuilder {
             .capabilities(physical_device).expect("failed to get surface capabilities");
 
             //lock settings to read fallback settings
-            let engine_settings_lck = engine_settings
+            let mut engine_settings_lck = engine_settings
             .lock()
             .expect("Failed to lock settings");
 
@@ -347,6 +347,27 @@ impl RenderBuilder {
             let dimensions = caps.current_extent.unwrap_or((*engine_settings_lck).get_dimensions());
             let usage = caps.supported_usage_flags;
             let format = caps.supported_formats[0].0;
+
+            //Check if we can get more then 60fps
+            let present_mode = {
+                if engine_settings_lck.get_render_settings().get_vsync(){
+                    //We should vsync, and it is always supported... returning
+                    vulkano::swapchain::PresentMode::Fifo
+                }else{
+                    //Test if it is supported, if not turn it off in the settings
+                    if caps.present_modes.immediate{
+                        //suppoorted and enabled
+                        vulkano::swapchain::PresentMode::Immediate
+                    }else{
+                        //Turn it of and set to fifo
+                        use ::rt_error;
+                        rt_error("RenderBuilder", "Immediate mode is not supported, using v_sync");
+                        engine_settings_lck.get_render_settings().set_vsync(false);
+                        vulkano::swapchain::PresentMode::Fifo
+                    }
+                }
+            };
+
 
             vulkano::swapchain::Swapchain::new(
                 device.clone(),
@@ -359,7 +380,7 @@ impl RenderBuilder {
                 &queue,
                 vulkano::swapchain::SurfaceTransform::Identity,
                 vulkano::swapchain::CompositeAlpha::Opaque,
-                vulkano::swapchain::PresentMode::Fifo,
+                present_mode,
                 true,
                 None
             )
@@ -394,6 +415,7 @@ impl RenderBuilder {
             Mutex::new(
                 pipeline_manager::PipelineManager::new(
                     device.clone(),
+                    engine_settings.clone(),
                     frame_system.get_renderpass(),
                     frame_system.get_object_pass_id() //default value atm
                 )

@@ -169,7 +169,6 @@ impl LightDirectional{
         //Creating the box extend from the location, there might be a better way
         let min = Point3::new(-0.5, -0.5, -0.5, );
         let max = Point3::new(0.5, 0.5, 0.5, );
-        let direction = Vector3::new(1.0, 1.0, 1.0);
 
         LightDirectional{
             name: String::from(name),
@@ -185,7 +184,10 @@ impl LightDirectional{
     pub fn as_shader_info(&self, rotation: &Quaternion<f32>) -> lights::ty::DirectionalLight{
 
         let tmp_color: [f32;3] = self.color.into();
-        let tmp_direction: [f32;3] = rotation.rotate_vector(Vector3::new(1.0, 0.0, 0.0)).into(); //Using a rotated unit vector
+        //Transfere to the shader type [f32;3]
+        let tmp_direction: [f32;3] = rotation.rotate_vector(Vector3::new(1.0, 0.0, 0.0)).into();
+
+        println!("Directional light direction: {:?}", tmp_direction);
 
         //Return a native vulkano struct
         lights::ty::DirectionalLight{
@@ -303,8 +305,11 @@ impl LightSpot{
     pub fn as_shader_info(&self, rotation: &Quaternion<f32>, location: &Vector3<f32>) -> lights::ty::SpotLight{
 
         let tmp_color: [f32;3] = self.color.into();
-        let tmp_direction: [f32;3] = rotation.rotate_vector(Vector3::new(1.0, 0.0, 0.0)).into(); //Using a rotated unit vector
+        //Transfere to the shader type [f32;3]
+        let tmp_direction: [f32;3] = rotation.rotate_vector(Vector3::new(1.0, 0.0, 0.0)).into();
         let location_type: [f32; 3] = location.clone().into();
+
+
 
         lights::ty::SpotLight{
             color: tmp_color,

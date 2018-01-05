@@ -98,9 +98,15 @@ impl Attribute<SceneJobs> for NodeAttributes{
                 SceneJobs::Move(t)
             } ,
             &SceneJobs::Rotate(r) => {
-                self.transform.rot = Quaternion::from(
-                    Euler::new(Deg(r.x), Deg(r.y), Deg(r.z))
-                ) * self.transform.rot;
+                let delta_rot = Quaternion::from(
+                    Euler::new(
+                        Deg(r.x),
+                        Deg(r.y),
+                        Deg(r.z)
+                    )
+                );
+
+                self.transform.rot = delta_rot * self.transform.rot;
                 //if we rotate self, we want to rotate the children around self's location
                 SceneJobs::RotateAroundPoint(r, self.transform.disp)
             }
@@ -126,7 +132,7 @@ impl Attribute<SceneJobs> for NodeAttributes{
                 SceneJobs::RotateAroundPoint(rotation, point)
             }
             &SceneJobs::Scale(s) => {
-                self.transform.scale += s.x;
+                self.transform.scale *= s.x;
                 SceneJobs::Scale(s)
             },
         }

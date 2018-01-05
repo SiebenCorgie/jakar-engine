@@ -5,7 +5,9 @@ use render::pipeline;
 use render::pipeline_builder;
 use render::shader_impls;
 
-use std::sync::Arc;
+use core::engine_settings;
+
+use std::sync::{Arc, Mutex};
 
 use vulkano;
 use vulkano::framebuffer;
@@ -38,6 +40,8 @@ impl PipelineRequirements{
 
 ///Manages all available pipeline
 pub struct PipelineManager {
+    //A reference to the settings, used later to get specialistaion constants and other special settings
+    engine_settings: Arc<Mutex<engine_settings::EngineSettings>>,
     //stores all the pipelines
     pipelines: BTreeMap<String, Arc<pipeline::Pipeline>>,
     //stores the renderpass used for the pipeline creation
@@ -51,6 +55,7 @@ impl PipelineManager{
     ///Creates a pipeline Manager with a default pipeline, have a look at the code to see the pipeline type
     pub fn new(
         device: Arc<vulkano::device::Device>,
+        l_engine_settings: Arc<Mutex<engine_settings::EngineSettings>>,
         renderpass: Arc<vulkano::framebuffer::RenderPassAbstract + Send + Sync>,
         default_subpass: u32,
     ) -> Self
@@ -65,6 +70,7 @@ impl PipelineManager{
             pipeline::Pipeline::new(
                 device.clone(),
                 default_pipeline,
+                l_engine_settings.clone(),
                 framebuffer::Subpass::from(renderpass.clone(), default_subpass).expect("failed to create subpass from renderpass"),
                 default_subpass
             )
@@ -74,6 +80,7 @@ impl PipelineManager{
 
 
         PipelineManager{
+            engine_settings: l_engine_settings,
             pipelines: b_tree_map,
             render_pass: renderpass,
             device: device,
@@ -100,8 +107,6 @@ impl PipelineManager{
         }
         false
     }
-
-
 
     ///Returns a pipeline by name, if not existend, returns the default pipeline
     pub fn get_pipeline_by_name(&mut self, name: &str) -> Arc<pipeline::Pipeline>{
@@ -135,6 +140,7 @@ impl PipelineManager{
         let pipe = pipeline::Pipeline::new(
             self.device.clone(),
             config,
+            self.engine_settings.clone(),
             framebuffer::Subpass::from(self.render_pass.clone(), subpass_id)
                 .expect("failed to get subpass at pipeline creation"),
             subpass_id
@@ -178,6 +184,7 @@ impl PipelineManager{
         let new_pipe = Arc::new(pipeline::Pipeline::new(
             device,
             needed_configuration,
+            self.engine_settings.clone(),
             framebuffer::Subpass::from(self.render_pass.clone(), needed_subpass_id)
                 .expect("failed to get subpass at pipeline creation"),
             needed_subpass_id
@@ -237,6 +244,7 @@ impl PipelineManager{
         let new_pipe = Arc::new(pipeline::Pipeline::new(
             device,
             pipeline_conf,
+            self.engine_settings.clone(),
             framebuffer::Subpass::from(self.render_pass.clone(), needed_subpass_id)
                 .expect("failed to get subpass at pipeline creation"),
             needed_subpass_id

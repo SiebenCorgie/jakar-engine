@@ -70,7 +70,7 @@ impl UniformManager{
                 _dummy0: [0; 4],
             };
 
-            let add_array = [empty_light.clone(); 6];
+            let add_array = [empty_light.clone(); 512];
 
             lights::ty::point_lights{
                 p_light: add_array,
@@ -104,7 +104,7 @@ impl UniformManager{
                 _dummy1: [0; 4],
                 _dummy2: [0; 8],
             };
-            let add_array = [empty_light.clone(); 6];
+            let add_array = [empty_light.clone(); 512];
 
             lights::ty::spot_lights{
                 s_light: add_array,

@@ -5,8 +5,12 @@
 
 //General definition (might be moved to specialisation constants later)
 #define MAX_DIR_LIGHTS 6
-#define MAX_POINT_LIGHTS 6
-#define MAX_SPOT_LIGHTS 6
+#define MAX_POINT_LIGHTS 512
+#define MAX_SPOT_LIGHTS 512
+
+layout (constant_id = 0) const int TEST_CONST = 512; 
+/*layout (constant_id = 1) const int MAX_DIR_LIGHTS = 6; */
+/*layout (constant_id = 2) const int MAX_SPOT_LIGHTS = 512; */
 
 //==============================================================================
 struct PointLight
