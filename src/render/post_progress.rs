@@ -2,14 +2,13 @@
 use render::shader_impls::default_pstprg_fragment;
 use render::pipeline;
 use render::frame_system::FrameStage;
+use render::frame_system::FrameSystem;
 
 use core::engine_settings;
 
 use vulkano;
 use vulkano::descriptor::descriptor_set::PersistentDescriptorSet;
-use vulkano::command_buffer::AutoCommandBufferBuilder;
 use vulkano::image::traits::ImageViewAccess;
-use vulkano::image::traits::ImageAccess;
 use vulkano::buffer::cpu_pool::CpuBufferPool;
 
 use std::sync::{Arc, Mutex};
@@ -86,6 +85,8 @@ impl PostProgress{
         command_buffer: FrameStage,
         hdr_image: Arc<ImageViewAccess  + Send + Sync>,
         depth_buffer: Arc<ImageViewAccess  + Send + Sync>,
+        pre_depth_buffer: Arc<ImageViewAccess  + Send + Sync>,
+        frame_system: &FrameSystem,
     ) -> FrameStage{
         //match the current stage, if wrong, panic
         match command_buffer{
@@ -98,12 +99,12 @@ impl PostProgress{
                     .expect("failed to add hdr_image to postprogress descriptor set")
                     .add_image(depth_buffer)
                     .expect("failed to add depth image")
+                    .add_image(pre_depth_buffer)
+                    .expect("failed to add pre depth buffer to postprogress descriptor")
                     .build()
                     .expect("failed to build postprogress cb");
 
-                let (exposure, gamma, msaa, dimensions) = {
-
-
+                let (exposure, gamma, msaa, show_mode_int) = {
                     let mut es_lck = self.engine_settings
                     .lock()
                     .expect("failed to lock settings for frame creation");
@@ -111,14 +112,15 @@ impl PostProgress{
                     let exposure = es_lck.get_render_settings().get_exposure();
                     let gamma = es_lck.get_render_settings().get_gamma();
                     let msaa = es_lck.get_render_settings().get_msaa_factor();
-                    let dimensions =  es_lck.get_dimensions();
-                    (exposure, gamma, msaa, dimensions)
+                    let debug_int = es_lck.get_render_settings().get_debug_view().as_shader_int();
+                    (exposure, gamma, msaa, debug_int)
                 };
 
                 let hdr_settings_data = default_pstprg_fragment::ty::hdr_settings{
                       exposure: exposure,
                       gamma: gamma,
                       sampling_rate: msaa as i32,
+                      show_mode: show_mode_int,
                 };
 
                 //the settings for this pass
@@ -140,19 +142,12 @@ impl PostProgress{
                 let mut command_buffer = cb;
                 command_buffer = command_buffer.draw(
                     self.pipeline.get_pipeline_ref(),
-                    vulkano::command_buffer::DynamicState{
-                        line_width: None,
-                        viewports: Some(vec![vulkano::pipeline::viewport::Viewport {
-                            origin: [0.0, 0.0],
-                            dimensions: [dimensions[0] as f32, dimensions[1] as f32],
-                            depth_range: 0.0 .. 1.0,
-                        }]),
-                        scissors: None,
-                    },
+                    frame_system.get_dynamic_state().clone(),
                     vec![self.screen_vertex_buffer.clone()],
                     (attachments_ds, settings_buffer),
                     ()
                 ).expect("failed to add draw call for the post progress plane");
+
                 return FrameStage::Postprogress(command_buffer);
             },
             _ => {

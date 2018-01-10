@@ -50,14 +50,17 @@ pub struct PipelineManager {
     device: Arc<vulkano::device::Device>,
 }
 
+
+
 impl PipelineManager{
 
-    ///Creates a pipeline Manager with a default pipeline, have a look at the code to see the pipeline type
+    ///Creates a pipeline Manager with:
+    /// - DefaultPipeline (useful for any kind of pbr material)
+    /// - PreDepth (Used internaly)
     pub fn new(
         device: Arc<vulkano::device::Device>,
         l_engine_settings: Arc<Mutex<engine_settings::EngineSettings>>,
         renderpass: Arc<vulkano::framebuffer::RenderPassAbstract + Send + Sync>,
-        default_subpass: u32,
     ) -> Self
     {
         let mut b_tree_map = BTreeMap::new();
@@ -65,18 +68,35 @@ impl PipelineManager{
 
         //the default inputs (all for the best visual graphics)
         let default_pipeline = pipeline_builder::PipelineConfig::default();
-
+        let subpass_id = default_pipeline.shader_set.get_subpass_id();
         let default_pipeline = Arc::new(
             pipeline::Pipeline::new(
                 device.clone(),
                 default_pipeline,
                 l_engine_settings.clone(),
-                framebuffer::Subpass::from(renderpass.clone(), default_subpass).expect("failed to create subpass from renderpass"),
-                default_subpass
+                framebuffer::Subpass::from(renderpass.clone(), subpass_id).expect("failed to create subpass from renderpass"),
             )
         );
 
         b_tree_map.insert(String::from("DefaultPipeline"), default_pipeline);
+
+        //also create a depth pipeline to be used, it actually mixes the pbr-vertx pipeline with
+        //a "nothing" fragment shader to only create a depth output
+        let mut pre_depth_config = pipeline_builder::PipelineConfig::default();
+        pre_depth_config.shader_set = shader_impls::ShaderTypes::PreDepth;
+        pre_depth_config.depth_stencil = pipeline_builder::DepthStencilConfig::SimpleDepthNoStencil;
+
+        let pre_depth_pipeline = Arc::new(
+            pipeline::Pipeline::new(
+                device.clone(),
+                pre_depth_config,
+                l_engine_settings.clone(),
+                framebuffer::Subpass::from(renderpass.clone(), shader_impls::ShaderTypes::PreDepth.get_subpass_id()).expect("failed to create subpass from renderpass"),
+            )
+        );
+        //push it to the manager
+        b_tree_map.insert(String::from("PreDepth"), pre_depth_pipeline);
+
 
 
         PipelineManager{
@@ -88,14 +108,24 @@ impl PipelineManager{
     }
 
     ///Should always return the normal PBR pipeline, if it panics, please file a bug report, this should not happen
-    pub fn get_default_pipeline(&mut self) -> Arc<pipeline::Pipeline>{
+    pub fn get_default_pipeline(&self) -> Arc<pipeline::Pipeline>{
 
-        match self.pipelines.get_mut(&String::from("DefaultPipeline")){
+        match self.pipelines.get(&String::from("DefaultPipeline")){
             Some(pipe) => return pipe.clone(),
 
             None =>rt_error("PIPELINE_MANAGER", "PIPELINE MANAGER: Could not find default pipe this should not happen"),
         }
         panic!("Crash could not get default pipeline!")
+    }
+
+    ///Should always return the PreDepth pipeline, if it panics, please file a bug report, this should not happen
+    pub fn get_predepth_pipeline(&self) -> Arc<pipeline::Pipeline>{
+        match self.pipelines.get(&String::from("PreDepth")){
+            Some(pipe) => return pipe.clone(),
+
+            None =>rt_error("PIPELINE_MANAGER", "PIPELINE MANAGER: Could not find PreDepth pipe this should not happen"),
+        }
+        panic!("Crash could not get PreDepth pipeline!")
     }
 
 
@@ -143,7 +173,6 @@ impl PipelineManager{
             self.engine_settings.clone(),
             framebuffer::Subpass::from(self.render_pass.clone(), subpass_id)
                 .expect("failed to get subpass at pipeline creation"),
-            subpass_id
         );
 
         let arc_pipe = Arc::new(pipe);
@@ -187,14 +216,11 @@ impl PipelineManager{
             self.engine_settings.clone(),
             framebuffer::Subpass::from(self.render_pass.clone(), needed_subpass_id)
                 .expect("failed to get subpass at pipeline creation"),
-            needed_subpass_id
         ));
 
         self.pipelines.insert(pipe_name.clone(), new_pipe);
         //now return the new pipe
         self.get_pipeline_by_name(&pipe_name)
-
-
     }
 
 
@@ -245,9 +271,9 @@ impl PipelineManager{
             device,
             pipeline_conf,
             self.engine_settings.clone(),
+
             framebuffer::Subpass::from(self.render_pass.clone(), needed_subpass_id)
-                .expect("failed to get subpass at pipeline creation"),
-            needed_subpass_id
+            .expect("failed to get subpass at pipeline creation"),
         ));
 
         let pipe_name = self.create_pipeline_name(&blend_type, &cull_mode);

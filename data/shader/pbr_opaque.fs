@@ -7,14 +7,7 @@
 #define MAX_POINT_LIGHTS 512
 #define MAX_SPOT_LIGHTS 512
 
-//layout (constant_id = 0) const int MAX_POINT_LIGHTS = 512;
-//layout (constant_id = 1) const int MAX_DIR_LIGHTS = 6;
-//layout (constant_id = 2) const int MAX_SPOT_LIGHTS = 512;
-
-
-
 const float kPi = 3.14159265;
-
 
 ///INS FROM VERTEX
 //Vertex Shader Input

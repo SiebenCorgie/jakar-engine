@@ -61,25 +61,26 @@ fn main() {
 
     //SUN========================================================================
     //add a matrix of lights
-    for x in -3..50{
-        let mut point = light::LightPoint::new("LightPoint");
-        point.set_intensity(( (x + 3) * 10) as f32);
-        point.set_color(Vector3::new(1.0, 1.0, 0.5));
-        //point.set_location(Vector3::new(x as f32 * 3.0, 1.0, 5.0));
+    for x in -8..8{
+        for y in -8..8{
+            let mut point = light::LightPoint::new("LightPoint");
+            point.set_intensity(( (x + 8) * 2) as f32);
+            point.set_color(Vector3::new(1.0, 1.0, 0.5));
+            //point.set_location(Vector3::new(x as f32 * 3.0, 1.0, 5.0));
 
-        let node_name = light_tree
-        .add_at_root(content::ContentType::PointLight(point), None);
+            let node_name = light_tree
+            .add_at_root(content::ContentType::PointLight(point), None);
 
-        //Set the location
-        match light_tree.get_node(&node_name.unwrap()){
-            Some(scene) => {
-                scene.add_job(jobs::SceneJobs::Move(Vector3::new(x as f32 * 3.0, 1.0, 5.0)));
+            //Set the location
+            match light_tree.get_node(&node_name.unwrap()){
+                Some(scene) => {
+                    scene.add_job(jobs::SceneJobs::Move(Vector3::new(x as f32 * 3.0, 1.0, y as f32 * 3.0)));
+                }
+                None => {println!("Could not find Light", );}, //get on with it
             }
-            None => {println!("Could not find Light", );}, //get on with it
         }
-
     }
-
+    /*
     //Now add a sun
     let mut sun = light::LightDirectional::new("Sunny");
     sun.set_intensity(25.0);
@@ -88,17 +89,17 @@ fn main() {
     //Now rotate it a bit on x
     match light_tree.get_node("Sunny"){
         Some(sun)=> {
-            sun.add_job(jobs::SceneJobs::Rotate(Vector3::new(0.0, 0.0, 0.0)));
+            sun.add_job(jobs::SceneJobs::Rotate(Vector3::new(0.0, 0.0, -60.0)));
         },
         None => {println!("Could not find sun", );}
     }
-
+    */
 
     light_tree.update();
     engine.get_asset_manager().get_active_scene().join_at_root(&light_tree);
     engine.get_asset_manager().get_active_scene().update();
 
-    engine.get_asset_manager().get_active_scene().print_tree();
+    //engine.get_asset_manager().get_active_scene().print_tree();
 
     let mut scene_added = false;
 
@@ -106,21 +107,23 @@ fn main() {
 
         //try adding by brute force to the main scene, could be handled nice :D
         if !scene_added{
-            println!("Adding Test Scene to main scnene", );
+            //println!("Adding Test Scene to main scnene", );
             match engine.get_asset_manager().add_scene_to_main_scene("TestScene"){
                 Ok(_) => scene_added = true,
                 Err(_) => {
-                    println!("Could not find TestScene", );
+                    //println!("Could not find TestScene", );
                 }
             }
 
             //Scale by .1
             match engine.get_asset_manager().get_active_scene().get_node("TestScene"){
                 Some(scene) => {
-                    println!("Scaling!", );
+                    //println!("Scaling!", );
                     //scene.add_job(jobs::SceneJobs::Scale(Vector3::new(0.01, 0.01, 0.01)));
                 }
-                None => {println!("Could not find TestScene", );}, //get on with it
+                None => {
+                    //println!("Could not find TestScene", );
+                }, //get on with it
             }
 
         }
@@ -174,8 +177,8 @@ fn main() {
 
             match engine.get_asset_manager().get_active_scene().get_node("Sunny"){
                 Some(scene) => {
-                    scene.add_job(jobs::SceneJobs::Rotate(Vector3::new(0.0, 1.0, 0.0)));
-                    println!("SunRot: {:?}!", scene.attributes.transform.disp);
+                    scene.add_job(jobs::SceneJobs::Rotate(Vector3::new(0.0, 0.0, 1.0)));
+                    println!("SunRot: {:?}!", scene.attributes.transform.rot);
                 }
                 None => {println!("Could not find TestScene", );}, //get on with it
             }
@@ -211,6 +214,21 @@ fn main() {
         if engine.get_asset_manager().get_keymap().n{
             let settings = engine.get_settings();
             settings.lock().expect("fail debug false").get_render_settings().set_debug_bound(false);
+        }
+
+        if engine.get_asset_manager().get_keymap().t_1{
+            let settings = engine.get_settings();
+            settings.lock().expect("fail debug false").get_render_settings().set_debug_view(jakar_engine::core::render_settings::DebugView::PreDepth);
+        }
+
+        if engine.get_asset_manager().get_keymap().t_2{
+            let settings = engine.get_settings();
+            settings.lock().expect("fail debug false").get_render_settings().set_debug_view(jakar_engine::core::render_settings::DebugView::MainDepth);
+        }
+
+        if engine.get_asset_manager().get_keymap().t_3{
+            let settings = engine.get_settings();
+            settings.lock().expect("fail debug false").get_render_settings().set_debug_view(jakar_engine::core::render_settings::DebugView::Normal);
         }
 
 

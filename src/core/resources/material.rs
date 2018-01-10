@@ -665,6 +665,7 @@ impl Material {
         //if needed, update the static sets
     }
 
+
     ///Recreates set_01 based on the current unfiorm_manager information (mvp matrix)
     pub fn recreate_set_01(&mut self, transform_matrix: Matrix4<f32>){
         let pipeline_ref = self.pipeline.get_pipeline_ref();
@@ -755,6 +756,7 @@ impl Material {
         }
         self.set_01.clone()
     }
+
 
     ///Returns the second set which holds the material textures
     #[inline]

@@ -10,6 +10,7 @@ use core;
 use core::ReturnBoundInfo;
 use render::pipeline_builder;
 use render::pipeline_manager;
+use render;
 
 use vulkano;
 
@@ -335,7 +336,7 @@ pub fn load_gltf_material(
         let mut pipeline_manager_lck = pipeline_manager.lock().expect("failed to lock pipe manager");
         //Build the pipeline by the requirements
         let pipeline = (*pipeline_manager_lck).get_pipeline_by_requirements(
-            requirements, device.clone(), 0
+            requirements, device.clone(), render::SubPassType::Forward.get_id() //need the forwad id
         );
 
 

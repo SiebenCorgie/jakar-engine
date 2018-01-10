@@ -5,6 +5,7 @@ use render::window;
 use render::render_helper;
 use render::frame_system;
 use render::post_progress;
+use render::pre_depth_system;
 
 use core::engine_settings;
 use core::resources::camera::Camera;
@@ -14,10 +15,6 @@ use jakar_tree;
 
 use vulkano;
 use vulkano::command_buffer::AutoCommandBufferBuilder;
-use vulkano::command_buffer::CommandBuffer;
-use vulkano::image::traits::ImageViewAccess;
-use vulkano::image::attachment::AttachmentImage;
-use vulkano::framebuffer::FramebufferAbstract;
 use vulkano::framebuffer::RenderPassAbstract;
 use vulkano::swapchain::SwapchainCreationError;
 use vulkano::swapchain::SwapchainAcquireFuture;
@@ -53,16 +50,9 @@ pub struct Renderer  {
     queue: Arc<vulkano::device::Queue>,
     swapchain: Arc<vulkano::swapchain::Swapchain>,
     images: Vec<Arc<vulkano::image::SwapchainImage>>,
-    /*
-    renderpass: Arc<RenderPassAbstract + Send + Sync>,
-    //The buffer to which the depth gets written
-    depth_buffer: Arc<ImageViewAccess + Send + Sync>,
-    //this holds a multi sampled image (later hdr)
-    msaa_image: Arc<ImageViewAccess + Send + Sync>,
 
-    framebuffers: Vec<Arc<FramebufferAbstract + Send + Sync>>,
-    */
     frame_system: frame_system::FrameSystem,
+    pre_depth_system: pre_depth_system::PreDpethSystem,
 
     ///The post progresser
     post_progress: post_progress::PostProgress,
@@ -93,7 +83,7 @@ impl Renderer {
         frame_system: frame_system::FrameSystem,
 
         post_progress: post_progress::PostProgress,
-
+        pre_depth_system: pre_depth_system::PreDpethSystem,
 
         recreate_swapchain: bool,
         engine_settings: Arc<Mutex<engine_settings::EngineSettings>>,
@@ -110,6 +100,7 @@ impl Renderer {
             //Helper systems, the frame system handles... well a frame, the post progress writes the
             //static post_progress pass.AcquireError
             frame_system: frame_system,
+            pre_depth_system: pre_depth_system,
             post_progress: post_progress,
 
             recreate_swapchain: recreate_swapchain,
@@ -273,14 +264,23 @@ impl Renderer {
             self.images[image_number].clone()
         );
 
-        //we now have the start for a command buffer. In a later engine
-        //stage at this point a compute command is added for the forward+ early depth pass.
-        // we are currently rendering only in a normal forward manor.
+        //Add all opaque meshes to the depth pre pass
+        for node in opaque_meshes.iter(){
+            command_buffer = self.pre_depth_system.draw_object(
+                command_buffer, node, self.frame_system.get_dynamic_state()
+            );
+        }
+
+        //Now we can end this stage (Pre depth)
+        //later this is the point where the compute pass should be started
+        //TODO Actually start it
+        //now end the frame
+        command_buffer = self.frame_system.next_pass(command_buffer);
+
 
         //add all opaque meshes to the command buffer
-
         for opaque_mesh in opaque_meshes.iter(){
-            command_buffer = self.add_node_to_command_buffer(opaque_mesh, command_buffer);
+            command_buffer = self.add_forward_node(opaque_mesh, command_buffer);
         }
 
         //now draw debug data of the meshes if turned on
@@ -304,7 +304,7 @@ impl Renderer {
             Ok(ord_tr) => {
 
                 for translucent_mesh in ord_tr.iter(){
-                    command_buffer = self.add_node_to_command_buffer(
+                    command_buffer = self.add_forward_node(
                         translucent_mesh, command_buffer
                     );
                 }
@@ -347,8 +347,10 @@ impl Renderer {
         //perform the post progressing
         let after_pp = self.post_progress.execute(
             post_progress_pass,
-            self.frame_system.get_msaa_image(),
-            self.frame_system.get_raw_render_depth()
+            self.frame_system.get_forward_hdr_image(),
+            self.frame_system.get_forward_hdr_depth(),
+            self.frame_system.get_pre_depth_image(),
+            &self.frame_system
         );
 
         if should_capture{
@@ -408,14 +410,10 @@ impl Renderer {
         }
 
         Box::new(after_frame)
-
-
-
-
     }
 
     ///adds a `node` to the `command_buffer` if possible to be rendered.
-    fn add_node_to_command_buffer(
+    fn add_forward_node(
         &self, node: &jakar_tree::node::Node<
             next_tree::content::ContentType,
             next_tree::jobs::SceneJobs,
@@ -489,7 +487,6 @@ impl Renderer {
             frame_system::FrameStage::Forward(new_cb)
 
     }
-
 
 
     ///Returns the uniform manager

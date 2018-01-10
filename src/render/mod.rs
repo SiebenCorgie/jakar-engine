@@ -24,6 +24,38 @@ pub mod uniform_manager;
 ///Provides some structs and methodes for the postprogressing of a frame
 pub mod post_progress;
 
+///Handles buffer creation and drawing of the pre depth rendering. It will calculate needed lights
+/// in a Tiled manor later TODO: Implement.
+pub mod pre_depth_system;
+
 ///An module which collects all the shader implementations, these are usually derived from
 ///vulkano-shader-derive
 pub mod shader_impls;
+
+
+// A Helper enum to specify which supass id something want, manly used in amterial creation
+pub enum SubPassType {
+    PreDepth,
+    Forward,
+    PostProgress,
+    Finished
+}
+
+impl SubPassType{
+    pub fn get_id(&self) -> u32{
+        match self{
+            &SubPassType::PreDepth =>{
+                0
+            },
+            &SubPassType::Forward =>{
+                1
+            },
+            &SubPassType::PostProgress => {
+                2
+            },
+            &SubPassType::Finished => {
+                3
+            }
+        }
+    }
+}

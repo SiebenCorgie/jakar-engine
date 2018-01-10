@@ -1,6 +1,7 @@
 use vulkano;
 use std::sync::Arc;
 
+use render;
 use render::pipeline_builder;
 use core::resources::mesh::Vertex;
 use render::post_progress;
@@ -28,6 +29,12 @@ pub mod default_data;
 ///Defines light types
 pub mod lights;
 
+///The fragment shader for the pre-depths pass, used in conjunktion the the pbr-vertex shader
+///to generate a depth image for the following compute shader
+pub mod pre_depth_fragment;
+///The vertex shader stage for the pre-depths pass.
+pub mod pre_depth_vertex;
+
 ///Defines the PBR Texture Factors
 pub mod pbr_texture_factors;
 
@@ -45,6 +52,14 @@ pub mod default_pstprg_fragment;
 
 ///Holds a list of all available shader types which can be loaded
 pub enum JakarShaders {
+    PreDepth(
+        (
+            pre_depth_vertex::Shader,
+            pre_depth_fragment::Shader,
+            pipeline_builder::PipelineInput,
+            vulkano::pipeline::vertex::SingleBufferDefinition::<Vertex>
+        )
+    ),
     ///Defines the default opaque shader
     PbrOpaque(
         (
@@ -78,10 +93,33 @@ pub enum JakarShaders {
 /// The final shader and its properties will be stored in an `JakarShaders` enum.
 #[derive(PartialEq)]
 pub enum ShaderTypes {
+    PreDepth,
     PbrOpaque,
     Wireframe,
     PostProgress
 }
+
+impl ShaderTypes{
+    ///Returns the subpass this shader set is aimed at. Be aware that a wrong return values
+    /// Crashes the renderer at runtime
+    pub fn get_subpass_id(&self) -> u32{
+        match self{
+            &ShaderTypes::PreDepth => {
+                render::SubPassType::PreDepth.get_id()
+            }
+            &ShaderTypes::PbrOpaque => {
+                render::SubPassType::Forward.get_id()
+            }
+            &ShaderTypes::Wireframe => {
+                render::SubPassType::Forward.get_id()
+            }
+            &ShaderTypes::PostProgress => {
+                render::SubPassType::PostProgress.get_id()
+            }
+        }
+    }
+}
+
 
 ///Loads an shader from specified type and returns the shaders as well as an `PipelineInputs` struct
 /// to define the needed Inputs and the `ShaderSetTypes` for the pipeline creation.
@@ -89,8 +127,24 @@ pub fn load_shader(device: Arc<vulkano::device::Device>, shader_type: ShaderType
     JakarShaders
 {
     match shader_type{
+        ShaderTypes::PreDepth =>{
+            println!("Loading Pre-Depth shader ...", );
+            //load shader
+            let vs = pre_depth_vertex::Shader::load(device.clone()).expect("failed to pre-depth vertex shader");
+            let fs = pre_depth_fragment::Shader::load(device).expect("failed to load pre-depth fragment shader");
+
+            //Create the vertex buffer definition
+            let vbd = vulkano::pipeline::vertex::SingleBufferDefinition::<Vertex>::new();
+
+            //Create needed inputs, for the pre depth we actually only need the MVP Matrix
+            let mut inputs = pipeline_builder::PipelineInput::with_none();
+            inputs.data = true;
+            //now return them
+            JakarShaders::PreDepth((vs, fs, inputs, vbd))
+        }
+
         ShaderTypes::PbrOpaque => {
-            println!("Loading Post PbrOpaque shader ...", );
+            println!("Loading PbrOpaque shader ...", );
             //load shader
             let vs = pbr_vertex::Shader::load(device.clone()).expect("failed to load vertex pbr shader");
             let fs = pbr_fragment::Shader::load(device).expect("failed to load fragment pbr shader");

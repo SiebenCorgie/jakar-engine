@@ -182,13 +182,9 @@ impl LightDirectional{
 
     ///Returns this lught as its shader-useable instance
     pub fn as_shader_info(&self, rotation: &Quaternion<f32>) -> lights::ty::DirectionalLight{
-
         let tmp_color: [f32;3] = self.color.into();
         //Transfere to the shader type [f32;3]
         let tmp_direction: [f32;3] = rotation.rotate_vector(Vector3::new(1.0, 0.0, 0.0)).into();
-
-        println!("Directional light direction: {:?}", tmp_direction);
-
         //Return a native vulkano struct
         lights::ty::DirectionalLight{
             color: tmp_color,
@@ -197,6 +193,7 @@ impl LightDirectional{
             _dummy0: [0; 4],
         }
     }
+    
 
     ///set intensity
     #[inline]

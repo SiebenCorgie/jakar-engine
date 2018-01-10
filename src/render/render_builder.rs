@@ -1,12 +1,8 @@
 use vulkano;
-use vulkano::image::attachment::AttachmentImage;
-use vulkano::framebuffer::FramebufferAbstract;
 use winit;
 use vulkano::sync::GpuFuture;
 use vulkano_win;
 use vulkano::instance::debug::{DebugCallback, MessageTypes};
-use vulkano::framebuffer::RenderPassAbstract;
-use vulkano::format::Format;
 
 use std::sync::{Arc, Mutex};
 
@@ -17,9 +13,8 @@ use render::window;
 use render::frame_system;
 use render::pipeline_builder;
 use render::post_progress;
-use render::shader_impls;
+use render::pre_depth_system;
 
-use core::render_settings;
 use core::engine_settings;
 use input::KeyMap;
 
@@ -397,6 +392,8 @@ impl RenderBuilder {
             device.clone()
         );
 
+        let uniform_manager = Arc::new(Mutex::new(uniform_manager_tmp));
+
         //start the future chain
         let previous_frame = Box::new(vulkano::sync::now(device.clone())) as Box<GpuFuture>;
 
@@ -417,7 +414,6 @@ impl RenderBuilder {
                     device.clone(),
                     engine_settings.clone(),
                     frame_system.get_renderpass(),
-                    frame_system.get_object_pass_id() //default value atm
                 )
             )
         );
@@ -447,7 +443,18 @@ impl RenderBuilder {
             device.clone()
         );
 
-        //now pack the pipeline manager
+        let depth_pipeline = {
+            let pipe_man_lck = pipeline_manager_arc.lock().expect("failed to lock pipeline manager");
+            pipe_man_lck.get_predepth_pipeline()
+        };
+
+        let pre_depth_system = pre_depth_system::PreDpethSystem::new(
+            uniform_manager.clone(),
+            depth_pipeline,
+            device.clone(),
+            queue.clone()
+        );
+
 
 
         println!("Finished Render Setup", );
@@ -464,11 +471,12 @@ impl RenderBuilder {
 
             frame_system,
             post_progress,
+            pre_depth_system,
 
             false,
 
             engine_settings.clone(),
-            Arc::new(Mutex::new(uniform_manager_tmp)),
+            uniform_manager,
 
             Arc::new(Mutex::new(render::renderer::RendererState::WAITING)),
         );

@@ -1,6 +1,24 @@
-use vulkano::pipeline::shader::SpecializationConstants;
-use vulkano::pipeline::shader::SpecializationMapEntry;
 
+
+
+///Can be used to change between variouse debug views. They are actually applied in the
+///post progress stage
+#[derive(Clone)]
+pub enum DebugView {
+    Normal,
+    PreDepth,
+    MainDepth,
+}
+
+impl DebugView{
+    pub fn as_shader_int(&self) -> i32{
+        match self{
+            &DebugView::Normal => 0,
+            &DebugView::PreDepth => 1,
+            &DebugView::MainDepth => 2,
+        }
+    }
+}
 
 ///Descibes settings the renderer can have. Most of the values can't be changed after
 /// starting the engine.
@@ -26,6 +44,9 @@ pub struct RenderSettings {
     ///The engine should render the bounds
     debug_bounds: bool,
 
+    ///Describes what the post_progress should render
+    debug_view: DebugView,
+
     //TODO: add things like "max render distance" for objects
 
     ///Describes the max values for each light, ** can only be changed before starting the engine **
@@ -33,9 +54,6 @@ pub struct RenderSettings {
     //turns false when the lights value is first read. From this time no changes can
     //be made to the max light values, to prevent wrong or changing constant types.
     first_light_getter: bool,
-
-
-
 }
 
 
@@ -63,6 +81,7 @@ impl RenderSettings{
             exposure: 1.0,
 
             debug_bounds: false,
+            debug_view: DebugView::Normal,
 
             max_lights: LightSpecConstants{
                 max_point_lights: 512,
@@ -104,6 +123,18 @@ impl RenderSettings{
     #[inline]
     pub fn get_anisotropical_filtering(&self) -> f32{
         self.anisotropic_filtering
+    }
+
+    ///Returns the current view type.
+    #[inline]
+    pub fn get_debug_view(&self) -> &DebugView{
+        &self.debug_view
+    }
+
+    ///sets the view type to be used for the following frames
+    #[inline]
+    pub fn set_debug_view(&mut self, new: DebugView){
+        self.debug_view = new;
     }
 
 
