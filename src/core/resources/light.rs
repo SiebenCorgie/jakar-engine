@@ -60,14 +60,17 @@ impl LightPoint{
         let min = Point3::new(-0.5, -0.5, -0.5, );
         let max = Point3::new(0.5, 0.5, 0.5, );
 
-        LightPoint{
+        let mut new_light = LightPoint{
             name: String::from(name),
             intensity: 1.0,
             color: Vector3::new(1.0, 1.0, 1.0),
             radius: 5.0,
 
             bound: collision::Aabb3::new(min, max),
-        }
+        };
+
+        new_light.rebuild_bound();
+        new_light
     }
     ///Returns this lught as its shader-useable instance
     pub fn as_shader_info(&self, location: &Vector3<f32>) -> lights::ty::PointLight{
@@ -204,14 +207,17 @@ impl LightDirectional{
         let min = Point3::new(-0.5, -0.5, -0.5, );
         let max = Point3::new(0.5, 0.5, 0.5, );
 
-        LightDirectional{
+        let mut new_light = LightDirectional{
             name: String::from(name),
 
             intensity: 1.0,
             color: Vector3::new(1.0, 1.0, 1.0),
 
             bound: collision::Aabb3::new(min, max),
-        }
+        };
+
+        new_light.rebuild_bound();
+        new_light
     }
 
     ///Returns this lught as its shader-useable instance
@@ -329,7 +335,7 @@ impl LightSpot{
         let outer_radius = 50.0;
         let inner_radius = 40.0;
 
-        LightSpot{
+        let mut new_light = LightSpot{
             name: String::from(name),
             intensity: 1.0,
             color: Vector3::new(1.0, 1.0, 1.0),
@@ -339,7 +345,10 @@ impl LightSpot{
             inner_radius: inner_radius,
 
             bound: collision::Aabb3::new(min, max),
-        }
+        };
+
+        new_light.rebuild_bound();
+        new_light
     }
 
     ///Returns this lught as its shader-useable instance

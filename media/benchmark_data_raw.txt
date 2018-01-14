@@ -1,0 +1,32 @@
+Buffer based light system for unlimited light with raw forward pass + hdr tone mapping:
+==============================================
+RENDER INFO:
+	Nedded 0.419327 ms to get all opaque meshes
+	Nedded 0.02102 ms to update the light set!
+	Nedded 0.00057 ms to dispatch compute shader
+	Nedded 0.178683 ms to draw all opaque meshes
+	Nedded 0.094292 ms to draw all transparent meshes!
+	Finished adding meshes
+	Changed to subpass
+	Added postprogress thingy
+	Ending frame
+FrameTime: 11.048618ms
+Which is 0.09050906fps
+This Frame after waiting: 87.416595
+==============================================
+Same as above but with dispatched compute shader, but the shader doesn't do any work atm
+==============================================
+RENDER INFO:
+	Nedded 0.244705 ms to get all opaque meshes
+	Nedded 0.02774 ms to update the light set!
+	Nedded 2.004158 ms to dispatch compute shader
+	Nedded 0.086741 ms to draw all opaque meshes
+	Nedded 0.03908 ms to draw all transparent meshes!
+	Finished adding meshes
+	Changed to subpass
+	Added postprogress thingy
+	Ending frame
+FrameTime: 9.788332ms
+Which is 0.10216245fps
+This Frame after waiting: 98.12513
+==============================================

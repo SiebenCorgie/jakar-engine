@@ -61,7 +61,7 @@ fn main() {
 
     //SUN========================================================================
     //add a matrix of lights
-    /*
+
     for x in -8..8{
         for y in -8..8{
             let mut point = light::LightPoint::new("LightPoint");
@@ -81,7 +81,7 @@ fn main() {
             }
         }
     }
-    */
+    /*
     //Single point light
     let mut point = light::LightPoint::new("LightPoint");
     point.set_intensity(100.0);
@@ -98,7 +98,7 @@ fn main() {
         }
         None => {println!("Could not find Light", );}, //get on with it
     }
-
+    */
     /*
     //Now add a sun
     let mut sun = light::LightDirectional::new("Sunny");

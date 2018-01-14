@@ -4,11 +4,11 @@ use core::resources::texture;
 //use render::shader_impls::pbr_fragment;
 use render::shader_impls::pbr_texture_factors;
 use render::shader_impls::pbr_texture_usage;
+use render::light_culling_system;
 
 use vulkano::descriptor::descriptor_set::PersistentDescriptorSet;
 use vulkano::descriptor::descriptor_set::DescriptorSet;
 use vulkano::pipeline::GraphicsPipelineAbstract;
-use vulkano::descriptor::descriptor_set::collection::DescriptorSetsCollection;
 use vulkano;
 
 use cgmath::*;
@@ -430,21 +430,6 @@ impl MaterialBuilder{
             .build().expect("failed to build first descriptor 03")
         );
 
-        //Creates thje first descriptor set 04
-        let set_04 = Arc::new(PersistentDescriptorSet::start(
-                pipeline_ref.clone(), 3
-            )
-            .add_buffer((*uniform_manager_lck).get_subbuffer_point_lights())
-            .expect("Failed to create descriptor set")
-            .add_buffer((*uniform_manager_lck).get_subbuffer_directional_lights())
-            .expect("Failed to create descriptor set")
-            .add_buffer((*uniform_manager_lck).get_subbuffer_spot_lights())
-            .expect("Failed to create descriptor set")
-            .add_buffer((*uniform_manager_lck).get_subbuffer_light_count())
-            .expect("Failed to create descriptor set")
-            .build().expect("failed to build first descriptor 04")
-        );
-
         //Now create the new material
         Material{
             name: String::from(name),
@@ -475,8 +460,6 @@ impl MaterialBuilder{
 
             material_factors: self.material_factors.to_shader_factors(),
             material_factor_pool: material_factor_pool,
-
-            set_04: set_04,
         }
     }
 }
@@ -535,8 +518,8 @@ pub struct Material {
 
     material_factors: pbr_texture_factors::ty::TextureFactors,
     material_factor_pool: vulkano::buffer::cpu_pool::CpuBufferPool<pbr_texture_factors::ty::TextureFactors>,
-    //Responsible for lighting information
-    set_04: Arc<DescriptorSet + Send + Sync>,
+    //light inforamtion is supplied through the compute system in the renderer, however for convinience
+    // there is a helperfunction for materials to make it easier to get the lights per pipeline
 }
 
 
@@ -659,9 +642,9 @@ impl Material {
     pub fn update(&mut self){
         //println!("STATUS: MATERIAL: In material, updating now", );
         //check if this pipeline actually needs light, if not don't do anything
-        if self.pipeline.get_inputs().has_light{
-            self.recreate_set_04();
-        }
+        //if self.pipeline.get_inputs().has_light{
+        //    self.recreate_set_04();
+        //}
         //if needed, update the static sets
     }
 
@@ -682,40 +665,6 @@ impl Material {
         //println!("STATUS: MATERIAL: Returning new set to self", );
         //return the new set
         self.set_01 = new_set;
-    }
-
-    ///Recreates set_04 based on the current unfiorm_manager information (light)
-    ///NOTE:
-    /// - Binding 0 = point lights
-    /// - Binding 1 = directional lights
-    /// - Binding 2 = spot lights
-    /// - Binding 3 = struct which describes how many actual lights where send
-    ///
-    ///*ENHANCE*: This and the first set could be created in the uniform manager because they are
-    ///always the same
-    pub fn recreate_set_04(&mut self){
-
-        let pipeline_ref = self.pipeline.get_pipeline_ref();
-
-        //TODO Add the buffers of the uniform manager to the descriptor set
-        let mut uniform_manager_lck = self.uniform_manager.lock().expect("Failed to locj unfiorm_mng");
-        //println!("STATUS: MATERIAL: Generation new set_04", );
-        let new_set = Arc::new(PersistentDescriptorSet::start(
-                pipeline_ref.clone(), 3
-            )
-            .add_buffer((*uniform_manager_lck).get_subbuffer_point_lights())
-            .expect("Failed to create descriptor set")
-            .add_buffer((*uniform_manager_lck).get_subbuffer_directional_lights())
-            .expect("Failed to create descriptor set")
-            .add_buffer((*uniform_manager_lck).get_subbuffer_spot_lights())
-            .expect("Failed to create descriptor set")
-            .add_buffer((*uniform_manager_lck).get_subbuffer_light_count())
-            .expect("Failed to create descriptor set")
-            .build().expect("failed to build descriptor 04")
-        );
-        //println!("STATUS: MATERIAL: Returning new set to self", );
-        //return the new set
-        self.set_04 = new_set;
     }
 
     ///Returns a subbuffer from the `usage_info_pool` to be used when adding a buffer to a set
@@ -771,10 +720,15 @@ impl Material {
         self.set_03.clone()
     }
 
-    ///Returns the 4th desciptor set responsible for the lighting information
+    ///Returns the 4th desciptor set responsible for the lighting information based on the current lights in the culling system
     #[inline]
-    pub fn get_set_04(&self) -> Arc<DescriptorSet + Send + Sync>{
-        self.set_04.clone()
+    pub fn get_set_04(
+        &self, compute_sys: &mut light_culling_system::PreDpethSystem
+    ) -> Arc<DescriptorSet + Send + Sync>{
+
+        //This has to be build based on the currently used light lists in the compute system.
+        compute_sys.get_light_descriptorset(3, self.get_vulkano_pipeline()) //for pbr materials this has to be the three
+
     }
 
     ///Sets a new pipeline
@@ -787,65 +741,6 @@ impl Material {
     #[inline]
     pub fn get_name(&self) -> String{
         self.name.clone()
-    }
-
-    ///Returns a tubel with descriptor sets needed to feed the pipeline of this material
-    pub fn get_descriptor_sets<T>(&mut self, model_transform: Matrix4<f32>)
-     -> Box<DescriptorSetsCollection>
-    {
-        //read the inputs of the pipeline
-        let pipeline_inputs = self.pipeline.get_inputs();
-        //We'll store the different sets in options and compose the tubel out of it.
-        //the binding of each set is hard coded at the moment, so the tubel size doesn't matter.
-
-
-        //data set
-        let data_set = {
-            if pipeline_inputs.data{
-                let set = self.get_set_01(model_transform);
-                Some(set)
-            }else{
-                None
-            }
-        };
-
-        //texture set and its info
-        let (texture_set, tex_info_set) = {
-            if pipeline_inputs.has_textures{
-                let tex = self.get_set_02();
-                let info_set = self.get_set_03();
-                (Some(tex), Some(info_set))
-            }else{
-                (None, None)
-            }
-        };
-
-        let light_set = {
-            if pipeline_inputs.has_light{
-                let light_set = self.get_set_04();
-                Some(light_set)
-            }else{
-                None
-            }
-        };
-
-        match (data_set, texture_set, tex_info_set, light_set){
-            (Some(data), Some(tex_set), Some(tex_inf), Some(light_inf)) => {
-                return Box::new((data, tex_set, tex_inf, light_inf))
-            },
-            (Some(data), Some(tex), Some(tex_inf), None) => {
-                return Box::new((data, tex, tex_inf))
-            },
-            (Some(data), None, None, Some(light)) => {
-                return Box::new((data, light))
-            },
-            (Some(data), None, None, None) => {
-                return Box::new(data)
-            }
-
-            _ => panic!("could not find pipeline pattern!"),
-        }
-
     }
 }
 

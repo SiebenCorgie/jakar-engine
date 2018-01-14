@@ -245,14 +245,11 @@ impl Renderer {
             translucent_meshes, asset_manager.get_camera()
         );
 
-        //We also need all point and sport lights
-        let all_point_lights = asset_manager.get_active_scene().copy_all_point_lights(&None);
-        let all_spot_lights = asset_manager.get_active_scene().copy_all_spot_lights(&None);
-
         if should_capture{
             let time_needed = time_step.elapsed().subsec_nanos();
             println!("RENDER INFO: ", );
-            println!("\tNedded {} nsec to get all opaque meshes", time_needed as f32 / 1_000_000_000.0);
+            println!("\tNedded {} ms to get all opaque meshes", time_needed as f32 / 1_000_000.0);
+            time_step = Instant::now()
         }
 
         //While the cpu is gathering the the translucent meshes based on the distance to the
@@ -264,12 +261,26 @@ impl Renderer {
         let mut command_buffer = self.frame_system.new_frame(
             self.images[image_number].clone()
         );
+
         //First of all we compute the light clusters
+        //Since we currently have no nice system to track
+        self.light_culling_system.update_light_set();
+
+        if should_capture{
+            let time_needed = time_step.elapsed().subsec_nanos();
+            println!("\tNedded {} ms to update the light set!", time_needed as f32 / 1_000_000.0);
+            time_step = Instant::now()
+        }
 
         //now execute the compute shader
         command_buffer = self.light_culling_system.dispatch_compute_shader(
             command_buffer,
         );
+        if should_capture{
+            let time_needed = time_step.elapsed().subsec_nanos();
+            println!("\tNedded {} ms to dispatch compute shader", time_needed as f32 / 1_000_000.0);
+            time_step = Instant::now()
+        }
         //Now we can end this stage (Pre compute)
         command_buffer = self.frame_system.next_pass(command_buffer);
         //now we are in the main render pass in the forward pass, using this to draw all meshes
@@ -277,6 +288,11 @@ impl Renderer {
         //add all opaque meshes to the command buffer
         for opaque_mesh in opaque_meshes.iter(){
             command_buffer = self.add_forward_node(opaque_mesh, command_buffer);
+        }
+        if should_capture{
+            let time_needed = time_step.elapsed().subsec_nanos();
+            println!("\tNedded {} ms to draw all opaque meshes", time_needed as f32 / 1_000_000.0);
+            time_step = Instant::now()
         }
 
         //now draw debug data of the meshes if turned on
@@ -292,6 +308,11 @@ impl Renderer {
                      &self.frame_system.get_dynamic_state()
                  );
             }
+            if should_capture{
+                let time_needed = time_step.elapsed().subsec_nanos();
+                println!("\tNedded {} ms to draw all mesh bounds!", time_needed as f32 / 1_000_000.0);
+                time_step = Instant::now()
+            }
         }
 
 
@@ -303,6 +324,12 @@ impl Renderer {
                     command_buffer = self.add_forward_node(
                         translucent_mesh, command_buffer
                     );
+                }
+
+                if should_capture{
+                    let time_needed = time_step.elapsed().subsec_nanos();
+                    println!("\tNedded {} ms to draw all transparent meshes!", time_needed as f32 / 1_000_000.0);
+                    time_step = Instant::now()
                 }
 
                 //now draw debug data of the meshes if turned on
@@ -318,6 +345,12 @@ impl Renderer {
                              &self.frame_system.get_dynamic_state()
                          );
                     }
+
+                    if should_capture{
+                        let time_needed = time_step.elapsed().subsec_nanos();
+                        println!("\tNedded {} ms to draw all transparent mesh bounds!", time_needed as f32 / 1_000_000.0);
+                        time_step = Instant::now()
+                    }
                     //also draw the light bounds
                     let all_point_lights = asset_manager.get_active_scene().copy_all_point_lights(&None);
                     for light in all_point_lights.iter(){
@@ -330,6 +363,7 @@ impl Renderer {
                              &self.frame_system.get_dynamic_state()
                          );
                     }
+
                     let all_spot_lights = asset_manager.get_active_scene().copy_all_spot_lights(&None);
                     for light in all_spot_lights.iter(){
                         command_buffer = render_helper::add_bound_draw(
@@ -341,9 +375,11 @@ impl Renderer {
                              &self.frame_system.get_dynamic_state()
                          );
                     }
-
-
-
+                    if should_capture{
+                        let time_needed = time_step.elapsed().subsec_nanos();
+                        println!("\tNedded {} ms to draw light bounds!", time_needed as f32 / 1_000_000.0);
+                        time_step = Instant::now()
+                    }
                 }
 
             },
@@ -426,7 +462,7 @@ impl Renderer {
         if should_capture{
             let frame_time = start_time.elapsed().subsec_nanos();
             println!("FrameTime: {}ms", frame_time as f32/1_000_000.0);
-            println!("Which is {}fps", 1.0/(frame_time as f32/1_000_000_000.0));
+            println!("Which is {}fps", 1.0/(frame_time as f32/1_000_000.0));
             self.engine_settings.lock().expect("failed to lock settings").stop_capture();
         }
 
@@ -435,7 +471,7 @@ impl Renderer {
 
     ///adds a `node` to the `command_buffer` if possible to be rendered.
     fn add_forward_node(
-        &self, node: &jakar_tree::node::Node<
+        &mut self, node: &jakar_tree::node::Node<
             next_tree::content::ContentType,
             next_tree::jobs::SceneJobs,
             next_tree::attributes::NodeAttributes>,
@@ -485,7 +521,7 @@ impl Renderer {
         };
 
         let set_04 = {
-            material.get_set_04()
+            material.get_set_04(&mut self.light_culling_system)
         };
 
         //extend the current command buffer by this mesh

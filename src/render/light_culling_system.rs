@@ -8,6 +8,8 @@ use vulkano::descriptor::descriptor_set::DescriptorSet;
 use vulkano::descriptor::descriptor_set::PersistentDescriptorSet;
 use vulkano::buffer::*;
 use vulkano::pipeline::ComputePipeline;
+use render::shader_impls::lights;
+use vulkano::buffer::cpu_pool::CpuBufferPoolSubbuffer;
 use vulkano;
 
 
@@ -52,10 +54,19 @@ pub struct PreDpethSystem {
     uniform_manager: Arc<Mutex<uniform_manager::UniformManager>>,
     device: Arc<vulkano::device::Device>,
     queue: Arc<vulkano::device::Queue>,
+    //Stores which lights are used in which cluster, it goes down to x->y->z then 0-512 pointlights and 513-> 1024 spotlights
+    // the clusterspecific lightcount is also stored.
     light_indice_buffer: Arc<CpuAccessibleBuffer< Vec<Vec<Vec<light_cull_shader::ty::Cluster>>> >>,
-
+    //Used only for fast assignment of new clusters
     empty_cluster: light_cull_shader::ty::Cluster,
 
+    //is the buffer of currently used point, directional and spotlights used
+    current_point_light_list: Arc<CpuAccessibleBuffer<[lights::ty::PointLight]>>,
+    current_dir_light_list: Arc<CpuAccessibleBuffer<[lights::ty::DirectionalLight]>>,
+    current_spot_light_list: Arc<CpuAccessibleBuffer<[lights::ty::SpotLight]>>,
+    current_light_count: CpuBufferPoolSubbuffer<lights::ty::LightCount, Arc<vulkano::memory::pool::StdMemoryPool>>,
+
+    compute_shader: Arc<light_cull_shader::Shader>,
 
 
 }
@@ -81,6 +92,22 @@ impl PreDpethSystem{
             device.clone(), BufferUsage::all(), index_buffer)
             .expect("failed to create index buffer");
 
+        //Now we pre_create the first current buffers and store them, they will be updated each time
+        //a compute shader for a new frame is dispatched
+        let (c_point_light, c_dir_light, c_spot_lights, c_light_count) = {
+            let mut uniform_lck = uniform_manager.lock().expect("Failed to lock uniformanager for light creation");
+            let p_l = uniform_lck.get_subbuffer_point_lights();
+            let s_l = uniform_lck.get_subbuffer_spot_lights();
+            let d_l = uniform_lck.get_subbuffer_directional_lights();
+            let l_c = uniform_lck.get_subbuffer_light_count();
+
+            (p_l, d_l, s_l, l_c)
+        };
+
+        //pre load the shader
+        let shader = Arc::new(light_cull_shader::Shader::load(device.clone())
+            .expect("failed to create shader module"));
+
 
         PreDpethSystem{
             uniform_manager: uniform_manager,
@@ -88,57 +115,111 @@ impl PreDpethSystem{
             queue: queue,
             light_indice_buffer: index_buffer,
             empty_cluster: empty_cluster,
+
+            current_point_light_list: c_point_light,
+            current_dir_light_list: c_dir_light,
+            current_spot_light_list: c_spot_lights,
+            current_light_count: c_light_count,
+
+            compute_shader: shader,
         }
+    }
+
+    ///Pulls in a new set of the light lists. This needs only to be called when the lightount in the
+    /// Currently rendered level changes.
+    pub fn update_light_set(&mut self){
+        //Now we pre_create the first current buffers and store them, they will be updated each time
+        //a compute shader for a new frame is dispatched
+        let mut uniform_lck = self.uniform_manager.lock().expect("Failed to lock uniformanager for light creation");
+        self.current_point_light_list = uniform_lck.get_subbuffer_point_lights();
+        self.current_spot_light_list = uniform_lck.get_subbuffer_spot_lights();
+        self.current_dir_light_list = uniform_lck.get_subbuffer_directional_lights();
+        self.current_light_count = uniform_lck.get_subbuffer_light_count();
     }
 
     pub fn dispatch_compute_shader(
         &mut self,
         command_buffer: frame_system::FrameStage,
     ) -> frame_system::FrameStage{
+
         match command_buffer{
             frame_system::FrameStage::LightCompute(cb) => {
-                /*
+
                 //We start by creating the sized index buffer for the first binding
-                let empty_indexes = [[[self.empty_cluster; 8]; 16]; 16];
+                let empty_indexes = vec![vec![vec![self.empty_cluster.clone(); 8]; 16]; 16];
                 //We now create the buffer for the first binding from this data
                 let index_buffer = CpuAccessibleBuffer::from_data(
                     self.device.clone(), BufferUsage::all(), empty_indexes)
                     .expect("failed to create index buffer");
 
-                //TODO Get all the light buffer from the uniform manager and store them to be used later
-                // in the fragment shader within each object to guarantee that the indices are right.
-
-                let shader = light_cull_shader::Shader::load(self.device.clone())
-                    .expect("failed to create shader module");
+                let shader = self.compute_shader.clone();
 
                 let compute_pipeline = Arc::new(
                     ComputePipeline::new(self.device.clone(), &shader.main_entry_point(), &()
                 )
                 .expect("failed to create compute pipeline"));
 
-                //adds the light buffers (all lights and indice buffer)
-                let set_01 = Arc::new(PersistentDescriptorSet::start(compute_pipeline.clone(), 0)
-                    .add_buffer(index_buffer).expect("failed to add index buffer")
-                    .add_buffer(light_count).expect("failed to add light count data")
-                    .add_buffer(point_lights).expect("failed to add point_lights")
-                    .add_buffer(spot_lights).expect("failed to add spot_lights")
-                    .build().unwrap()
-                );
+                let camera_data = {
+                    let mut uniform_manager_lck = self.uniform_manager
+                    .lock().expect("Failed to lock unfiorm_mng");
 
-                let set_02 = {
-                    let mut uniform_manager_lck = self.uniform_manager.lock()
-                    .expect("Failed to lock unfiorm_mng");
-                    Arc::new(PersistentDescriptorSet::start(compute_pipeline.clone(), 1)
-                        .add_buffer(uniform_manager_lck.get_subbuffer_data(Matrix4::identity())).unwrap()
-                        .build().unwrap()
-                    )
+                    uniform_manager_lck.get_subbuffer_data(Matrix4::identity())
                 };
 
-                //Now add to cb
-                let new_cb = cb.dispatch([16, 16, 8], compute_pipeline.clone(), (set_01.clone(), set_02.clone()), ()).expect("failed to add compute operation");
+                //adds the light buffers (all lights and indice buffer)
+                let set_01 = Arc::new(PersistentDescriptorSet::start(compute_pipeline.clone(), 0)
+                    .add_buffer(index_buffer)
+                    .expect("failed to add index buffer")
+                    //lights and counter
+                    .add_buffer(self.current_point_light_list.clone())
+                    .expect("Failed to create descriptor set")
+
+                    .add_buffer(self.current_dir_light_list.clone())
+                    .expect("Failed to create descriptor set")
+
+                    .add_buffer(self.current_spot_light_list.clone())
+                    .expect("Failed to create descriptor set")
+
+                    .add_buffer(self.current_light_count.clone())
+                    .expect("Failed to create descriptor set")
+                    //The camera data
+                    .add_buffer(camera_data)
+                    .expect("Failed to create descriptor set")
+
+                    .build().expect("failed to build compute desc set 1")
+                );
+                /*
+                let set_02 = Arc::new(PersistentDescriptorSet::start(
+                        compute_pipeline.clone(), 1
+                    )
+                    //now we copy the current buffers to the descriptor set
+                    .add_buffer(self.current_point_light_list.clone())
+                    .expect("Failed to create descriptor set")
+                    .add_buffer(self.current_dir_light_list.clone())
+                    .expect("Failed to create descriptor set")
+                    .add_buffer(self.current_spot_light_list.clone())
+                    .expect("Failed to create descriptor set")
+                    .add_buffer(self.current_light_count.clone())
+                    .expect("Failed to create descriptor set")
+                    .build().expect("failed to build descriptor 04")
+                );
+
+                let set_03 = {
+                    let mut uniform_manager_lck = self.uniform_manager
+                    .lock().expect("Failed to lock unfiorm_mng");
+
+                    Arc::new(PersistentDescriptorSet::start(compute_pipeline.clone(), 2)
+                        .add_buffer(uniform_manager_lck.get_subbuffer_data(Matrix4::identity())).unwrap()
+                        .build().expect("failed to build compute desc set 3")
+                    );
+                };
                 */
+
+                //Now add to cb
+                let new_cb = cb.dispatch([16, 16, 8], compute_pipeline.clone(), set_01, ()).expect("failed to add compute operation");
+
                 //END
-                return frame_system::FrameStage::LightCompute(cb);
+                return frame_system::FrameStage::LightCompute(new_cb);
 
             }
             _ => {
@@ -163,11 +244,36 @@ impl PreDpethSystem{
         );
         new_set
     }
-    /*
-    pub fn get_index_buffer(&self) -> Arc<CpuAccessibleBuffer<[i32]>>{
-        self.light_indice_buffer.clone()
+
+    ///Since all the objects drawn in the current frame need to get the same light info, we create
+    /// one decriptorset based on the needed set id when asked for it.
+    ///TODO: Have a look if we can put this in a ring buffer (cpubufferpool)
+    ///NOTE:
+    /// - Binding 0 = point lights
+    /// - Binding 1 = directional lights
+    /// - Binding 2 = spot lights
+    /// - Binding 3 = struct which describes how many actual lights where send
+    pub fn get_light_descriptorset(
+        &mut self, binding_id: u32,
+        pipeline: Arc<vulkano::pipeline::GraphicsPipelineAbstract + Send + Sync>
+    ) -> Arc<DescriptorSet + Send + Sync>{
+        let new_set = Arc::new(PersistentDescriptorSet::start(
+                pipeline.clone(), binding_id as usize
+            )
+            //now we copy the current buffers to the descriptor set
+            .add_buffer(self.current_point_light_list.clone())
+            .expect("Failed to create descriptor set")
+            .add_buffer(self.current_dir_light_list.clone())
+            .expect("Failed to create descriptor set")
+            .add_buffer(self.current_spot_light_list.clone())
+            .expect("Failed to create descriptor set")
+            .add_buffer(self.current_light_count.clone())
+            .expect("Failed to create descriptor set")
+            .build().expect("failed to build descriptor 04")
+        );
+
+        new_set
     }
-    */
 }
 
 mod light_cull_shader {
