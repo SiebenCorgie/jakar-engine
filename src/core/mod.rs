@@ -29,6 +29,8 @@ pub trait ReturnBoundInfo {
     fn set_bound(&mut self, min: Point3<f32>, max: Point3<f32>);
     ///Returns the vertices of the bounding mesh, good for debuging
     fn get_bound_points(&self)-> Vec<Vector3<f32>>;
+    ///Rebuilds the bound based on for instance `intensity` of an light.
+    fn rebuild_bound(&mut self);
 }
 
 

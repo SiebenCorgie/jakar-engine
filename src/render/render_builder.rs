@@ -13,7 +13,7 @@ use render::window;
 use render::frame_system;
 use render::pipeline_builder;
 use render::post_progress;
-use render::pre_depth_system;
+use render::light_culling_system;
 
 use core::engine_settings;
 use input::KeyMap;
@@ -74,6 +74,7 @@ impl RenderBuilder {
         let minimal_features = vulkano::instance::Features {
             sampler_anisotropy: true,
             sample_rate_shading: true,
+            logic_op: true, //needed for custom blending
             .. vulkano::instance::Features::none()
         };
 
@@ -413,7 +414,7 @@ impl RenderBuilder {
                 pipeline_manager::PipelineManager::new(
                     device.clone(),
                     engine_settings.clone(),
-                    frame_system.get_renderpass(),
+                    frame_system.get_main_renderpass(),
                 )
             )
         );
@@ -443,19 +444,12 @@ impl RenderBuilder {
             device.clone()
         );
 
-        let depth_pipeline = {
-            let pipe_man_lck = pipeline_manager_arc.lock().expect("failed to lock pipeline manager");
-            pipe_man_lck.get_predepth_pipeline()
-        };
-
-        let pre_depth_system = pre_depth_system::PreDpethSystem::new(
+        println!("Creating light culling system", );
+        let light_culling_system = light_culling_system::PreDpethSystem::new(
             uniform_manager.clone(),
-            depth_pipeline,
             device.clone(),
             queue.clone()
         );
-
-
 
         println!("Finished Render Setup", );
         //Pass everthing to the struct
@@ -471,7 +465,7 @@ impl RenderBuilder {
 
             frame_system,
             post_progress,
-            pre_depth_system,
+            light_culling_system,
 
             false,
 

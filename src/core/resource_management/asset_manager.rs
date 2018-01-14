@@ -151,134 +151,72 @@ impl AssetManager {
             proj: self.get_camera().get_perspective().into(),
         };
 
-        //in scope to prevent dead lock while updating material manager
-        //TODO get the lights from the light-pre-pass and make the info reciving nicer (see:
-        // https://github.com/SiebenCorgie/jakar-engine/issues/23)
-        //light counter
-        let (mut c_point, mut c_dir, mut c_spot): (u32, u32, u32) = (0,0,0);
-        //after getting all lights, create the shader-usable shader infos
-        let point_shader_info = {
-
-            let all_point_lights = self.active_main_scene.copy_all_point_lights(&None);
-            let all_point_light_primitive = all_point_lights.into_point_light();
-
-            let mut return_vec = Vec::new();
-            //transform into shader infos
-            for light_index in 0..all_point_lights.len(){
-                let location = &all_point_lights[light_index].attributes.transform.disp;
-                return_vec.push(all_point_light_primitive[light_index].as_shader_info(location));
+        //TODO only update lights when scene changes
+        let point_shader_infos = {
+            let all_point_light_nodes = self.active_main_scene.copy_all_point_lights(&None);
+            let mut shader_vec = Vec::new();
+            for p_light in all_point_light_nodes.iter(){
+                let light_location = &p_light.attributes.transform.disp;
+                let light = {
+                    match p_light.value{
+                        next_tree::content::ContentType::PointLight(ref light) => light,
+                        _ => {
+                            continue; //Is no pointlight, test next
+                        }
+                    }
+                };
+                shader_vec.push(light.as_shader_info(light_location));
             }
-
-            let empty_light = lights::ty::PointLight{
-                color: [0.0; 3],
-                location: [0.0; 3],
-                intensity: 0.0,
-                _dummy0: [0; 4],
-            };
-            let mut add_array = [empty_light.clone(); 512];
-
-            let mut index = 0;
-            //Todo make the bound configurable
-            //configure the array to hold the forst six lights
-            while (index < 512) & (index < return_vec.len()) {
-                add_array[index] = return_vec[index];
-                index += 1;
-                c_point += 1;
-            }
-
-
-            lights::ty::point_lights{
-                p_light: add_array,
-            }
-
+            shader_vec
         };
 
-        let directional_shader_info = {
-            let all_directional_lights = self.active_main_scene.copy_all_directional_lights(&None);
-            let directional_primitive = all_directional_lights.into_directional_light();
-
-            let mut return_vec = Vec::new();
-            //transform into shader infos
-            for light_index in 0..all_directional_lights.len(){
-                let direction = &all_directional_lights[light_index].attributes.transform.rot;
-                return_vec.push(directional_primitive[light_index].as_shader_info(direction));
+        let spot_shader_infos = {
+            let all_spot_light_nodes = self.active_main_scene.copy_all_spot_lights(&None);
+            let mut shader_vec = Vec::new();
+            for s_light in all_spot_light_nodes.iter(){
+                let light_location = &s_light.attributes.transform.disp;
+                let light_rotation = &s_light.attributes.transform.rot;
+                let light = {
+                    match s_light.value{
+                        next_tree::content::ContentType::SpotLight(ref light) => light,
+                        _ => {
+                            continue; //Is no pointlight, test next
+                        }
+                    }
+                };
+                shader_vec.push(light.as_shader_info(light_rotation, light_location));
             }
-
-            let empty_light = lights::ty::DirectionalLight{
-                color: [0.0; 3],
-                direction: [1.0; 3],
-                intensity: 0.0,
-                _dummy0: [0; 4],
-            };
-            let mut add_array = [empty_light.clone(); 6];
-
-            let mut index = 0;
-            //Todo make the bound configurable
-            //configure the array to hold the forst six lights
-            while (index < 6) & (index < return_vec.len()) {
-                add_array[index] = return_vec[index];
-                index += 1;
-                c_dir += 1;
-            }
-
-            lights::ty::directional_lights{
-                d_light: add_array,
-            }
+            shader_vec
         };
 
-        let spot_shader_info = {
-            let mut return_vec = Vec::new();
-            let all_spot_lights = self.active_main_scene.copy_all_spot_lights(&None);
-            let spot_primitve = all_spot_lights.into_spot_light();
-
-            //transform into shader infos
-            for light_index in 0..all_spot_lights.len(){
-                let location = &all_spot_lights[light_index].attributes.transform.disp;
-                let rotation = &all_spot_lights[light_index].attributes.transform.rot;
-
-                return_vec.push(spot_primitve[light_index].as_shader_info(rotation, location));
+        let dir_shader_infos = {
+            let all_dir_light_nodes = self.active_main_scene.copy_all_directional_lights(&None);
+            let mut shader_vec = Vec::new();
+            for d_light in all_dir_light_nodes.iter(){
+                let light_rotation = &d_light.attributes.transform.rot;
+                let light = {
+                    match d_light.value{
+                        next_tree::content::ContentType::DirectionalLight(ref light) => light,
+                        _ => {
+                            continue; //Is no pointlight, test next
+                        }
+                    }
+                };
+                shader_vec.push(light.as_shader_info(light_rotation));
             }
-
-            let empty_light = lights::ty::SpotLight{
-                color: [0.0; 3],
-                direction: [1.0; 3],
-                location: [0.0; 3],
-                intensity: 0.0,
-                outer_radius: 0.0,
-                inner_radius: 0.0,
-                _dummy0: [0; 4],
-                _dummy1: [0; 4],
-                _dummy2: [0; 8],
-            };
-
-            let mut add_array = [empty_light.clone(); 512];
-
-            let mut index = 0;
-            //Todo make the bound configurable
-            //configure the array to hold the forst six lights
-            while (index < 512) & (index < return_vec.len()) {
-                add_array[index] = return_vec[index];
-                index += 1;
-                c_spot +=1;
-            }
-
-            lights::ty::spot_lights{
-                s_light: add_array,
-            }
+            shader_vec
         };
+
+
 
         //Update the uniform manager with the latest infos about camera and light
         {
             let mut uniform_manager_lck = self.uniform_manager.lock().expect("failed to lock uniform_man.");
-            (*uniform_manager_lck).update(
-                uniform_data,
-                point_shader_info,
-                directional_shader_info,
-                spot_shader_info,
-                c_point,
-                c_dir,
-                c_spot
-            );
+            uniform_manager_lck.set_point_lights(point_shader_infos);
+            uniform_manager_lck.set_directional_lights(dir_shader_infos);
+            uniform_manager_lck.set_spot_lights(spot_shader_infos);
+            //Finally upadte the MVP data as well
+            uniform_manager_lck.update(uniform_data);
         }
 
 

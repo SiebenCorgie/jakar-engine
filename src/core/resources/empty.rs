@@ -76,6 +76,11 @@ impl ReturnBoundInfo for Empty{
 
         return_vector
     }
+
+    ///Doesn't change anything because the set bound is always right (an empty has no dimension)
+    fn rebuild_bound(&mut self){
+        //Does nothing
+    }
 }
 
 /*

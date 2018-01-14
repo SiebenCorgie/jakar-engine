@@ -55,14 +55,19 @@ layout(set = 2, binding = 1) uniform TextureFactors {
 } u_tex_fac;
 
 //LIGHTS
-//definitions of the lights for the unsized arrays
+//==============================================================================
 struct PointLight
 {
   vec3 color;
   vec3 location;
   float intensity;
+  float radius;
 };
 
+layout(set = 3, binding = 0) buffer point_lights{
+  PointLight p_light[];
+}u_point_light;
+//==============================================================================
 struct DirectionalLight
 {
   vec3 color;
@@ -70,6 +75,10 @@ struct DirectionalLight
   float intensity;
 };
 
+layout(set = 3, binding = 1) buffer directional_lights{
+  DirectionalLight d_light[];
+}u_dir_light;
+//==============================================================================
 struct SpotLight
 {
   vec3 color;
@@ -77,31 +86,24 @@ struct SpotLight
   vec3 location;
 
   float intensity;
+  float radius;
   float outer_radius;
   float inner_radius;
 
 };
 
-
-//And the send bindings from rust/vulkano
-layout(set = 3, binding = 0) uniform point_lights{
-  PointLight p_light[MAX_POINT_LIGHTS];
-}u_point_light;
-
-layout(set = 3, binding = 1) uniform directional_lights{
-  DirectionalLight d_light[MAX_DIR_LIGHTS];
-}u_dir_light;
-
-layout(set = 3, binding = 2) uniform spot_lights{
-  SpotLight s_light[MAX_SPOT_LIGHTS];
+layout(set = 3, binding = 2) buffer spot_lights{
+  SpotLight s_light[];
 }u_spot_light;
+//==============================================================================
 
+//descibes the count of lights used
 layout(set = 3, binding = 3) uniform LightCount{
   uint points;
   uint directionals;
   uint spots;
 }u_light_count;
-
+//==============================================================================
 ///outgoing final color
 layout(location = 0) out vec4 f_color;
 
@@ -169,6 +171,22 @@ vec3 fresnelSchlick(float cosTheta, vec3 F0)
     return F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);
 }
 
+vec3 srgb_to_linear(vec3 c) {
+    return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(0.04045, c));
+}
+
+// ----------------------------------------------------------------------------
+//calculates the light falloff based on a distance and a radius
+//shamlessly stolen from epics paper: Real Shading in Unreal Engine 4
+//Source: https://cdn2.unrealengine.com/Resources/files/2013SiggraphPresentationsNotes-26915738.pdf figure (9)
+float calcFalloff(float distance, float radius){
+  float dtr = distance/radius;
+  float falloff_top = clamp(1 - (dtr*dtr*dtr*dtr), 0.0, 1.0);
+  float falloff = falloff_top / (distance*distance + 1);
+  return falloff;
+}
+
+
 //Calculates a point ligh -----------------------------------------------------
 vec3 calcPointLight(PointLight light, vec3 FragmentPosition, vec3 albedo, float metallic, float roughness, vec3 V, vec3 N, vec3 F0)
 {
@@ -176,8 +194,10 @@ vec3 calcPointLight(PointLight light, vec3 FragmentPosition, vec3 albedo, float 
   vec3 L = normalize(light.location - FragmentPosition);
   vec3 H = normalize(V + L);
   float distance = length(light.location - FragmentPosition);
-  float attenuation = 1.0 / (distance * distance);
-  vec3 radiance = light.color * light.intensity * attenuation;
+
+  float falloff = calcFalloff(distance, light.radius);
+  //float attenuation = 1.0 / (distance * distance);
+  vec3 radiance = light.color * light.intensity * falloff;
 
   // Cook-Torrance BRDF
   float NDF = DistributionGGX(N, H, roughness);
@@ -260,8 +280,8 @@ vec3 calcSpotLight(SpotLight light, vec3 FragmentPosition, vec3 albedo, float me
   vec3 L = normalize(light.location - FragmentPosition);
   vec3 H = normalize(V + L);
   float distance = length(light.location - FragmentPosition);
-  float attenuation = 1.0 / (distance * distance);
-  vec3 radiance = light.color * light.intensity * attenuation;
+  float falloff = calcFalloff(distance, light.radius);
+  vec3 radiance = light.color * light.intensity * falloff;
 
   // Cook-Torrance BRDF
   float NDF = DistributionGGX(N, H, roughness);
@@ -272,27 +292,14 @@ vec3 calcSpotLight(SpotLight light, vec3 FragmentPosition, vec3 albedo, float me
   float denominator = 4 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.001; // 0.001 to prevent divide by zero.
   vec3 specular = nominator / denominator;
 
-  // kS is equal to Fresnel
   vec3 kS = F;
-  // for energy conservation, the diffuse and specular light can't
-  // be above 1.0 (unless the surface emits light); to preserve this
-  // relationship the diffuse component (kD) should equal 1.0 - kS.
   vec3 kD = vec3(1.0) - kS;
-  // multiply kD by the inverse metalness such that only non-metals
-  // have diffuse lighting, or a linear blend if partly metal (pure metals
-  // have no diffuse light).
   kD *= 1.0 - metallic;
-
-  // scale light by NdotL
   float NdotL = max(dot(N, L), 0.0);
-
-  // add to outgoing radiance Lo
   return ((kD * albedo / PI + specular) * radiance * NdotL) * spot_intensity;  // note that we already multiplied the BRDF by the Fresnel (kS) so we won't multiply by kS again
 }
 
-vec3 srgb_to_linear(vec3 c) {
-    return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(0.04045, c));
-}
+
 
 // ----------------------------------------------------------------------------
 void main()

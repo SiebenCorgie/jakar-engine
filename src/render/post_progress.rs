@@ -85,7 +85,6 @@ impl PostProgress{
         command_buffer: FrameStage,
         hdr_image: Arc<ImageViewAccess  + Send + Sync>,
         depth_buffer: Arc<ImageViewAccess  + Send + Sync>,
-        pre_depth_buffer: Arc<ImageViewAccess  + Send + Sync>,
         frame_system: &FrameSystem,
     ) -> FrameStage{
         //match the current stage, if wrong, panic
@@ -99,8 +98,6 @@ impl PostProgress{
                     .expect("failed to add hdr_image to postprogress descriptor set")
                     .add_image(depth_buffer)
                     .expect("failed to add depth image")
-                    .add_image(pre_depth_buffer)
-                    .expect("failed to add pre depth buffer to postprogress descriptor")
                     .build()
                     .expect("failed to build postprogress cb");
 

@@ -6,6 +6,8 @@ use render::shader_impls::lights;
 
 use vulkano::buffer::cpu_pool::CpuBufferPoolSubbuffer;
 use vulkano::buffer::cpu_pool::CpuBufferPool;
+use vulkano::buffer::BufferUsage;
+use vulkano::buffer::CpuAccessibleBuffer;
 use vulkano;
 
 use cgmath::*;
@@ -21,12 +23,15 @@ use std::sync::Arc;
 /// - SPOT_LIGHTS
 /// - LIGHT_COUNT (holds a variable representing the acutally used light number per type)
 pub struct UniformManager {
+
+    device: Arc<vulkano::device::Device>,
+
     ///Describes the universal world properties (see `render:://`)
     pub u_world: default_data::ty::Data,
 
-    u_point_lights: lights::ty::point_lights,
-    u_directional_lights: lights::ty::directional_lights,
-    u_spot_lights: lights::ty::spot_lights,
+    u_point_lights: Vec<lights::ty::PointLight>,
+    u_directional_lights: Vec<lights::ty::DirectionalLight>,
+    u_spot_lights: Vec<lights::ty::SpotLight>,
 
     u_light_count: lights::ty::LightCount,
 
@@ -34,14 +39,6 @@ pub struct UniformManager {
     /// camera location
     buffer_pool_01_mvp: vulkano::buffer::cpu_pool::CpuBufferPool<default_data::ty::Data>,
 
-    ///4th uniform buffer pool block, used for point lights
-    buffer_pool_02_point: vulkano::buffer::cpu_pool::CpuBufferPool<lights::ty::point_lights>,
-
-    ///4th uniform buffer pool block, used for directional lights
-    buffer_pool_03_dir: vulkano::buffer::cpu_pool::CpuBufferPool<lights::ty::directional_lights>,
-
-    ///4th uniform buffer pool block, used for spot lights
-    buffer_pool_04_spot: vulkano::buffer::cpu_pool::CpuBufferPool<lights::ty::spot_lights>,
     ///5th for the light count fo each light type
     buffer_pool_05_count: vulkano::buffer::cpu_pool::CpuBufferPool<lights::ty::LightCount>,
 }
@@ -60,58 +57,6 @@ impl UniformManager{
             proj : <Matrix4<f32>>::identity().into(),
         };
 
-        //Create an fixed array for each light
-        //TODO make a variable size array and pass it via &Vec<T>
-        let points = {
-            let empty_light = lights::ty::PointLight{
-                color: [1.0; 3],
-                location: [0.0; 3],
-                intensity: 0.0,
-                _dummy0: [0; 4],
-            };
-
-            let add_array = [empty_light.clone(); 512];
-
-            lights::ty::point_lights{
-                p_light: add_array,
-            }
-
-        };
-
-        let direct = {
-            let empty_light = lights::ty::DirectionalLight{
-                color: [1.0; 3],
-                direction: [1.0; 3],
-                intensity: 0.0,
-                _dummy0: [0; 4],
-            };
-            let add_array = [empty_light.clone(); 6];
-
-            lights::ty::directional_lights{
-                d_light: add_array,
-            }
-        };
-
-        let spots = {
-            let empty_light = lights::ty::SpotLight{
-                color: [1.0; 3],
-                direction: [1.0; 3],
-                location: [0.0; 3],
-                intensity: 0.0,
-                outer_radius: 0.0,
-                inner_radius: 0.0,
-                _dummy0: [0; 4],
-                _dummy1: [0; 4],
-                _dummy2: [0; 8],
-            };
-            let add_array = [empty_light.clone(); 512];
-
-            lights::ty::spot_lights{
-                s_light: add_array,
-            }
-        };
-
-
         let light_count_tmp = lights::ty::LightCount{
             points: 0,
             directionals: 0,
@@ -123,18 +68,6 @@ impl UniformManager{
             device.clone(), vulkano::buffer::BufferUsage::all()
         );
 
-        let tmp_uniform_buffer_pool_02 = CpuBufferPool::<lights::ty::point_lights>::new(
-            device.clone(), vulkano::buffer::BufferUsage::all()
-        );
-
-        let tmp_uniform_buffer_pool_03 = CpuBufferPool::<lights::ty::directional_lights>::new(
-            device.clone(), vulkano::buffer::BufferUsage::all()
-        );
-
-        let tmp_uniform_buffer_pool_04 = CpuBufferPool::<lights::ty::spot_lights>::new(
-            device.clone(), vulkano::buffer::BufferUsage::all()
-        );
-
         let tmp_uniform_buffer_pool_05 = CpuBufferPool::<lights::ty::LightCount>::new(
             device.clone(), vulkano::buffer::BufferUsage::all()
         );
@@ -143,25 +76,18 @@ impl UniformManager{
 
         UniformManager{
 
+            device: device,
+
             u_world: world,
 
-            u_point_lights: points,
-            u_directional_lights: direct,
-            u_spot_lights: spots,
+            u_point_lights: Vec::new(),
+            u_directional_lights: Vec::new(),
+            u_spot_lights: Vec::new(),
 
             u_light_count: light_count_tmp,
 
             ///First uniform buffer pool block, used or model, view and perspecive matrix
             buffer_pool_01_mvp: tmp_uniform_buffer_pool_01,
-
-            ///4th uniform buffer pool block, used for point lights
-            buffer_pool_02_point: tmp_uniform_buffer_pool_02,
-
-            ///4th uniform buffer pool block, used for directional lights
-            buffer_pool_03_dir: tmp_uniform_buffer_pool_03,
-
-            ///4th uniform buffer pool block, used for spot lights
-            buffer_pool_04_spot: tmp_uniform_buffer_pool_04,
 
             buffer_pool_05_count: tmp_uniform_buffer_pool_05,
 
@@ -186,43 +112,58 @@ impl UniformManager{
         }
     }
 
+    ///Sets the current light objects to be rendered. The resulting array will be used for all
+    ///light calculations.
+    pub fn set_point_lights(&mut self, new_point_lights: Vec<lights::ty::PointLight>){
+        self.u_point_lights = new_point_lights;
+        self.u_light_count.points = self.u_point_lights.len() as u32;
+    }
+
     ///Returns a subbuffer of the u_point_light
     pub fn get_subbuffer_point_lights (&mut self) ->
-    CpuBufferPoolSubbuffer<lights::ty::point_lights, Arc<vulkano::memory::pool::StdMemoryPool>>{
+    Arc<CpuAccessibleBuffer<[lights::ty::PointLight]>>{
 
-        match self.buffer_pool_02_point.next(self.u_point_lights.clone()){
-            Ok(k) => k,
-            Err(e) => {
-                println!("{:?}", e);
-                panic!("failed to allocate new sub buffer!")
-            },
-        }
+        let current_points_copy = self.u_point_lights.clone(); //we don't want to free the vec in here each time :)
+
+        CpuAccessibleBuffer::from_iter(
+            self.device.clone(), BufferUsage::all(), current_points_copy.into_iter())
+            .expect("failed to create PointLightBuffer")
+    }
+
+    ///Sets the current light objects to be rendered. The resulting array will be used for all
+    ///light calculations.
+    pub fn set_directional_lights(&mut self, new_dir_lights: Vec<lights::ty::DirectionalLight>){
+        self.u_directional_lights = new_dir_lights;
+        self.u_light_count.directionals = self.u_directional_lights.len() as u32;
     }
 
     ///Returns a subbuffer of the u_directional_light
     pub fn get_subbuffer_directional_lights (&mut self) ->
-    CpuBufferPoolSubbuffer<lights::ty::directional_lights, Arc<vulkano::memory::pool::StdMemoryPool>>{
+    Arc<CpuAccessibleBuffer<[lights::ty::DirectionalLight]>>{
 
-        match self.buffer_pool_03_dir.next(self.u_directional_lights.clone()){
-            Ok(k) => k,
-            Err(e) => {
-                println!("{:?}", e);
-                panic!("failed to allocate new sub buffer!")
-            },
-        }
+        let current_dir_copy = self.u_directional_lights.clone(); //we don't want to free the vec in here each time :)
+
+        CpuAccessibleBuffer::from_iter(
+            self.device.clone(), BufferUsage::all(), current_dir_copy.into_iter())
+            .expect("failed to create PointLightBuffer")
+    }
+
+    ///Sets the current light objects to be rendered. The resulting array will be used for all
+    ///light calculations.
+    pub fn set_spot_lights(&mut self, new_spot_lights: Vec<lights::ty::SpotLight>){
+        self.u_spot_lights = new_spot_lights;
+        self.u_light_count.spots = self.u_spot_lights.len() as u32;
     }
 
     ///Returns a subbuffer of the u_spot_light
     pub fn get_subbuffer_spot_lights (&mut self) ->
-    CpuBufferPoolSubbuffer<lights::ty::spot_lights, Arc<vulkano::memory::pool::StdMemoryPool>>{
+    Arc<CpuAccessibleBuffer<[lights::ty::SpotLight]>>{
 
-        match self.buffer_pool_04_spot.next(self.u_spot_lights.clone()){
-            Ok(k) => k,
-            Err(e) => {
-                println!("{:?}", e);
-                panic!("failed to allocate new sub buffer!")
-            },
-        }
+        let current_spots_copy = self.u_spot_lights.clone(); //we don't want to free the vec in here each time :)
+
+        CpuAccessibleBuffer::from_iter(
+            self.device.clone(), BufferUsage::all(), current_spots_copy.into_iter())
+            .expect("failed to create PointLightBuffer")
     }
 
     ///Returns a subbuffer of the light counts
@@ -233,7 +174,7 @@ impl UniformManager{
             Ok(k) => k,
             Err(e) => {
                 println!("{:?}", e);
-                panic!("failed to allocate new sub buffer!")
+                panic!("failed to allocate new sub buffer for light count!")
             },
         }
     }
@@ -241,21 +182,7 @@ impl UniformManager{
     ///Updates the internal data used for the uniform buffer creation
     pub fn update(
         &mut self, new_u_world: default_data::ty::Data,
-        new_point: lights::ty::point_lights,
-        new_dir: lights::ty::directional_lights,
-        new_spot: lights::ty::spot_lights,
-        count_point: u32,
-        count_dir: u32,
-        count_spot: u32,
     ){
         self.u_world = new_u_world;
-        self.u_point_lights = new_point;
-        self.u_directional_lights = new_dir;
-        self.u_spot_lights = new_spot;
-        self.u_light_count = lights::ty::LightCount{
-            points: count_point,
-            directionals: count_dir,
-            spots: count_spot,
-        }
     }
 }

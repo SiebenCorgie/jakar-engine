@@ -6,7 +6,6 @@
 //tries to get the input attachment
 layout(input_attachment_index = 0, set = 0, binding = 0) uniform subpassInputMS color_input;
 layout(input_attachment_index = 0, set = 0, binding = 1) uniform subpassInputMS depths_input;
-layout(input_attachment_index = 0, set = 0, binding = 2) uniform subpassInput pre_depths_buffer;
 
 //outputs the fragment color
 layout(location = 0) out vec4 FragColor;
@@ -36,7 +35,8 @@ void main()
 {
 
   if (u_hdr_settings.show_mode == 1) {
-    float depth_out = subpassLoad(pre_depths_buffer).x;
+    //currently only the depth output as well, will change to heat map
+    float depth_out = subpassLoad(depths_input, 1).x;
     FragColor = vec4(depth_out, depth_out, depth_out, 1.0);
     return;
   }

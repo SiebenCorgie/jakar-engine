@@ -9,11 +9,13 @@ use core::ReturnBoundInfo;
 //use std::sync::{Arc,Mutex};
 use std::f64::consts;
 
+
 ///A Generic Point Light
 #[derive(Clone)]
 pub struct LightPoint {
     pub name: String,
     intensity: f32,
+    radius: f32,
     color: Vector3<f32>,
 
     bound: collision::Aabb3<f32>,
@@ -40,6 +42,7 @@ pub struct LightSpot {
     intensity: f32,
     color: Vector3<f32>,
 
+    radius: f32,
     outer_radius: f32,
     inner_radius: f32,
 
@@ -61,6 +64,7 @@ impl LightPoint{
             name: String::from(name),
             intensity: 1.0,
             color: Vector3::new(1.0, 1.0, 1.0),
+            radius: 5.0,
 
             bound: collision::Aabb3::new(min, max),
         }
@@ -75,7 +79,9 @@ impl LightPoint{
             color: color_type,
             location: location_type,
             intensity: self.intensity,
+            radius: self.radius,
             _dummy0: [0; 4],
+            _dummy1: [0; 12],
         }
 
 
@@ -84,6 +90,10 @@ impl LightPoint{
     ///sets the lights intensity
     #[inline]
     pub fn set_intensity(&mut self, new_itensity: f32){
+        //check for under 0 value, if so do nothing
+        if new_itensity<=0.0{
+            return;
+        }
         self.intensity = new_itensity;
     }
 
@@ -91,6 +101,19 @@ impl LightPoint{
     #[inline]
     pub fn get_intensity(&mut self) -> &mut f32{
         &mut self.intensity
+    }
+
+    ///sets the lights intensity
+    #[inline]
+    pub fn set_radius(&mut self, new_radius: f32){
+        self.radius = new_radius;
+        self.rebuild_bound();
+    }
+
+    ///returns the refernce to the radius of this light source
+    #[inline]
+    pub fn get_radius(&mut self) -> &mut f32{
+        &mut self.radius
     }
 
     ///Sets its color, the value gets normalized, set the intensity via `set_intensity`
@@ -159,6 +182,17 @@ impl ReturnBoundInfo for LightPoint{
 
         return_vector
     }
+
+    ///Rebuilds bound based on intensity
+    fn rebuild_bound(&mut self){
+
+        //following https://developer.valvesoftware.com/wiki/Constant-Linear-Quadratic_Falloff and UE4 radius + brightness
+        let radius = self.radius;
+        self.bound = collision::Aabb3::new(
+            Point3::new(-radius, -radius, -radius),
+            Point3::new(radius, radius, radius)
+        );
+    }
 }
 
 ///Special functions for directional lights
@@ -193,12 +227,16 @@ impl LightDirectional{
             _dummy0: [0; 4],
         }
     }
-    
+
 
     ///set intensity
     #[inline]
     pub fn set_intensity(&mut self, new_itensity: f32){
-        self.intensity = new_itensity;
+        //check for under 0 value, if so do nothing
+        if new_itensity<=0.0{
+            return;
+        }
+        self.rebuild_bound()
     }
 
     ///returns the refernce to the intensity
@@ -272,6 +310,11 @@ impl ReturnBoundInfo for LightDirectional{
 
         return_vector
     }
+
+    ///Rebuilds bound, but directional lights have no bound (atm), so do nothing
+    fn rebuild_bound(&mut self){
+        //nothing
+    }
 }
 
 ///Special functions for the spot light
@@ -291,6 +334,7 @@ impl LightSpot{
             intensity: 1.0,
             color: Vector3::new(1.0, 1.0, 1.0),
 
+            radius: 5.0,
             outer_radius: outer_radius,
             inner_radius: inner_radius,
 
@@ -313,19 +357,24 @@ impl LightSpot{
             direction: tmp_direction,
             location: location_type,
             intensity: self.intensity,
+            radius: self.radius,
             //to save some graphics power calculating the cosin directly and using it in the shader
 
             outer_radius: to_radians(self.outer_radius).cos(),
             inner_radius: to_radians(self.inner_radius).cos(),
             _dummy0: [0; 4],
             _dummy1: [0; 4],
-            _dummy2: [0; 8],
+            _dummy2: [0; 4],
         }
     }
 
     ///set intensity
     #[inline]
     pub fn set_intensity(&mut self, new_itensity: f32){
+        //check for under 0 value, if so do nothing
+        if new_itensity<=0.0{
+            return;
+        }
         self.intensity = new_itensity;
     }
 
@@ -333,6 +382,19 @@ impl LightSpot{
     #[inline]
     pub fn get_intensity(&mut self) -> &mut f32{
         &mut self.intensity
+    }
+
+    ///sets the lights intensity
+    #[inline]
+    pub fn set_radius(&mut self, new_radius: f32){
+        self.radius = new_radius;
+        self.rebuild_bound();
+    }
+
+    ///returns the refernce to the radius of this light source
+    #[inline]
+    pub fn get_radius(&mut self) -> &mut f32{
+        &mut self.radius
     }
 
     ///Sets its color, the value gets normalized, set the intensity via `set_intensity`
@@ -424,6 +486,23 @@ impl ReturnBoundInfo for LightSpot{
         return_vector.push(Vector3::new(b_min[0] + b_max[0], b_min[1] + b_max[1], b_min[2] + b_max[2])); //+xyz
 
         return_vector
+    }
+
+    ///Rebuilds bound based on intensity, but only in the + direction, because its the only direction
+    /// a spotlight shines
+    fn rebuild_bound(&mut self){
+        //following https://developer.valvesoftware.com/wiki/Constant-Linear-Quadratic_Falloff
+        //we calculate the max radius of the light for 1/256 as min. intensity
+
+
+        let radius = self.radius;
+        let y_z_extend = self.outer_radius.sin() * radius;
+        self.bound = collision::Aabb3::new(
+            Point3::new(0.0, 0.0, 0.0),
+            Point3::new(radius, y_z_extend, -y_z_extend)//we can make the assumption that the spot light
+            //is always "looking" in x direction because of the way the direction vector is computed in the
+            // to_shader_info() //TODO Check for function
+        );
     }
 
 }

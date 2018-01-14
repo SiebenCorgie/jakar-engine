@@ -265,4 +265,10 @@ impl ReturnBoundInfo for Mesh{
 
         return_vector
     }
+
+    ///Rebuilds nothing, but might be able in the future to actually rebuild the bound based on all of the vertexes
+    fn rebuild_bound(&mut self){
+        //
+
+    }
 }

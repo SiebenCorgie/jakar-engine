@@ -3,12 +3,7 @@
 
 //contains all light definitions
 
-//General definition (might be moved to specialisation constants later)
-#define MAX_DIR_LIGHTS 6
-#define MAX_POINT_LIGHTS 512
-#define MAX_SPOT_LIGHTS 512
-
-layout (constant_id = 0) const int TEST_CONST = 512; 
+//layout (constant_id = 0) const int TEST_CONST = 512;
 /*layout (constant_id = 1) const int MAX_DIR_LIGHTS = 6; */
 /*layout (constant_id = 2) const int MAX_SPOT_LIGHTS = 512; */
 
@@ -18,10 +13,11 @@ struct PointLight
   vec3 color;
   vec3 location;
   float intensity;
+  float radius;
 };
 
-layout(set = 3, binding = 0) uniform point_lights{
-  PointLight p_light[MAX_POINT_LIGHTS];
+layout(set = 3, binding = 0) buffer point_lights{
+  PointLight p_light[];
 }u_point_light;
 //==============================================================================
 struct DirectionalLight
@@ -31,8 +27,8 @@ struct DirectionalLight
   float intensity;
 };
 
-layout(set = 3, binding = 1) uniform directional_lights{
-  DirectionalLight d_light[MAX_DIR_LIGHTS];
+layout(set = 3, binding = 1) buffer directional_lights{
+  DirectionalLight d_light[];
 }u_dir_light;
 //==============================================================================
 struct SpotLight
@@ -42,17 +38,18 @@ struct SpotLight
   vec3 location;
 
   float intensity;
+  float radius;
   float outer_radius;
   float inner_radius;
 
 };
 
-layout(set = 3, binding = 2) uniform spot_lights{
-  SpotLight s_light[MAX_SPOT_LIGHTS];
+layout(set = 3, binding = 2) buffer spot_lights{
+  SpotLight s_light[];
 }u_spot_light;
 //==============================================================================
 
-//descibes the real count of lights used
+//descibes the count of lights used
 layout(set = 3, binding = 3) uniform LightCount{
   uint points;
   uint directionals;

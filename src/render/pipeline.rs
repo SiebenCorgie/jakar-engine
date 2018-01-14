@@ -4,10 +4,8 @@ use vulkano::pipeline::GraphicsPipelineAbstract;
 use vulkano::framebuffer::RenderPassAbstract;
 use vulkano::framebuffer::Subpass;
 
-use core::resources::mesh;
 use core::engine_settings;
 
-use render::post_progress;
 use render::shader_impls;
 use render::pipeline_builder::*;
 
@@ -63,15 +61,6 @@ impl Pipeline{
         let shader = {
             //now return stuff depending on the loaded shader
             match pipeline_configuration.shader_set{
-
-                shader_impls::ShaderTypes::PreDepth =>{
-                    //load the shader based on the type the use wants to load
-                    let shader = shader_impls::load_shader(device.clone(), shader_impls::ShaderTypes::PreDepth);
-                    //extract some infos which doesnt need to be stored in an enum for the compiler
-                    println!("Generated PreDpeth Shader", );
-                    //build the return
-                    shader
-                }
 
                 shader_impls::ShaderTypes::PbrOpaque => {
                     //load the shader based on the type the use wants to load
@@ -360,25 +349,6 @@ impl Pipeline{
         let (final_pipeline, pipeline_inputs): (Arc<GraphicsPipelineAbstract + Send + Sync>, _) = {
             //sort the shaders and return generated Arc<GraphicsPipelineAbstract>
             match shader{
-                shader_impls::JakarShaders::PreDepth((vs, fs, inputs, vbd)) =>{
-                    //take the current pipeline builder
-                    let pipeline = renderpass_pipeline
-                    .take()
-                    .expect("failed to get pipeline #1")
-                    //settup the vertex buffer definition
-                    .vertex_input(
-                        vbd
-                    )
-                    //now add the vertex and fragment shader, then return the new created pipeline and the inputs
-                    .vertex_shader(vs.main_entry_point(), ())
-                    .fragment_shader(fs.main_entry_point(), ()) //Gets as specialisation the max light count
-                    //now build
-                    .build(device)
-                    .expect("failed to build pipeline for PreDepth shader set!");
-
-                    //Finally put this in an arc and return along the inputs
-                    (Arc::new(pipeline), inputs)
-                }
 
                 shader_impls::JakarShaders::PbrOpaque((vs, fs, inputs, vbd)) => {
                     println!("Building pipeline based on PbrOpaque shader and vertex ...", );
@@ -473,10 +443,6 @@ impl Pipeline{
     ///Prints the shader type the pipeline is based on for debug reasons
     pub fn print_shader_name(&self){
         match self.pipeline_config.shader_set{
-            shader_impls::ShaderTypes::PreDepth => {
-                //println!("Using: PreDepth shader set", );
-            }
-
             shader_impls::ShaderTypes::PbrOpaque => {
                 //println!("Using: Opaque shader set", );
             },

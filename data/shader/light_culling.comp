@@ -1,0 +1,76 @@
+#version 450
+
+//We have a global invocation of [16x16x8], so one groupe per cluster, and we have
+// 2*512 lights per cluster to check (in the worst case) thats why we call it localy
+// 16*16*2 times, each time checking the n-th point and the n-th spot light
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 2) in;
+
+//Represents a single cluster
+struct Cluster{
+  int point_light_count;
+  int spot_light_count;
+  int light_indices[1024];
+};
+
+struct PointLight
+{
+  vec3 color;
+  vec3 location;
+  float intensity;
+  float radius;
+};
+
+struct SpotLight
+{
+  vec3 color;
+  vec3 direction;
+  vec3 location;
+
+  float intensity;
+  float radius;
+  float outer_radius;
+  float inner_radius;
+};
+
+//Represents all clusters in the 3d grid
+layout(set = 0, binding = 0) buffer Data {
+  Cluster data[16][16][8];
+} indice_buffer;
+
+//Represents the actualy light counts of the two following buffers
+layout(set = 0, binding = 1) buffer LightCount {
+  int point_light_count;
+  int spot_light_count;
+} light_count;
+
+//Represents all point lights in the scene
+layout(set = 0, binding = 2) buffer PointLights {
+  PointLight p_light[];
+} all_point_lights;
+
+//Represents all spot lights in the scene
+layout(set = 0, binding = 3) buffer SpotLights {
+  SpotLight s_light[];
+} all_spot_lights;
+
+//Has information about the camera, used to transform the light bounds into
+//screen space and then compare the aabb to the current cluster in screen space.
+// this way the comparing becomes a simple "is any point of the light bound withing the cluster bound?"
+layout(set = 1, binding = 0) uniform CameraData {
+  vec3 camera_position;
+  mat4 model;
+  mat4 view;
+  mat4 proj;
+} u_main;
+
+
+
+
+bool TetstAABB_vs_cluster(){
+  return true;
+}
+
+void main() {
+    //Does nothing atm
+}

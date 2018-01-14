@@ -7,15 +7,15 @@ use vulkano::image::traits::ImageAccess;
 use vulkano::framebuffer::RenderPassAbstract;
 use vulkano::image::attachment::AttachmentImage;
 use vulkano::command_buffer::AutoCommandBufferBuilder;
+use vulkano::framebuffer::FramebufferAbstract;
 use vulkano::format::Format;
 use vulkano;
 use vulkano::sync::GpuFuture;
 use std::sync::{Arc, Mutex};
 ///Describes the current stage the command buffer is in
 pub enum FrameStage {
-    ///Generates the depth image used in a compute shader to generate a list of light indices used in
-    /// the fotward pass to reduce calculation time. Hvae a look at "Forward+" for more information.
-    PreDepth(AutoCommandBufferBuilder),
+    ///Is a stage between the first and the second render pass, it does the light culling etc.
+    LightCompute(AutoCommandBufferBuilder),
     ///The first stage allows to add objects to an command buffer
     Forward(AutoCommandBufferBuilder),
     ///Is used to take the image from the first buffer and preform tone mapping on it
@@ -28,8 +28,8 @@ impl FrameStage{
     ///Returns the id of this stage
     pub fn get_id(&self) -> u32{
         match self{
-            &FrameStage::PreDepth(_)=>{
-                let id_type = render::SubPassType::PreDepth;
+            &FrameStage::LightCompute(_)=> {
+                let id_type = render::SubPassType::LightCompute;
                 id_type.get_id()
             }
             &FrameStage::Forward(_) =>{
@@ -65,12 +65,11 @@ pub struct FrameSystem {
     */
     dynamic_state: vulkano::command_buffer::DynamicState,
 
+    main_renderpass: Arc<RenderPassAbstract + Send + Sync>,
 
-    renderpass: Arc<RenderPassAbstract + Send + Sync>,
-
-    ///the image used in the compute shader
-    pre_depth_buffer: Arc<ImageViewAccess + Send + Sync>,
-    pre_depth_color: Arc<ImageViewAccess + Send + Sync>,
+    //Sometimes holds the newly build main framebuffer, but gets taken out when switching from
+    // pre-depth -> compute -> forward pass
+    current_main_frame_buffer: Option<Arc<FramebufferAbstract + Send + Sync>>,
 
     //The buffer to which the multi sampled depth gets written
     forward_hdr_depth: Arc<ImageViewAccess + Send + Sync>,
@@ -121,17 +120,6 @@ impl FrameSystem{
         let hdr_msaa_format = vulkano::format::Format::R16G16B16A16Sfloat;
         let msaa_depth_format = vulkano::format::Format::D16Unorm;
 
-        //Create the first images
-        //Image used in the compute shader
-        let pre_depth_color = AttachmentImage::input_attachment(device.clone(),
-        current_dimensions, //sadly we have to write this one in the same size
-        swapchain_format).expect("failed to create pre_depth color image!");
-
-
-        let pre_depth = AttachmentImage::transient_input_attachment(device.clone(),
-        current_dimensions,
-        msaa_depth_format).expect("failed to create pre_depth buffer!");
-
         //Creates a buffer for the msaa image
         let raw_render_color = AttachmentImage::transient_multisampled_input_attachment(device.clone(),
         current_dimensions, static_msaa_factor,
@@ -145,76 +133,54 @@ impl FrameSystem{
 
 
         println!("Created images the first time", );
-        //Setup the render_pass layout
-        let renderpass = Arc::new(
+
+        //Setup the render_pass layout for the forward pass
+        let main_renderpass = Arc::new(
             ordered_passes_renderpass!(target_queue.device().clone(),
-            attachments: {
-                /*
-                pre_depth_color: {
-                    load: Clear,
-                    store: DontCare,
-                    format: swapchain_format, //works per vulkan definition
-                    samples: 1,
+                attachments: {
+                    // The first framebuffer attachment is the raw_render_color image.
+                    raw_render_color: {
+                        load: Clear,
+                        store: Store,
+                        format: hdr_msaa_format, //Defined that it works by the vulkan implementation
+                        samples: static_msaa_factor,     // This has to match the image definition.
+                    },
+
+                    //the second one is the msaa depth buffer
+                    raw_render_depth: {
+                        load: Clear,
+                        store: DontCare,
+                        format: msaa_depth_format, //works per vulkan definition
+                        samples: static_msaa_factor,
+                    },
+
+                    //the final image
+                    color: {
+                        load: Clear,
+                        store: Store,
+                        format: swapchain_format, //this needs to have the format which is presentable to the window
+                        samples: 1, //target image is not sampled
+                    }
                 },
-                */
-                //the second one is the msaa depth buffer
-                pre_depth: {
-                    load: Clear,
-                    store: DontCare,
-                    format: msaa_depth_format, //works per vulkan definition
-                    samples: 1,
-                },
+                passes:[
+                    {
+                        color: [raw_render_color], //TODO change to msaa
+                        depth_stencil: {raw_render_depth},
+                        input: []
+                    },
 
-                // The first framebuffer attachment is the raw_render_color image.
-                raw_render_color: {
-                    load: Clear,
-                    store: Store,
-                    format: hdr_msaa_format, //Defined that it works by the vulkan implementation
-                    samples: static_msaa_factor,     // This has to match the image definition.
-                },
+                    {
+                        color: [color],
+                        depth_stencil: {},
+                        input: [raw_render_color]
+                        //resolve: [color]
+                    }
 
-                //the second one is the msaa depth buffer
-                raw_render_depth: {
-                    load: Clear,
-                    store: DontCare,
-                    format: msaa_depth_format, //works per vulkan definition
-                    samples: static_msaa_factor,
-                },
+                ]
 
-                //the final image
-                color: {
-                    load: Clear,
-                    store: Store,
-                    format: swapchain_format, //this needs to have the format which is presentable to the window
-                    samples: 1, //target image is not sampled
-                }
-
-            },
-            passes:[
-                {
-                    color: [], //NO Color value
-                    depth_stencil: {pre_depth},
-                    input: []
-                },
-
-                {
-                    color: [raw_render_color], //TODO change to msaa
-                    depth_stencil: {raw_render_depth},
-                    input: []
-                },
-
-                {
-                    color: [color],
-                    depth_stencil: {},
-                    input: [raw_render_color]
-                    //resolve: [color]
-                }
-
-            ]
-
-        ).expect("failed to create render_pass")
+            ).expect("failed to create main render_pass")
         );
-        println!("Created RenderPass", );
+        println!("Created main_renderpass", );
         //At this point we build the state, now we have to create the configuration for it as well
         //to be used, dynmaicly while drawing
         let dynamic_state = vulkano::command_buffer::DynamicState{
@@ -228,7 +194,7 @@ impl FrameSystem{
         };
 
 
-        println!("Finished renderpass", );
+        println!("Finished main_renderpass", );
 
         FrameSystem{
 
@@ -236,10 +202,11 @@ impl FrameSystem{
 
             engine_settings: settings,
 
-            renderpass: renderpass,
+            main_renderpass: main_renderpass,
+            //Get created when starting a frame for later use
+            current_main_frame_buffer: None,
+
             ///The depth buffer for the compute shader
-            pre_depth_color: pre_depth_color,
-            pre_depth_buffer: pre_depth,
 
             //The buffer to which the depth gets written
             forward_hdr_depth: forward_hdr_depth,
@@ -266,15 +233,6 @@ impl FrameSystem{
             .expect("failed to get new dimenstions in frame system update")
             .get_dimensions()
         };
-
-        self.pre_depth_color = AttachmentImage::transient_input_attachment(self.device.clone(),
-        new_dimensions,
-        self.swapchain_format).expect("failed to create pre_depth color image!");
-
-
-        self.pre_depth_buffer = AttachmentImage::transient_input_attachment(self.device.clone(),
-        new_dimensions,
-        self.image_msaa_depth_format).expect("failed to create pre_depth buffer!");
 
 
         self.forward_hdr_image = AttachmentImage::transient_multisampled_input_attachment(
@@ -309,13 +267,11 @@ impl FrameSystem{
         //recreate all attachments
 
 
-        //Create the frame buffer
-        let frame_buffer = {
-            Arc::new(vulkano::framebuffer::Framebuffer::start(self.renderpass.clone())
-                //Add the pre depth color image
-                //.add(self.pre_depth_color.clone()).expect("Failed to add pre depth color to framebuffer")
+        //Create the main frame buffer
+        self.current_main_frame_buffer = Some(
+            Arc::new(vulkano::framebuffer::Framebuffer::start(self.main_renderpass.clone())
                 //Add the pre depth image
-                .add(self.pre_depth_buffer.clone()).expect("Failed to add pre depth buffer to framebuffer")
+                //.add(self.pre_depth_buffer.clone()).expect("Failed to add pre depth buffer to framebuffer")
                 //the msaa image
                 .add(self.forward_hdr_image.clone()).expect("failed to add msaa image")
                 //the multi sampled depth image
@@ -325,17 +281,10 @@ impl FrameSystem{
                 //and its depth pass
                 //.add(self.depth_buffer.clone()).expect("failed to add depth to frame buffer!")
 
-                .build().expect("failed to build framebuffer!"))
-        };
-
-        //For successfull clearing we generate a vector for all images.
-        let clearing_values = vec![
-            1f32.into(), //pre depth
-            [0.1, 0.1, 0.1, 1.0].into(), //forward color hdr
-            1f32.into(), //forward depth
-            [0.1, 0.1, 0.1, 1.0].into(), //post progress / frame buffer image
-            //1f32.into(), //
-        ];
+                .build()
+                .expect("failed to build main framebuffer!")
+            )
+        );
 
 
 
@@ -345,32 +294,48 @@ impl FrameSystem{
                 self.device.clone(),
                 self.queue.family()
             )
-            .expect("failed to create tmp buffer!")
-            .begin_render_pass(
-                frame_buffer, false,
-                clearing_values
-            ).expect("failed to clear")
-            ;
+            .expect("failed to create tmp buffer!");
 
-            FrameStage::PreDepth(command_buffer)
+            FrameStage::LightCompute(command_buffer)
     }
 
     ///changes to the next render pass, returns the same if already at the last pass
-    pub fn next_pass(&self, command_buffer: FrameStage) -> FrameStage{
+    pub fn next_pass(&mut self, command_buffer: FrameStage) -> FrameStage{
+
         match command_buffer{
-            FrameStage::PreDepth(cb) =>{
-                let next_stage = cb.next_subpass(false).expect("Failed to change to forward pass from pre depth");
-                FrameStage::Forward(next_stage)
+            FrameStage::LightCompute(cb) => {
+                //first of all try to get the main frame buffer, if not possible, panic
+                let main_fb = {
+                    match self.current_main_frame_buffer.take(){
+                        Some(fb) => fb,
+                        None => panic!("Could not find main frame buffer!"),
+                    }
+                };
+
+                //For successfull clearing we generate a vector for all images.
+                let clearing_values = vec![
+                    [0.1, 0.1, 0.1, 1.0].into(), //forward color hdr
+                    1f32.into(), //forward depth
+                    [0.1, 0.1, 0.1, 1.0].into(), //post progress / frame buffer image
+                    //1f32.into(), //
+                ];
+                let next = cb.begin_render_pass(main_fb, false, clearing_values)
+                    .expect("failed to start main renderpass");
+
+                FrameStage::Forward(next)
             }
+
             FrameStage::Forward(cb) => {
                 //change to next subpass
                 let next_stage = cb.next_subpass(false).expect("failed to change to next render pass");
                 FrameStage::Postprogress(next_stage)
             }
+
             FrameStage::Postprogress(cb) => {
                 //println!("Is already at the last stage, end it!", );
                 FrameStage::Finished(cb)
             }
+
             FrameStage::Finished(cb) => FrameStage::Finished(cb),
         }
     }
@@ -394,14 +359,9 @@ impl FrameSystem{
         self.forward_hdr_depth.clone()
     }
 
-    ///Returns the current pre_depth image
-    pub fn get_pre_depth_image(&self) -> Arc<ImageViewAccess +Sync + Send>{
-        self.pre_depth_buffer.clone()
-    }
-
-    ///Returns the currently used renderpass layout
-    pub fn get_renderpass(&self) -> Arc<RenderPassAbstract + Send + Sync>{
-        self.renderpass.clone()
+    ///Returns the currently used main_renderpass layout
+    pub fn get_main_renderpass(&self) -> Arc<RenderPassAbstract + Send + Sync>{
+        self.main_renderpass.clone()
     }
 
     ///Returns the current, up to date dynamic state. Should be used for every onscreen rendering.
@@ -409,11 +369,6 @@ impl FrameSystem{
         &self.dynamic_state
     }
 
-    ///Returns the id of the pre_depth pass
-    pub fn get_pre_depth_pass_id(&self) -> u32{
-        let id_type = render::SubPassType::PreDepth;
-        id_type.get_id()
-    }
 
     ///Returns the id of the object pass
     pub fn get_object_pass_id(&self) -> u32{

@@ -61,6 +61,7 @@ fn main() {
 
     //SUN========================================================================
     //add a matrix of lights
+    /*
     for x in -8..8{
         for y in -8..8{
             let mut point = light::LightPoint::new("LightPoint");
@@ -80,6 +81,24 @@ fn main() {
             }
         }
     }
+    */
+    //Single point light
+    let mut point = light::LightPoint::new("LightPoint");
+    point.set_intensity(100.0);
+    point.set_radius(10.0);
+    point.set_color(Vector3::new(1.0, 1.0, 0.5));
+    //point.set_location(Vector3::new(x as f32 * 3.0, 1.0, 5.0));
+
+    let node_name = light_tree
+    .add_at_root(content::ContentType::PointLight(point), None);
+
+    match light_tree.get_node(&node_name.unwrap()){
+        Some(scene) => {
+            scene.add_job(jobs::SceneJobs::Move(Vector3::new(0.0, 5.0, 3.0)));
+        }
+        None => {println!("Could not find Light", );}, //get on with it
+    }
+
     /*
     //Now add a sun
     let mut sun = light::LightDirectional::new("Sunny");
@@ -98,9 +117,9 @@ fn main() {
     light_tree.update();
     engine.get_asset_manager().get_active_scene().join_at_root(&light_tree);
     engine.get_asset_manager().get_active_scene().update();
-
-    //engine.get_asset_manager().get_active_scene().print_tree();
-
+    println!("THE SCENE ==================================================", );
+    engine.get_asset_manager().get_active_scene().print_tree();
+    println!("END ========================================================", );
     let mut scene_added = false;
 
     'game_loop: loop{
@@ -142,11 +161,56 @@ fn main() {
         }
 
         //test if a is pressed
-        if engine.get_asset_manager().get_keymap().j{
+        if engine.get_asset_manager().get_keymap().h{
 
             match engine.get_asset_manager().get_active_scene().get_node("TestScene"){
                 Some(scene) => {
-                    scene.add_job(jobs::SceneJobs::Rotate(Vector3::new(0.0, 1.0, 0.0)));
+                    scene.add_job(jobs::SceneJobs::Rotate(Vector3::new(1.0, 0.0, 0.0)));
+                }
+                None => {println!("Could not find TestScene", );}, //get on with it
+            }
+        }
+
+        //Change light intensity
+        if engine.get_asset_manager().get_keymap().o{
+
+            match engine.get_asset_manager().get_active_scene().get_node("LightPoint"){
+                Some(light) => {
+                    match light.value{
+                        core::next_tree::content::ContentType::PointLight(ref mut light) => {
+                            let old_intensity = light.get_intensity().clone();
+                            light.set_intensity(old_intensity + 1.0);
+                        },
+                        _ => {println!("No Light :(", );}
+                    }
+                }
+                None => {println!("Could not find Light", );}, //get on with it
+            }
+        }
+
+        //Change light intensity
+        if engine.get_asset_manager().get_keymap().i{
+
+            match engine.get_asset_manager().get_active_scene().get_node("LightPoint"){
+                Some(light) => {
+                    match light.value{
+                        core::next_tree::content::ContentType::PointLight(ref mut light) => {
+                            let old_intensity = light.get_intensity().clone();
+                            light.set_intensity(old_intensity - 1.0);
+                        },
+                        _ => {println!("No Light :(", );}
+                    }
+                }
+                None => {println!("Could not find Light", );}, //get on with it
+            }
+        }
+
+        //test if a is pressed
+        if engine.get_asset_manager().get_keymap().l{
+
+            match engine.get_asset_manager().get_active_scene().get_node("TestScene"){
+                Some(scene) => {
+                    scene.add_job(jobs::SceneJobs::Move(Vector3::new(0.0, -0.1, 0.0)));
                 }
                 None => {println!("Could not find TestScene", );}, //get on with it
             }
@@ -168,19 +232,6 @@ fn main() {
                 //light.add_job(jobs::SceneJobs::Move(Vector3::new(10.0, 10.0, 10.0)));
 
                 println!("Light location: {:?}!", light.attributes.transform.disp);
-            }
-        }
-
-
-        //Rotate the lights sun
-        if engine.get_asset_manager().get_keymap().t{
-
-            match engine.get_asset_manager().get_active_scene().get_node("Sunny"){
-                Some(scene) => {
-                    scene.add_job(jobs::SceneJobs::Rotate(Vector3::new(0.0, 0.0, 1.0)));
-                    println!("SunRot: {:?}!", scene.attributes.transform.rot);
-                }
-                None => {println!("Could not find TestScene", );}, //get on with it
             }
         }
 

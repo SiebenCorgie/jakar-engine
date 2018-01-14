@@ -44,8 +44,8 @@ pub struct PipelineManager {
     engine_settings: Arc<Mutex<engine_settings::EngineSettings>>,
     //stores all the pipelines
     pipelines: BTreeMap<String, Arc<pipeline::Pipeline>>,
-    //stores the renderpass used for the pipeline creation
-    render_pass: Arc<vulkano::framebuffer::RenderPassAbstract + Send + Sync>,
+    //stores the main_renderpass used for the pipeline creation
+    main_renderpass: Arc<vulkano::framebuffer::RenderPassAbstract + Send + Sync>,
     //strores the device this pipeline is based on
     device: Arc<vulkano::device::Device>,
 }
@@ -60,7 +60,7 @@ impl PipelineManager{
     pub fn new(
         device: Arc<vulkano::device::Device>,
         l_engine_settings: Arc<Mutex<engine_settings::EngineSettings>>,
-        renderpass: Arc<vulkano::framebuffer::RenderPassAbstract + Send + Sync>,
+        main_renderpass: Arc<vulkano::framebuffer::RenderPassAbstract + Send + Sync>,
     ) -> Self
     {
         let mut b_tree_map = BTreeMap::new();
@@ -74,35 +74,19 @@ impl PipelineManager{
                 device.clone(),
                 default_pipeline,
                 l_engine_settings.clone(),
-                framebuffer::Subpass::from(renderpass.clone(), subpass_id).expect("failed to create subpass from renderpass"),
+                framebuffer::Subpass::from(
+                    main_renderpass.clone(), subpass_id
+                )
+                .expect("failed to create subpass from main_renderpass"),
             )
         );
 
         b_tree_map.insert(String::from("DefaultPipeline"), default_pipeline);
 
-        //also create a depth pipeline to be used, it actually mixes the pbr-vertx pipeline with
-        //a "nothing" fragment shader to only create a depth output
-        let mut pre_depth_config = pipeline_builder::PipelineConfig::default();
-        pre_depth_config.shader_set = shader_impls::ShaderTypes::PreDepth;
-        pre_depth_config.depth_stencil = pipeline_builder::DepthStencilConfig::SimpleDepthNoStencil;
-
-        let pre_depth_pipeline = Arc::new(
-            pipeline::Pipeline::new(
-                device.clone(),
-                pre_depth_config,
-                l_engine_settings.clone(),
-                framebuffer::Subpass::from(renderpass.clone(), shader_impls::ShaderTypes::PreDepth.get_subpass_id()).expect("failed to create subpass from renderpass"),
-            )
-        );
-        //push it to the manager
-        b_tree_map.insert(String::from("PreDepth"), pre_depth_pipeline);
-
-
-
         PipelineManager{
             engine_settings: l_engine_settings,
             pipelines: b_tree_map,
-            render_pass: renderpass,
+            main_renderpass: main_renderpass,
             device: device,
         }
     }
@@ -116,16 +100,6 @@ impl PipelineManager{
             None =>rt_error("PIPELINE_MANAGER", "PIPELINE MANAGER: Could not find default pipe this should not happen"),
         }
         panic!("Crash could not get default pipeline!")
-    }
-
-    ///Should always return the PreDepth pipeline, if it panics, please file a bug report, this should not happen
-    pub fn get_predepth_pipeline(&self) -> Arc<pipeline::Pipeline>{
-        match self.pipelines.get(&String::from("PreDepth")){
-            Some(pipe) => return pipe.clone(),
-
-            None =>rt_error("PIPELINE_MANAGER", "PIPELINE MANAGER: Could not find PreDepth pipe this should not happen"),
-        }
-        panic!("Crash could not get PreDepth pipeline!")
     }
 
 
@@ -171,7 +145,7 @@ impl PipelineManager{
             self.device.clone(),
             config,
             self.engine_settings.clone(),
-            framebuffer::Subpass::from(self.render_pass.clone(), subpass_id)
+            framebuffer::Subpass::from(self.main_renderpass.clone(), subpass_id)
                 .expect("failed to get subpass at pipeline creation"),
         );
 
@@ -196,7 +170,7 @@ impl PipelineManager{
             if pipe.pipeline_config.compare(&needed_configuration){
                 //test the subpass
                 if pipe.sub_pass == needed_subpass_id{
-                    println!("Found the right pipeline based on the supplied config!", );
+                    //Found the right pipeline based on the supplied config!
                     return pipe.clone()
                 }
             }
@@ -214,7 +188,7 @@ impl PipelineManager{
             device,
             needed_configuration,
             self.engine_settings.clone(),
-            framebuffer::Subpass::from(self.render_pass.clone(), needed_subpass_id)
+            framebuffer::Subpass::from(self.main_renderpass.clone(), needed_subpass_id)
                 .expect("failed to get subpass at pipeline creation"),
         ));
 
@@ -226,7 +200,7 @@ impl PipelineManager{
 
     ///Returns a pipeline which fulfills the `requirements`. If there is none one will be created.
     /// if possible based on the `needed_configuration`. Anyways the pipeline will always be made for
-    /// the `needed_subpass_id` in the renderpass stored in this pipeline_manager.
+    /// the `needed_subpass_id` in the main_renderpass stored in this pipeline_manager.
     ///You can provide an optional `configuration` for the new pipeline.
     pub fn get_pipeline_by_requirements(
         &mut self,
@@ -272,7 +246,7 @@ impl PipelineManager{
             pipeline_conf,
             self.engine_settings.clone(),
 
-            framebuffer::Subpass::from(self.render_pass.clone(), needed_subpass_id)
+            framebuffer::Subpass::from(self.main_renderpass.clone(), needed_subpass_id)
             .expect("failed to get subpass at pipeline creation"),
         ));
 

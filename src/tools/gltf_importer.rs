@@ -13,6 +13,7 @@ use render::pipeline_manager;
 use render;
 
 use vulkano;
+use vulkano::pipeline::blend::LogicOp;
 
 use cgmath::*;
 
@@ -304,7 +305,7 @@ pub fn load_gltf_material(
     let cull_mode = {
         if mat.double_sided(){
             //println!("RENDING DOUBLE SIDED! ======================================================", );
-            pipeline_builder::CullMode::Disabled
+            pipeline_builder::CullMode::Back //Note I have to implement order independent transparency for this to work in complex models
         }else{
             //println!("RENDING SINGLE SIDED! ======================================================", );
             pipeline_builder::CullMode::Back

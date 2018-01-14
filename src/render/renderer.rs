@@ -5,8 +5,9 @@ use render::window;
 use render::render_helper;
 use render::frame_system;
 use render::post_progress;
-use render::pre_depth_system;
+use render::light_culling_system;
 
+use core::next_tree::SceneTree;
 use core::engine_settings;
 use core::resources::camera::Camera;
 //use core::simple_scene_system::node_helper;
@@ -52,7 +53,7 @@ pub struct Renderer  {
     images: Vec<Arc<vulkano::image::SwapchainImage>>,
 
     frame_system: frame_system::FrameSystem,
-    pre_depth_system: pre_depth_system::PreDpethSystem,
+    light_culling_system: light_culling_system::PreDpethSystem,
 
     ///The post progresser
     post_progress: post_progress::PostProgress,
@@ -83,7 +84,7 @@ impl Renderer {
         frame_system: frame_system::FrameSystem,
 
         post_progress: post_progress::PostProgress,
-        pre_depth_system: pre_depth_system::PreDpethSystem,
+        light_culling_system: light_culling_system::PreDpethSystem,
 
         recreate_swapchain: bool,
         engine_settings: Arc<Mutex<engine_settings::EngineSettings>>,
@@ -100,7 +101,7 @@ impl Renderer {
             //Helper systems, the frame system handles... well a frame, the post progress writes the
             //static post_progress pass.AcquireError
             frame_system: frame_system,
-            pre_depth_system: pre_depth_system,
+            light_culling_system: light_culling_system,
             post_progress: post_progress,
 
             recreate_swapchain: recreate_swapchain,
@@ -213,10 +214,6 @@ impl Renderer {
             let start_time = Instant::now();
             (cap_bool, time_step, start_time)
         };
-
-        //println!("Starting Frame", );
-
-
         let (image_number, acquire_future) = {
             match self.check_pipeline(){
                 Ok(k) => {
@@ -248,6 +245,10 @@ impl Renderer {
             translucent_meshes, asset_manager.get_camera()
         );
 
+        //We also need all point and sport lights
+        let all_point_lights = asset_manager.get_active_scene().copy_all_point_lights(&None);
+        let all_spot_lights = asset_manager.get_active_scene().copy_all_spot_lights(&None);
+
         if should_capture{
             let time_needed = time_step.elapsed().subsec_nanos();
             println!("RENDER INFO: ", );
@@ -263,20 +264,15 @@ impl Renderer {
         let mut command_buffer = self.frame_system.new_frame(
             self.images[image_number].clone()
         );
+        //First of all we compute the light clusters
 
-        //Add all opaque meshes to the depth pre pass
-        for node in opaque_meshes.iter(){
-            command_buffer = self.pre_depth_system.draw_object(
-                command_buffer, node, self.frame_system.get_dynamic_state()
-            );
-        }
-
-        //Now we can end this stage (Pre depth)
-        //later this is the point where the compute pass should be started
-        //TODO Actually start it
-        //now end the frame
+        //now execute the compute shader
+        command_buffer = self.light_culling_system.dispatch_compute_shader(
+            command_buffer,
+        );
+        //Now we can end this stage (Pre compute)
         command_buffer = self.frame_system.next_pass(command_buffer);
-
+        //now we are in the main render pass in the forward pass, using this to draw all meshes
 
         //add all opaque meshes to the command buffer
         for opaque_mesh in opaque_meshes.iter(){
@@ -285,7 +281,7 @@ impl Renderer {
 
         //now draw debug data of the meshes if turned on
         if (self.engine_settings.lock().expect("failed to lock settings")).get_render_settings().draw_bounds(){
-            //draw the opaque bounds
+            //draw all opaque
             for mesh in opaque_meshes.iter(){
                 command_buffer = render_helper::add_bound_draw(
                      command_buffer,
@@ -311,7 +307,7 @@ impl Renderer {
 
                 //now draw debug data of the meshes if turned on
                 if (self.engine_settings.lock().expect("failed to lock settings")).get_render_settings().draw_bounds(){
-                    //draw the opaque bounds
+                    //draw the transparent bounds
                     for mesh in ord_tr.iter(){
                         command_buffer = render_helper::add_bound_draw(
                              command_buffer,
@@ -322,6 +318,32 @@ impl Renderer {
                              &self.frame_system.get_dynamic_state()
                          );
                     }
+                    //also draw the light bounds
+                    let all_point_lights = asset_manager.get_active_scene().copy_all_point_lights(&None);
+                    for light in all_point_lights.iter(){
+                        command_buffer = render_helper::add_bound_draw(
+                             command_buffer,
+                             self.pipeline_manager.clone(),
+                             light,
+                             self.device.clone(),
+                             self.uniform_manager.clone(),
+                             &self.frame_system.get_dynamic_state()
+                         );
+                    }
+                    let all_spot_lights = asset_manager.get_active_scene().copy_all_spot_lights(&None);
+                    for light in all_spot_lights.iter(){
+                        command_buffer = render_helper::add_bound_draw(
+                             command_buffer,
+                             self.pipeline_manager.clone(),
+                             light,
+                             self.device.clone(),
+                             self.uniform_manager.clone(),
+                             &self.frame_system.get_dynamic_state()
+                         );
+                    }
+
+
+
                 }
 
             },
@@ -338,18 +360,17 @@ impl Renderer {
 
 
         //finished the forward pass, change to the postprogressing pass
-        let post_progress_pass = self.frame_system.next_pass(command_buffer);
+        command_buffer = self.frame_system.next_pass(command_buffer);
 
         if should_capture{
             println!("\tChanged to subpass", );
         }
 
         //perform the post progressing
-        let after_pp = self.post_progress.execute(
-            post_progress_pass,
+        command_buffer = self.post_progress.execute(
+            command_buffer,
             self.frame_system.get_forward_hdr_image(),
             self.frame_system.get_forward_hdr_depth(),
-            self.frame_system.get_pre_depth_image(),
             &self.frame_system
         );
 
@@ -358,9 +379,9 @@ impl Renderer {
         }
 
         //now finish the frame
-        let in_finished_frame = self.frame_system.next_pass(after_pp);
+        command_buffer = self.frame_system.next_pass(command_buffer);
         let finished_command_buffer = {
-            match self.frame_system.finish_frame(in_finished_frame){
+            match self.frame_system.finish_frame(command_buffer){
                 Ok(cb) => cb,
                 Err(er) =>{
                     println!("{}", er);

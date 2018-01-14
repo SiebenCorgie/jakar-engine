@@ -26,7 +26,7 @@ pub mod post_progress;
 
 ///Handles buffer creation and drawing of the pre depth rendering. It will calculate needed lights
 /// in a Tiled manor later TODO: Implement.
-pub mod pre_depth_system;
+pub mod light_culling_system;
 
 ///An module which collects all the shader implementations, these are usually derived from
 ///vulkano-shader-derive
@@ -35,7 +35,7 @@ pub mod shader_impls;
 
 // A Helper enum to specify which supass id something want, manly used in amterial creation
 pub enum SubPassType {
-    PreDepth,
+    LightCompute,
     Forward,
     PostProgress,
     Finished
@@ -44,17 +44,17 @@ pub enum SubPassType {
 impl SubPassType{
     pub fn get_id(&self) -> u32{
         match self{
-            &SubPassType::PreDepth =>{
+            &SubPassType::LightCompute => { //is in its own compute queue
+                0
+            }
+            &SubPassType::Forward =>{ //the first pass in the rendering
                 0
             },
-            &SubPassType::Forward =>{
+            &SubPassType::PostProgress => { //the second
                 1
             },
-            &SubPassType::PostProgress => {
+            &SubPassType::Finished => { //no actual renderpass atm, alter maybe
                 2
-            },
-            &SubPassType::Finished => {
-                3
             }
         }
     }
