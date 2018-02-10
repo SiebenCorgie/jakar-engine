@@ -11,6 +11,8 @@ layout(set = 0, binding = 0) uniform Data {
   mat4 model;
   mat4 view;
   mat4 proj;
+  float near;
+  float far;
 } u_main;
 
 

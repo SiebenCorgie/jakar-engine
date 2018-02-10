@@ -1,5 +1,5 @@
 use cgmath::*;
-use collision::Aabb3;
+use collision::*;
 use jakar_tree::node::Attribute;
 use super::jobs::SceneJobs;
 
@@ -106,6 +106,7 @@ impl Attribute<SceneJobs> for NodeAttributes{
                     )
                 );
 
+
                 self.transform.rot = delta_rot * self.transform.rot;
                 //if we rotate self, we want to rotate the children around self's location
                 SceneJobs::RotateAroundPoint(r, self.transform.disp)
@@ -119,6 +120,7 @@ impl Attribute<SceneJobs> for NodeAttributes{
                     y: Deg(rotation.y),
                     z: Deg(rotation.z),
                 });
+
 
                 //go to the point
                 //self.transform.disp -= point;
@@ -208,20 +210,33 @@ impl Attribute<SceneJobs> for NodeAttributes{
             None => {},
         }
 
-        //bound
+        //Test the bound against the node bound
         match comp.bound{
             Some(bnd) => {
-                if bnd != self.bound{
+                if !bnd.intersects(&self.bound) && !bnd.contains(&self.bound){
                     return false;
                 }
             },
             None => {},
         }
 
-        //value bound
+        //Testst the frustum relation, if atleas partly inside everything is okay.
+        match comp.frustum{
+            Some(frustum) => {
+                match frustum.contains(&self.value_bound){
+                    Relation::Out => {
+                        return false;
+                    },
+                    _ => {},
+                }
+            },
+            None => {},
+        }
+
+        //test the bound against the nodes value bound
         match comp.value_bound{
             Some(bnd) => {
-                if bnd != self.value_bound{
+                if !bnd.intersects(&self.value_bound) && !bnd.contains(&self.value_bound){
                     return false;
                 }
             },

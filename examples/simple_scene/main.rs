@@ -1,3 +1,4 @@
+
 extern crate vulkano;
 extern crate jakar_engine;
 extern crate cgmath;
@@ -38,7 +39,12 @@ fn main() {
     .with_cursor_state(winit::CursorState::Grab)
     .with_cursor_visibility(winit::MouseCursor::NoneCursor)
     .with_render_settings(graphics_settings)
-    .with_max_fps(10000)
+    .with_asset_update_speed(100)
+    .with_max_fps(200)
+    .with_camera_settings(core::engine_settings::CameraSettings{
+        far_plane: 100.0,
+        near_plane: 0.1,
+    })
     ;
 
     //Start the engine
@@ -51,7 +57,7 @@ fn main() {
     };
 
 
-    engine.get_asset_manager().import_gltf("TestScene", "examples/simple_scene/TestScenes/Cube_Plane.gltf");
+    engine.get_asset_manager().import_gltf("TestScene", "examples/simple_scene/Sponza/Sponza.gltf");
 
 
     let mut light_tree =jakar_tree::tree::Tree::new(
@@ -59,15 +65,22 @@ fn main() {
         jakar_engine::core::next_tree::attributes::NodeAttributes::default()
     );
 
+
     //SUN========================================================================
     //add a matrix of lights
 
-    for x in -8..8{
-        for y in -8..8{
+    for x in -10..10{
+        for y in -10..10{
             let mut point = light::LightPoint::new("LightPoint");
-            point.set_intensity(( (x + 8) * 2) as f32);
-            point.set_color(Vector3::new(1.0, 1.0, 0.5));
-            //point.set_location(Vector3::new(x as f32 * 3.0, 1.0, 5.0));
+            point.set_intensity(
+                5.0
+            );
+            point.set_color(
+                Vector3::new(
+                    (x + 5) as f32 / 15.0, (x + 10) as f32 / 100.0, (y + 5) as f32 / 15.0
+                )
+            );
+            point.set_radius(2.0);
 
             let node_name = light_tree
             .add_at_root(content::ContentType::PointLight(point), None);
@@ -75,30 +88,20 @@ fn main() {
             //Set the location
             match light_tree.get_node(&node_name.unwrap()){
                 Some(scene) => {
-                    scene.add_job(jobs::SceneJobs::Move(Vector3::new(x as f32 * 3.0, 1.0, y as f32 * 3.0)));
+                    scene.add_job(
+                        jobs::SceneJobs::Move(
+                            Vector3::new(
+                                x as f32 * 2.0,
+                                (x + y) as f32 * 2.0,
+                                y as f32 * 2.0
+                            )
+                        )
+                    );
                 }
                 None => {println!("Could not find Light", );}, //get on with it
             }
         }
     }
-    /*
-    //Single point light
-    let mut point = light::LightPoint::new("LightPoint");
-    point.set_intensity(100.0);
-    point.set_radius(10.0);
-    point.set_color(Vector3::new(1.0, 1.0, 0.5));
-    //point.set_location(Vector3::new(x as f32 * 3.0, 1.0, 5.0));
-
-    let node_name = light_tree
-    .add_at_root(content::ContentType::PointLight(point), None);
-
-    match light_tree.get_node(&node_name.unwrap()){
-        Some(scene) => {
-            scene.add_job(jobs::SceneJobs::Move(Vector3::new(0.0, 5.0, 3.0)));
-        }
-        None => {println!("Could not find Light", );}, //get on with it
-    }
-    */
     /*
     //Now add a sun
     let mut sun = light::LightDirectional::new("Sunny");
@@ -171,68 +174,37 @@ fn main() {
             }
         }
 
-        //Change light intensity
-        if engine.get_asset_manager().get_keymap().o{
 
-            match engine.get_asset_manager().get_active_scene().get_node("LightPoint"){
-                Some(light) => {
-                    match light.value{
-                        core::next_tree::content::ContentType::PointLight(ref mut light) => {
-                            let old_intensity = light.get_intensity().clone();
-                            light.set_intensity(old_intensity + 1.0);
-                        },
-                        _ => {println!("No Light :(", );}
-                    }
-                }
-                None => {println!("Could not find Light", );}, //get on with it
+        let light_names = engine.get_asset_manager().get_active_scene().all_point_light_names(&None);
+        for i in light_names.into_iter(){
+            //Get the light (unwarp is save)
+            let mut engine_lock = engine.get_asset_manager();
+            let mut light = engine_lock.get_active_scene().get_node(&i).unwrap();
+
+            let add_vec = Vector3::new(
+                0.01,
+                0.02,
+                0.005
+            );
+
+            light.add_job(jobs::SceneJobs::Move(
+                add_vec)
+            );
+
+            if light.attributes.transform.disp.x > 10.0{
+                light.attributes.transform.disp.x = -10.0;
             }
-        }
 
-        //Change light intensity
-        if engine.get_asset_manager().get_keymap().i{
-
-            match engine.get_asset_manager().get_active_scene().get_node("LightPoint"){
-                Some(light) => {
-                    match light.value{
-                        core::next_tree::content::ContentType::PointLight(ref mut light) => {
-                            let old_intensity = light.get_intensity().clone();
-                            light.set_intensity(old_intensity - 1.0);
-                        },
-                        _ => {println!("No Light :(", );}
-                    }
-                }
-                None => {println!("Could not find Light", );}, //get on with it
+            if light.attributes.transform.disp.y > 3.0{
+                light.attributes.transform.disp.y = -3.0;
             }
-        }
 
-        //test if a is pressed
-        if engine.get_asset_manager().get_keymap().l{
-
-            match engine.get_asset_manager().get_active_scene().get_node("TestScene"){
-                Some(scene) => {
-                    scene.add_job(jobs::SceneJobs::Move(Vector3::new(0.0, -0.1, 0.0)));
-                }
-                None => {println!("Could not find TestScene", );}, //get on with it
+            if light.attributes.transform.disp.z > 10.0{
+                light.attributes.transform.disp.z = -10.0;
             }
-        }
 
-        //Rotate the lights around 0.0.0
-        if engine.get_asset_manager().get_keymap().r{
+            //light.add_job(jobs::SceneJobs::Move(Vector3::new(10.0, 10.0, 10.0)));
 
-            let light_names = engine.get_asset_manager().get_active_scene().all_point_light_names(&None);
-            for i in light_names.into_iter(){
-                //Get the light (unwarp is save)
-                let mut engine_lock = engine.get_asset_manager();
-                let mut light = engine_lock.get_active_scene().get_node(&i).unwrap();
-
-
-                light.add_job(jobs::SceneJobs::RotateAroundPoint(
-                    Vector3::new(0.0, 1.0, 0.0), Vector3::new(0.0, 0.0, 0.0))
-                );
-                //light.add_job(jobs::SceneJobs::Move(Vector3::new(10.0, 10.0, 10.0)));
-
-                println!("Light location: {:?}!", light.attributes.transform.disp);
-            }
         }
 
 
@@ -269,17 +241,22 @@ fn main() {
 
         if engine.get_asset_manager().get_keymap().t_1{
             let settings = engine.get_settings();
-            settings.lock().expect("fail debug false").get_render_settings().set_debug_view(jakar_engine::core::render_settings::DebugView::PreDepth);
+            settings.lock().expect("fail debug false").get_render_settings().set_debug_view(jakar_engine::core::render_settings::DebugView::ClusterId);
         }
 
         if engine.get_asset_manager().get_keymap().t_2{
             let settings = engine.get_settings();
-            settings.lock().expect("fail debug false").get_render_settings().set_debug_view(jakar_engine::core::render_settings::DebugView::MainDepth);
+            settings.lock().expect("fail debug false").get_render_settings().set_debug_view(jakar_engine::core::render_settings::DebugView::HeatMap);
         }
 
         if engine.get_asset_manager().get_keymap().t_3{
             let settings = engine.get_settings();
-            settings.lock().expect("fail debug false").get_render_settings().set_debug_view(jakar_engine::core::render_settings::DebugView::Normal);
+            settings.lock().expect("fail debug false").get_render_settings().set_debug_view(jakar_engine::core::render_settings::DebugView::MainDepth);
+        }
+
+        if engine.get_asset_manager().get_keymap().t_4{
+            let settings = engine.get_settings();
+            settings.lock().expect("fail debug false").get_render_settings().set_debug_view(jakar_engine::core::render_settings::DebugView::Shaded);
         }
 
 

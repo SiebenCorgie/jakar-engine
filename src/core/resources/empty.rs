@@ -9,6 +9,7 @@ pub struct Empty {
     bound: Aabb3<f32>,
 }
 
+
 impl Empty{
     ///Returns an Empty with a 1x1x1 bound and `name` as name
     pub fn new(name: &str) -> Self{
@@ -22,6 +23,8 @@ impl Empty{
         }
     }
 }
+
+
 
 impl ReturnBoundInfo for Empty{
     ///return the max size of its bound

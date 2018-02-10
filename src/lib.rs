@@ -176,8 +176,30 @@ impl JakarEngine {
                 // that the engine only starts if the renderer is created successfuly.
                 let mut render_builder = render::render_builder::RenderBuilder::new();
                 //Configure======================================
-                //render_builder.layer_loading = render::render_builder::LayerLoading::All;
-                //render_builder.vulkan_messages = vulkano::instance::debug::MessageTypes::errors_and_warnings();
+                {
+                    let settings = render_settings.lock().expect("failed to lock render settings");
+                    //Check for the debug mode, if we are in debug mode, setup the layers
+                    match settings.build_mode{
+                        //Throw all messages
+                        core::engine_settings::BuildType::Debug => {
+                            render_builder.layer_loading = render::render_builder::LayerLoading::All;
+                            render_builder.vulkan_messages = vulkano::instance::debug::MessageTypes::errors_and_warnings();
+                        }
+                        //Throw only errors
+                        core::engine_settings::BuildType::ReleaseWithDebugMessages => {
+                            render_builder.layer_loading = render::render_builder::LayerLoading::NoLayer;
+                            render_builder.vulkan_messages = vulkano::instance::debug::MessageTypes::errors();
+                        }
+                        //Throw nothing
+                        core::engine_settings::BuildType::Release => {
+                            render_builder.layer_loading = render::render_builder::LayerLoading::NoLayer;
+                            render_builder.vulkan_messages = vulkano::instance::debug::MessageTypes::none();
+                        }
+                    }
+
+
+                }
+
                 //===============================================
                 //lock the input system for the creation
                 let mut input_sys = render_input_system
@@ -292,7 +314,8 @@ impl JakarEngine {
                     .lock().expect("failed to lock asset manager");
                     (*asset_manager_lck).clone()
                 };
-                gpu_future = (*renderer_lck).render(&mut asset_copy, gpu_future);
+                //gpu_future =
+                (*renderer_lck).render(&mut asset_copy); // gpu_future);
 
                 //Tet if the engine should still run
                 let engine_is_running = {

@@ -204,8 +204,11 @@ impl Renderer {
     pub fn render(
         &mut self,
         asset_manager: &mut asset_manager::AssetManager,
-        previous_frame: Box<GpuFuture>,
-    ) -> Box<GpuFuture>{
+        //previous_frame: Box<GpuFuture>,
+    ){
+
+        //Sync gput
+        let this_frame: Box<GpuFuture> = Box::new(vulkano::sync::now(self.device.clone()));
 
         //First of all we get info if we should debug anything, if so this bool will be true
         let (should_capture, mut time_step, start_time) = {
@@ -222,7 +225,7 @@ impl Renderer {
                 Err(e) => {
                     println!("Could not get next swapchain image: {}", e);
                     //early return to restart the frame
-                    return previous_frame;
+                    return; // this_frame;
                 }
             }
         };
@@ -248,7 +251,7 @@ impl Renderer {
         if should_capture{
             let time_needed = time_step.elapsed().subsec_nanos();
             println!("RENDER INFO: ", );
-            println!("\tNedded {} ms to get all opaque meshes", time_needed as f32 / 1_000_000.0);
+            println!("\tRE: Nedded {} ms to get all opaque meshes", time_needed as f32 / 1_000_000.0);
             time_step = Instant::now()
         }
 
@@ -268,7 +271,7 @@ impl Renderer {
 
         if should_capture{
             let time_needed = time_step.elapsed().subsec_nanos();
-            println!("\tNedded {} ms to update the light set!", time_needed as f32 / 1_000_000.0);
+            println!("\tRE: Nedded {} ms to update the light set!", time_needed as f32 / 1_000_000.0);
             time_step = Instant::now()
         }
 
@@ -278,9 +281,10 @@ impl Renderer {
         );
         if should_capture{
             let time_needed = time_step.elapsed().subsec_nanos();
-            println!("\tNedded {} ms to dispatch compute shader", time_needed as f32 / 1_000_000.0);
+            println!("\tRE: Nedded {} ms to dispatch compute shader", time_needed as f32 / 1_000_000.0);
             time_step = Instant::now()
         }
+
         //Now we can end this stage (Pre compute)
         command_buffer = self.frame_system.next_pass(command_buffer);
         //now we are in the main render pass in the forward pass, using this to draw all meshes
@@ -291,7 +295,7 @@ impl Renderer {
         }
         if should_capture{
             let time_needed = time_step.elapsed().subsec_nanos();
-            println!("\tNedded {} ms to draw all opaque meshes", time_needed as f32 / 1_000_000.0);
+            println!("\tRE: Nedded {} ms to draw all opaque meshes", time_needed as f32 / 1_000_000.0);
             time_step = Instant::now()
         }
 
@@ -310,7 +314,7 @@ impl Renderer {
             }
             if should_capture{
                 let time_needed = time_step.elapsed().subsec_nanos();
-                println!("\tNedded {} ms to draw all mesh bounds!", time_needed as f32 / 1_000_000.0);
+                println!("\tRE: Nedded {} ms to draw all mesh bounds!", time_needed as f32 / 1_000_000.0);
                 time_step = Instant::now()
             }
         }
@@ -328,7 +332,7 @@ impl Renderer {
 
                 if should_capture{
                     let time_needed = time_step.elapsed().subsec_nanos();
-                    println!("\tNedded {} ms to draw all transparent meshes!", time_needed as f32 / 1_000_000.0);
+                    println!("\tRE: Nedded {} ms to draw all transparent meshes!", time_needed as f32 / 1_000_000.0);
                     time_step = Instant::now()
                 }
 
@@ -348,7 +352,7 @@ impl Renderer {
 
                     if should_capture{
                         let time_needed = time_step.elapsed().subsec_nanos();
-                        println!("\tNedded {} ms to draw all transparent mesh bounds!", time_needed as f32 / 1_000_000.0);
+                        println!("\tRE: Nedded {} ms to draw all transparent mesh bounds!", time_needed as f32 / 1_000_000.0);
                         time_step = Instant::now()
                     }
                     //also draw the light bounds
@@ -377,7 +381,7 @@ impl Renderer {
                     }
                     if should_capture{
                         let time_needed = time_step.elapsed().subsec_nanos();
-                        println!("\tNedded {} ms to draw light bounds!", time_needed as f32 / 1_000_000.0);
+                        println!("\tRE: Nedded {} ms to draw light bounds!", time_needed as f32 / 1_000_000.0);
                         time_step = Instant::now()
                     }
                 }
@@ -391,7 +395,7 @@ impl Renderer {
 
 
         if should_capture{
-            println!("\tFinished adding meshes", );
+            println!("\tRE: Finished adding meshes", );
         }
 
 
@@ -399,7 +403,7 @@ impl Renderer {
         command_buffer = self.frame_system.next_pass(command_buffer);
 
         if should_capture{
-            println!("\tChanged to subpass", );
+            println!("\tRE: Changed to subpass", );
         }
 
         //perform the post progressing
@@ -411,8 +415,9 @@ impl Renderer {
         );
 
         if should_capture{
-            println!("\tAdded postprogress thingy", );
+            println!("\tRE: Added postprogress thingy", );
         }
+
 
         //now finish the frame
         command_buffer = self.frame_system.next_pass(command_buffer);
@@ -421,13 +426,13 @@ impl Renderer {
                 Ok(cb) => cb,
                 Err(er) =>{
                     println!("{}", er);
-                    return previous_frame;
+                    return; // previous_frame;
                 }
             }
         };
 
         if should_capture{
-            println!("\tEnding frame", );
+            println!("\tRE: Ending frame", );
         }
 
 
@@ -437,7 +442,7 @@ impl Renderer {
         .build().expect("failed to build command buffer");
 
 
-        let after_prev_and_aq = previous_frame.join(acquire_future);
+        let after_prev_and_aq = this_frame.join(acquire_future);
 
         let before_present_frame = after_prev_and_aq.then_execute(self.queue.clone(), real_cb)
         .expect("failed to add execute to the frame");
@@ -461,12 +466,12 @@ impl Renderer {
         //Resetting debug options
         if should_capture{
             let frame_time = start_time.elapsed().subsec_nanos();
-            println!("FrameTime: {}ms", frame_time as f32/1_000_000.0);
-            println!("Which is {}fps", 1.0/(frame_time as f32/1_000_000.0));
+            println!("\t RE: FrameTime: {}ms", frame_time as f32/1_000_000.0);
+            println!("\t RE: Which is {}fps", 1.0/(frame_time as f32/1_000_000_000.0));
             self.engine_settings.lock().expect("failed to lock settings").stop_capture();
         }
 
-        Box::new(after_frame)
+        //Box::new(after_frame)
     }
 
     ///adds a `node` to the `command_buffer` if possible to be rendered.
@@ -480,68 +485,86 @@ impl Renderer {
     where AutoCommandBufferBuilder: Sized + 'static
     {
 
-        //unwaraps the command_buffer_builder
-        let command_buffer = {
-            match frame_stage{
-                frame_system::FrameStage::Forward(cb) => cb,
-                _ => {
-                    panic!("Got wrong frame system stage while building command buffer")
-                }
+        let mut time_step = Instant::now();
+
+
+        match frame_stage{
+            frame_system::FrameStage::Forward(cb) => {
+                //get the actual mesh as well as its pipeline an create the descriptor sets
+                let mesh_locked = match node.value{
+                    next_tree::content::ContentType::Mesh(ref mesh) => mesh.clone(),
+                    _ => return frame_system::FrameStage::Forward(cb), //is no mesh :(
+                };
+
+                //println!("Needed {}ms to get mesh lock", time_step.elapsed().subsec_nanos() as f32 / 1_000_000.0);
+                //time_step = Instant::now();
+
+                let mesh = mesh_locked.lock().expect("failed to lock mesh in cb creation");
+
+                let mesh_transform = node.attributes.get_matrix();
+
+                let material_locked = mesh.get_material();
+                let mut material = material_locked
+                .lock()
+                .expect("failed to lock mesh for command buffer generation");
+
+                let pipeline = material.get_vulkano_pipeline();
+
+                //println!("Needed {}ms Till sets", time_step.elapsed().subsec_nanos() as f32 / 1_000_000.0);
+                //time_step = Instant::now();
+
+                let set_01 = {
+                    //aquirre the tranform matrix and generate the new set_01
+                    material.get_set_01(mesh_transform)
+                };
+
+                //println!("Needed {}ms set 01", time_step.elapsed().subsec_nanos() as f32 / 1_000_000.0);
+                //time_step = Instant::now();
+
+                let set_02 = {
+                    material.get_set_02()
+                };
+
+                //println!("Needed {}ms set 02", time_step.elapsed().subsec_nanos() as f32 / 1_000_000.0);
+                //time_step = Instant::now();
+
+                let set_03 = {
+                    material.get_set_03()
+                };
+
+                //println!("Needed {}ms set 03", time_step.elapsed().subsec_nanos() as f32 / 1_000_000.0);
+                //time_step = Instant::now();
+
+                let set_04 = {
+                    material.get_set_04(&mut self.light_culling_system)
+                };
+
+                //println!("Needed {}ms set 04", time_step.elapsed().subsec_nanos() as f32 / 1_000_000.0);
+                //time_step = Instant::now();
+
+                //extend the current command buffer by this mesh
+                let new_cb = cb.draw_indexed(
+                    pipeline,
+                    self.frame_system.get_dynamic_state().clone(),
+                    mesh.get_vertex_buffer(), //vertex buffer (static usually)
+                    mesh.get_index_buffer(), //index buffer
+                    (set_01, set_02, set_03, set_04), //descriptor sets (currently static)
+                    ()
+                )
+                .expect("Failed to draw in command buffer!");
+
+
+                //println!("Needed {}ms to draw", time_step.elapsed().subsec_nanos() as f32 / 1_000_000.0);
+                //time_step = Instant::now();
+
+                return frame_system::FrameStage::Forward(new_cb);
+            },
+            _ => {
+                println!("Tried to draw mesh in wrong stage!", );
             }
-        };
+        }
 
-        //get the actual mesh as well as its pipeline an create the descriptor sets
-        let mesh_locked = match node.value{
-            next_tree::content::ContentType::Mesh(ref mesh) => mesh.clone(),
-            _ => return frame_system::FrameStage::Forward(command_buffer), //is no mesh :(
-        };
-
-        let mesh = mesh_locked.lock().expect("failed to lock mesh in cb creation");
-
-        let mesh_transform = node.attributes.get_matrix();
-
-        let material_locked = mesh.get_material();
-        let mut material = material_locked
-        .lock()
-        .expect("failed to lock mesh for command buffer generation");
-
-        let pipeline = material.get_vulkano_pipeline();
-
-        let set_01 = {
-            //aquirre the tranform matrix and generate the new set_01
-            material.get_set_01(mesh_transform)
-        };
-
-        let set_02 = {
-            material.get_set_02()
-        };
-
-        let set_03 = {
-            material.get_set_03()
-        };
-
-        let set_04 = {
-            material.get_set_04(&mut self.light_culling_system)
-        };
-
-        //extend the current command buffer by this mesh
-        let new_cb = command_buffer
-            .draw_indexed(
-                pipeline,
-                self.frame_system.get_dynamic_state().clone(),
-
-                mesh
-                .get_vertex_buffer(), //vertex buffer (static usually)
-                mesh
-                .get_index_buffer(
-                    self.device.clone(), self.queue.clone()
-                ).clone(), //index buffer
-                (set_01, set_02, set_03, set_04), //descriptor sets (currently static)
-                ()
-            )
-            .expect("Failed to draw in command buffer!");
-
-            frame_system::FrameStage::Forward(new_cb)
+        return frame_stage;
 
     }
 

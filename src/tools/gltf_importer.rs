@@ -517,7 +517,6 @@ pub fn load_gltf_mesh(
             (min,max)
         };
 
-
         for i in 0..positions.len(){
             let vertex = mesh::Vertex::new(
                 positions[i],
@@ -529,7 +528,7 @@ pub fn load_gltf_mesh(
             vertices.push(vertex);
         }
         //write new vertices as well as indices to mesh
-        add_mesh.set_vertices_and_indices(vertices, indices, device.clone(), queue.clone());
+        add_mesh.set_vertices_and_indices(vertices, indices);
         //TODO SETUP BOUNDS
         add_mesh.set_bound(
             Point3::new(mins[0], mins[1], mins[2]),

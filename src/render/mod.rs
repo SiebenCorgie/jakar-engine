@@ -32,7 +32,6 @@ pub mod light_culling_system;
 ///vulkano-shader-derive
 pub mod shader_impls;
 
-
 // A Helper enum to specify which supass id something want, manly used in amterial creation
 pub enum SubPassType {
     LightCompute,
@@ -46,7 +45,7 @@ impl SubPassType{
         match self{
             &SubPassType::LightCompute => { //is in its own compute queue
                 0
-            }
+            },
             &SubPassType::Forward =>{ //the first pass in the rendering
                 0
             },

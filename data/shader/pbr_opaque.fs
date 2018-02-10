@@ -2,12 +2,8 @@
 
 #extension GL_ARB_shading_language_420pack : enable
 
-//General definition
-#define MAX_DIR_LIGHTS 6
-#define MAX_POINT_LIGHTS 512
-#define MAX_SPOT_LIGHTS 512
-
 const float kPi = 3.14159265;
+
 
 ///INS FROM VERTEX
 //Vertex Shader Input
@@ -15,7 +11,9 @@ layout(location = 0) in vec3 v_normal;
 layout(location = 1) in vec3 FragmentPosition;
 layout(location = 2) in vec2 v_TexCoord;
 layout(location = 3) in vec3 v_position;
-layout(location = 4) in mat3 v_TBN;
+layout(location = 4) in vec4 ndc_Pos;
+layout(location = 5) in mat3 v_TBN;
+
 
 
 //Global uniforms
@@ -24,6 +22,8 @@ layout(set = 0, binding = 0) uniform Data {
   mat4 model;
   mat4 view;
   mat4 proj;
+  float near;
+  float far;
 } u_main;
 
 //TEXTURES
@@ -54,8 +54,27 @@ layout(set = 2, binding = 1) uniform TextureFactors {
   float occlusion_factor;
 } u_tex_fac;
 
+
+
 //LIGHTS
 //==============================================================================
+//Represents a single cluster
+struct Cluster{
+  uint point_count;
+  uint spot_count;
+  uint point_indice[512];
+  uint spot_indice[512];
+};
+
+const uvec3 cluster_size = uvec3(32,16,32);
+//Represents all clusters in the 3d grid
+layout(set = 3, binding = 0) readonly buffer ClusterBuffer {
+  vec3 min_extend;
+  vec3 max_extend;
+  Cluster data[cluster_size.x][cluster_size.y][cluster_size.z];
+} indice_buffer;
+
+
 struct PointLight
 {
   vec3 color;
@@ -64,7 +83,7 @@ struct PointLight
   float radius;
 };
 
-layout(set = 3, binding = 0) buffer point_lights{
+layout(set = 3, binding = 1) readonly buffer point_lights{
   PointLight p_light[];
 }u_point_light;
 //==============================================================================
@@ -75,7 +94,7 @@ struct DirectionalLight
   float intensity;
 };
 
-layout(set = 3, binding = 1) buffer directional_lights{
+layout(set = 3, binding = 2) readonly buffer directional_lights{
   DirectionalLight d_light[];
 }u_dir_light;
 //==============================================================================
@@ -92,13 +111,13 @@ struct SpotLight
 
 };
 
-layout(set = 3, binding = 2) buffer spot_lights{
+layout(set = 3, binding = 3) readonly buffer spot_lights{
   SpotLight s_light[];
 }u_spot_light;
 //==============================================================================
 
 //descibes the count of lights used
-layout(set = 3, binding = 3) uniform LightCount{
+layout(set = 3, binding = 4) uniform LightCount{
   uint points;
   uint directionals;
   uint spots;
@@ -179,11 +198,15 @@ vec3 srgb_to_linear(vec3 c) {
 //calculates the light falloff based on a distance and a radius
 //shamlessly stolen from epics paper: Real Shading in Unreal Engine 4
 //Source: https://cdn2.unrealengine.com/Resources/files/2013SiggraphPresentationsNotes-26915738.pdf figure (9)
-float calcFalloff(float distance, float radius){
-  float dtr = distance/radius;
+float calcFalloff(float dist, float radius){
+
+  float dtr = dist/radius;
   float falloff_top = clamp(1 - (dtr*dtr*dtr*dtr), 0.0, 1.0);
-  float falloff = falloff_top / (distance*distance + 1);
+  float falloff = falloff_top / (dist*dist + 1);
   return falloff;
+
+
+
 }
 
 
@@ -299,7 +322,23 @@ vec3 calcSpotLight(SpotLight light, vec3 FragmentPosition, vec3 albedo, float me
   return ((kD * albedo / PI + specular) * radiance * NdotL) * spot_intensity;  // note that we already multiplied the BRDF by the Fresnel (kS) so we won't multiply by kS again
 }
 
+bool isInClusters(){
 
+  if (
+    v_position.x < indice_buffer.min_extend.x ||
+    v_position.y < indice_buffer.min_extend.y ||
+    v_position.z < indice_buffer.min_extend.z
+    ){return false;}
+
+  if (
+    v_position.x > indice_buffer.max_extend.x ||
+    v_position.y > indice_buffer.max_extend.y ||
+    v_position.z > indice_buffer.max_extend.z
+    ){return false;}
+
+  return true;
+
+}
 
 // ----------------------------------------------------------------------------
 void main()
@@ -319,7 +358,7 @@ void main()
   if (u_tex_usage_info.b_metal != 1) {
     metallic = u_tex_fac.metal_factor;
   }else{
-    metallic = texture(t_Metall_Rough, v_TexCoord).r * u_tex_fac.metal_factor;
+    metallic = texture(t_Metall_Rough, v_TexCoord).b * u_tex_fac.metal_factor;
   }
 
   //Set roughness color
@@ -335,7 +374,7 @@ void main()
   if (u_tex_usage_info.b_occlusion != 1) {
     ao = u_tex_fac.occlusion_factor;
   }else{
-    ao = texture(t_Occlusion, v_TexCoord).b * u_tex_fac.occlusion_factor;
+    ao = texture(t_Occlusion, v_TexCoord).r * u_tex_fac.occlusion_factor;
   }
 
   //TODO implemetn emmessive
@@ -359,31 +398,72 @@ void main()
   vec3 Lo = vec3(0.0);
 
 
-  //Point Lights
-  for(int i = 0; i < min(MAX_POINT_LIGHTS, u_light_count.points); ++i)
-  {
-    if (u_point_light.p_light[i].intensity == 0.0){
-      continue;
+  vec3 test_color = vec3(0.0);
+
+  //We can early check if we are inside the clusters which where calculated. If not we can skip point
+  // and spotlight calculation
+  if (isInClusters()){
+
+    float x_length = indice_buffer.max_extend.x - indice_buffer.min_extend.x;
+    float fragment_x_length = indice_buffer.max_extend.x - v_position.x;
+    //No find out at which 1/16th of the x_length we are
+    uint in_x = clamp( uint(fragment_x_length / (x_length * (1.0/float(cluster_size.x)))), 0, cluster_size.x-1);
+
+    float y_length = indice_buffer.max_extend.y - indice_buffer.min_extend.y;
+    float fragment_y_length = indice_buffer.max_extend.y - v_position.y;
+    //No find out at which 1/16th of the x_length we are
+    uint in_y = clamp( uint(fragment_y_length / (y_length * (1.0/float(cluster_size.y)))), 0, cluster_size.y-1);
+
+    float z_length = indice_buffer.max_extend.z - indice_buffer.min_extend.z;
+    float fragment_z_length = indice_buffer.max_extend.z - v_position.z;
+    //No find out at which 1/16th of the x_length we are
+    uint in_z = clamp( uint(fragment_z_length / (z_length * (1.0/float(cluster_size.z)))), 0, cluster_size.z-1);
+
+    uint p_light_count = indice_buffer.data[cluster_size.x-1 - in_x][cluster_size.y-1 - in_y][cluster_size.z-1 - in_z].point_count;
+
+    uint value = p_light_count;
+
+    if (value < 500){
+      test_color = vec3(1.0, 0.0, 0.0);
     }
-    Lo += calcPointLight(u_point_light.p_light[i], FragmentPosition, albedo.xyz, metallic, roughness, V, N, F0);
+
+    if (value < 100){
+      //blue and some green
+      test_color  = vec3(0.0, 1.0, 0.0);
+    }
+
+    if (value < 10){
+      //only blue
+      test_color = vec3(0.0,0.0, 1.0);
+    }
+
+    if (value <= 0){
+      test_color = vec3(0.0);
+    }
+
+
+    //Point Lights
+    for(uint l_i = 0; l_i < p_light_count && l_i < 512; l_i++)
+    {
+      uint ted_index = indice_buffer.data[cluster_size.x-1 - in_x][cluster_size.y-1 - in_y][cluster_size.z-1 - in_z].point_indice[l_i];
+      PointLight light = u_point_light.p_light[ted_index];
+      Lo += calcPointLight(light, FragmentPosition, albedo.xyz, metallic, roughness, V, N, F0);
+    }
+
+
+
   }
 
-  //Directional Lights
-  for(int i = 0; i < min(MAX_DIR_LIGHTS, u_light_count.directionals); ++i){
-    if (u_dir_light.d_light[i].intensity == 0.0){
-      continue;
-    }
-    Lo += calcDirectionalLight(u_dir_light.d_light[i], FragmentPosition, albedo.xyz, metallic, roughness, V, N, F0);
-  }
   //Spot Lights
-  for(int i = 0; i < min(MAX_SPOT_LIGHTS, u_light_count.spots); ++i){
-    if (u_spot_light.s_light[i].intensity == 0.0){
-      continue;
-    }
+  for(int i = 0; i < u_light_count.spots; i++){
     Lo += calcSpotLight(u_spot_light.s_light[i], FragmentPosition, albedo.xyz, metallic, roughness, V, N, F0);
   }
 
-
+  //Directional Lights
+  for(int i = 0; i < u_light_count.directionals; i++){
+    Lo += calcDirectionalLight(u_dir_light.d_light[i], FragmentPosition, albedo.xyz, metallic, roughness, V, N, F0);
+  }
+  //TODO
   // ambient lighting (note that the next IBL tutorial will replace
   // this ambient lighting with environment lighting).
   vec3 ambient = vec3(0.03) * albedo.xyz * ao;

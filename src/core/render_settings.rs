@@ -5,17 +5,19 @@
 ///post progress stage
 #[derive(Clone)]
 pub enum DebugView {
-    Normal,
-    PreDepth,
+    ClusterId,
+    HeatMap,
     MainDepth,
+    Shaded,
 }
 
 impl DebugView{
     pub fn as_shader_int(&self) -> i32{
         match self{
-            &DebugView::Normal => 0,
-            &DebugView::PreDepth => 1,
+            &DebugView::ClusterId => 0,
+            &DebugView::HeatMap => 1,
             &DebugView::MainDepth => 2,
+            &DebugView::Shaded => 3,
         }
     }
 }
@@ -81,7 +83,7 @@ impl RenderSettings{
             exposure: 1.0,
 
             debug_bounds: false,
-            debug_view: DebugView::Normal,
+            debug_view: DebugView::Shaded,
 
             max_lights: LightSpecConstants{
                 max_point_lights: 512,

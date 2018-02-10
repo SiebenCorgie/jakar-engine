@@ -55,6 +55,8 @@ impl UniformManager{
             model : <Matrix4<f32>>::identity().into(),
             view : <Matrix4<f32>>::identity().into(),
             proj : <Matrix4<f32>>::identity().into(),
+            near: 0.1,
+            far: 100.0,
         };
 
         let light_count_tmp = lights::ty::LightCount{

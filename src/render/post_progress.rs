@@ -1,5 +1,6 @@
 
 use render::shader_impls::default_pstprg_fragment;
+use render::light_culling_system::light_cull_shader;
 use render::pipeline;
 use render::frame_system::FrameStage;
 use render::frame_system::FrameSystem;
@@ -9,6 +10,7 @@ use core::engine_settings;
 use vulkano;
 use vulkano::descriptor::descriptor_set::PersistentDescriptorSet;
 use vulkano::image::traits::ImageViewAccess;
+use vulkano::buffer::device_local::DeviceLocalBuffer;
 use vulkano::buffer::cpu_pool::CpuBufferPool;
 
 use std::sync::{Arc, Mutex};
@@ -61,7 +63,6 @@ impl PostProgress{
         vertices.push(PostProgressVertex::new([1.0, -1.0], [1.0, -1.0]));
         vertices.push(PostProgressVertex::new([1.0; 2], [1.0; 2]));
 
-
         let sample_vertex_buffer = vulkano::buffer::cpu_access::CpuAccessibleBuffer
                                     ::from_iter(device.clone(), vulkano::buffer::BufferUsage::all(), vertices.iter().cloned())
                                     .expect("failed to create buffer");
@@ -101,7 +102,8 @@ impl PostProgress{
                     .build()
                     .expect("failed to build postprogress cb");
 
-                let (exposure, gamma, msaa, show_mode_int) = {
+                //Might add screen extend
+                let (exposure, gamma, msaa, show_mode_int, far, near) = {
                     let mut es_lck = self.engine_settings
                     .lock()
                     .expect("failed to lock settings for frame creation");
@@ -110,7 +112,9 @@ impl PostProgress{
                     let gamma = es_lck.get_render_settings().get_gamma();
                     let msaa = es_lck.get_render_settings().get_msaa_factor();
                     let debug_int = es_lck.get_render_settings().get_debug_view().as_shader_int();
-                    (exposure, gamma, msaa, debug_int)
+                    let far_plane = es_lck.camera.far_plane.clone();
+                    let near_plane = es_lck.camera.near_plane.clone();
+                    (exposure, gamma, msaa, debug_int, far_plane, near_plane)
                 };
 
                 let hdr_settings_data = default_pstprg_fragment::ty::hdr_settings{
@@ -118,7 +122,10 @@ impl PostProgress{
                       gamma: gamma,
                       sampling_rate: msaa as i32,
                       show_mode: show_mode_int,
+                      near: near,
+                      far: far,
                 };
+
 
                 //the settings for this pass
                 let settings = match self.settings_pool.next(hdr_settings_data){

@@ -26,9 +26,11 @@ use collision::*;
 pub struct SceneComparer{
         ///Some if the transform component should be compared
         pub transform: Option<Decomposed<Vector3<f32>, Quaternion<f32>>>,
-        ///Some if the bound component should be compared
+        ///Some if the bound of the node should be in this bound
         pub bound: Option<Aabb3<f32>>,
-        ///Some if the value bound should compared with self
+        ///Some the node should be in this frustum
+        pub frustum: Option<Frustum<f32>>,
+        ///Some if the value bound of the node should be in this bound
         pub value_bound: Option<Aabb3<f32>>,
         ///Some if the size should be comapred. However, be aware that a same size doesn't necessarly mean
         /// that you got the same bound extends.
@@ -50,6 +52,7 @@ impl SceneComparer{
         SceneComparer{
             transform: None,
             bound: None,
+            frustum: None,
             value_bound: None,
             size: None,
             cast_shadow: None,
@@ -68,6 +71,11 @@ impl SceneComparer{
     ///Adds a `Some(bound)`
     pub fn with_bound(mut self, bound: Aabb3<f32>) -> Self{
         self.bound = Some(bound);
+        self
+    }
+
+    pub fn with_frustum(mut self, frustum: Frustum<f32>) ->Self{
+        self.frustum = Some(frustum);
         self
     }
 

@@ -1,5 +1,6 @@
 use std::sync::{Mutex, Arc, MutexGuard};
 use std::thread;
+use std::time::Instant;
 
 use jakar_tree::*;
 use jakar_tree::node::Attribute;
@@ -8,7 +9,6 @@ use core::next_tree::attributes;
 use core::next_tree::jobs;
 use core::next_tree;
 use core::next_tree::SceneTree;
-use core::next_tree::SaveUnwrap;
 
 
 use core::resource_management::texture_manager;
@@ -61,8 +61,6 @@ pub struct AssetManager {
     uniform_manager: Arc<Mutex<uniform_manager::UniformManager>>,
 
 
-
-
     ///A Debug camera, will be removed in favor of a camera_managemant system
     camera: DefaultCamera,
 
@@ -85,6 +83,7 @@ impl AssetManager {
         key_map: Arc<Mutex<KeyMap>>,
     )->Self{
 
+
         //The camera will be moved to a camera manager
         let camera = DefaultCamera::new(settings.clone(), key_map.clone());
 
@@ -106,8 +105,12 @@ impl AssetManager {
             fallback_phy,
             none_texture,
         );
+
+
+
         //create a empty scene manager
         let new_scene_manager = Arc::new(Mutex::new(scene_manager::SceneManager::new()));
+
 
         //create an empty main scene
         //the empty
@@ -130,13 +133,26 @@ impl AssetManager {
             camera: camera,
 
             settings: settings,
-
             key_map: key_map.clone(),
         }
     }
 
+
     ///Updates all child components
     pub fn update(&mut self){
+
+        let (mut time_stamp, start_time, should_cap) = {
+            let set_lck = self.settings.lock().expect("failed to lock engine settings");
+            let sh_cap = set_lck.capture_frame.clone();
+            let time_step = Instant::now();
+
+            (time_step, Instant::now(), sh_cap)
+        };
+
+        let (far, near) = {
+            let set_lck = self.settings.lock().expect("Failed to settings");
+            (set_lck.camera.far_plane.clone(), set_lck.camera.near_plane.clone())
+        };
 
         //figure out the main uniform matrix to be sent to the shaders
         let mat_4: Matrix4<f32> = Matrix4::identity();
@@ -149,7 +165,20 @@ impl AssetManager {
             model: mat_4.into(),
             view: self.get_camera().get_view_matrix().into(),
             proj: self.get_camera().get_perspective().into(),
+            near: near,
+            far: far,
         };
+
+        if should_cap{
+            println!(
+                "\t \t AS: needed {}ms to setup uniform DATA",
+                time_stamp.elapsed().subsec_nanos() as f32 / 1_000_000.0
+            );
+            time_stamp = Instant::now()
+        }
+
+        let light_comparer = next_tree::SceneComparer::new().with_frustum(self.camera.get_frustum_bound());
+
 
         //TODO only update lights when scene changes
         let point_shader_infos = {
@@ -170,8 +199,16 @@ impl AssetManager {
             shader_vec
         };
 
+        if should_cap{
+            println!(
+                "\t \t AS: needed {}ms to get point lights in frustum",
+                time_stamp.elapsed().subsec_nanos() as f32 / 1_000_000.0
+            );
+            time_stamp = Instant::now()
+        }
+
         let spot_shader_infos = {
-            let all_spot_light_nodes = self.active_main_scene.copy_all_spot_lights(&None);
+            let all_spot_light_nodes = self.active_main_scene.copy_all_spot_lights(&Some(light_comparer));
             let mut shader_vec = Vec::new();
             for s_light in all_spot_light_nodes.iter(){
                 let light_location = &s_light.attributes.transform.disp;
@@ -188,6 +225,14 @@ impl AssetManager {
             }
             shader_vec
         };
+
+        if should_cap{
+            println!(
+                "\t \t AS: needed {}ms to get spot lights",
+                time_stamp.elapsed().subsec_nanos() as f32 / 1_000_000.0
+            );
+            time_stamp = Instant::now()
+        }
 
         let dir_shader_infos = {
             let all_dir_light_nodes = self.active_main_scene.copy_all_directional_lights(&None);
@@ -207,7 +252,13 @@ impl AssetManager {
             shader_vec
         };
 
-
+        if should_cap{
+            println!(
+                "\t \t AS: needed {}ms to get directional lights",
+                time_stamp.elapsed().subsec_nanos() as f32 / 1_000_000.0
+            );
+            time_stamp = Instant::now()
+        }
 
         //Update the uniform manager with the latest infos about camera and light
         {
@@ -219,6 +270,14 @@ impl AssetManager {
             uniform_manager_lck.update(uniform_data);
         }
 
+        if should_cap{
+            println!(
+                "\t \t AS: needed {}ms to update unform manager",
+                time_stamp.elapsed().subsec_nanos() as f32 / 1_000_000.0
+            );
+            time_stamp = Instant::now()
+        }
+
 
         //println!("STATUS: ASSET_MANAGER: Now I'll update the materials", );
         //Update materials
@@ -226,12 +285,49 @@ impl AssetManager {
         //self.material_manager.update();
         //println!("STATUS: ASSET_MANAGER: Finished materials", );
 
+        if should_cap{
+            println!(
+                "\t \t AS: needed {}ms to update material manager",
+                time_stamp.elapsed().subsec_nanos() as f32 / 1_000_000.0
+            );
+            time_stamp = Instant::now()
+        }
+
         //Now update the camera
         self.camera.update_view();
+
+        if should_cap{
+            println!(
+                "\t \t AS: needed {}ms to update view in camera",
+                time_stamp.elapsed().subsec_nanos() as f32 / 1_000_000.0
+            );
+            time_stamp = Instant::now()
+        }
+
         //and finally update the tree
         self.active_main_scene.update();
+
+        if should_cap{
+            println!(
+                "\t \t AS: needed {}ms to update active scene",
+                time_stamp.elapsed().subsec_nanos() as f32 / 1_000_000.0
+            );
+            time_stamp = Instant::now()
+        }
         //also update the bounds for the current scene.
         self.active_main_scene.rebuild_bounds();
+
+        if should_cap{
+            println!(
+                "\t \t AS: needed {}ms to rebuild bounds of active scene",
+                time_stamp.elapsed().subsec_nanos() as f32 / 1_000_000.0
+            );
+            //time_stamp = Instant::now()
+            println!(
+                "\t \t AS: needed {}ms for asset manager update",
+                start_time.elapsed().subsec_nanos() as f32 / 1_000_000.0
+            );
+        }
 
     }
 

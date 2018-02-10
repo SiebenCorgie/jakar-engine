@@ -10,7 +10,6 @@ use input::KeyMap;
 use std::time::{Instant};
 
 
-
 ///Camera trait, use this to implement any type of camera
 pub trait Camera {
     ///Creates a default camera
@@ -26,6 +25,8 @@ pub trait Camera {
         pitch: f32,
         speed: f32,
     ) -> Self;
+
+
     ///Calculates / Update the view
     fn update_view(&mut self);
     ///Returns the view matrix if needed
@@ -284,7 +285,6 @@ impl Camera for DefaultCamera{
     fn get_perspective(&self) -> Matrix4<f32>{
         let (width, height, near_plane, far_plane) = {
             let engine_settings_lck = self.settings.lock().expect("Faield to lock settings");
-
             (
                 engine_settings_lck.get_dimensions()[0],
                 engine_settings_lck.get_dimensions()[1],
@@ -292,6 +292,8 @@ impl Camera for DefaultCamera{
                 engine_settings_lck.camera.far_plane
             )
         };
+
+
         //from https://matthewwellings.com/blog/the-new-vulkan-coordinate-system/
         let bias: Matrix4<f32> = Matrix4::new(
             1.0, 0.0, 0.0, 0.0,
@@ -301,9 +303,16 @@ impl Camera for DefaultCamera{
         );
         //bias has to be multiplied to comply with the opengl -> vulkan coorinate system
         //(+y is down and depth is -1.0 - 1.0)
-        bias * perspective(Deg(self.fov),
-        (width as f32 / height as f32),
-        near_plane, far_plane)
+        //bias *
+        let mut pers = perspective(
+            Deg(self.fov),
+            (width as f32 / height as f32),
+            near_plane,
+            far_plane
+        );
+        pers[1][1] *= -1.0;
+        //pers = bias * pers;
+        pers
     }
 
     ///Returns the frustum bound of this camera as a AABB
@@ -312,7 +321,6 @@ impl Camera for DefaultCamera{
         let matrix = self.get_perspective() * self.get_view_matrix();
         collision::Frustum::from_matrix4(matrix).expect("failed to create frustum")
     }
-
 }
 
 //Helper function for calculating the view

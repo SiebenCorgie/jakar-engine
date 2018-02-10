@@ -28,10 +28,12 @@ impl FrameStage{
     ///Returns the id of this stage
     pub fn get_id(&self) -> u32{
         match self{
+
             &FrameStage::LightCompute(_)=> {
                 let id_type = render::SubPassType::LightCompute;
                 id_type.get_id()
             }
+
             &FrameStage::Forward(_) =>{
                 let id_type = render::SubPassType::Forward;
                 id_type.get_id()
@@ -221,19 +223,15 @@ impl FrameSystem{
             device: device,
             queue: target_queue,
         }
-
-
     }
 
     ///Recreates all attachments with the right size
     pub fn recreate_attachments(&mut self){
-
         let new_dimensions = {
             self.engine_settings.lock()
             .expect("failed to get new dimenstions in frame system update")
             .get_dimensions()
         };
-
 
         self.forward_hdr_image = AttachmentImage::transient_multisampled_input_attachment(
             self.device.clone(),
@@ -243,9 +241,7 @@ impl FrameSystem{
         self.forward_hdr_depth = AttachmentImage::transient_multisampled_input_attachment(
             self.device.clone(), new_dimensions, self.static_msaa_factor, self.image_msaa_depth_format)
             .expect("failed to create depth buffer!");
-
         //After all, create the frame dynamic states
-
         self.dynamic_state = vulkano::command_buffer::DynamicState{
             line_width: None,
             viewports: Some(vec![vulkano::pipeline::viewport::Viewport {
@@ -257,6 +253,7 @@ impl FrameSystem{
         };
     }
 
+
     ///Starts a new frame by taking a target image and starting a command buffer for it
     pub fn new_frame<I>(&mut self, target_image: I) -> FrameStage
     where I: ImageAccess + ImageViewAccess + Clone + Send + Sync + 'static
@@ -266,27 +263,23 @@ impl FrameSystem{
         //check the frame dimensions, if changed (happens if the swapchain changes),
         //recreate all attachments
 
-
         //Create the main frame buffer
-        self.current_main_frame_buffer = Some(
-            Arc::new(vulkano::framebuffer::Framebuffer::start(self.main_renderpass.clone())
-                //Add the pre depth image
-                //.add(self.pre_depth_buffer.clone()).expect("Failed to add pre depth buffer to framebuffer")
-                //the msaa image
-                .add(self.forward_hdr_image.clone()).expect("failed to add msaa image")
-                //the multi sampled depth image
-                .add(self.forward_hdr_depth.clone()).expect("failed to add msaa depth buffer")
-                //The color pass
-                .add(target_image.clone()).expect("failed to add image to frame buffer!")
-                //and its depth pass
-                //.add(self.depth_buffer.clone()).expect("failed to add depth to frame buffer!")
+        self.current_main_frame_buffer = Some(Arc::new(
+            vulkano::framebuffer::Framebuffer::start(self.main_renderpass.clone())
+            //Add the pre depth image
+            //.add(self.pre_depth_buffer.clone()).expect("Failed to add pre depth buffer to framebuffer")
+            //the msaa image
+            .add(self.forward_hdr_image.clone()).expect("failed to add msaa image")
+            //the multi sampled depth image
+            .add(self.forward_hdr_depth.clone()).expect("failed to add msaa depth buffer")
+            //The color pass
+            .add(target_image.clone()).expect("failed to add image to frame buffer!")
+            //and its depth pass
+            //.add(self.depth_buffer.clone()).expect("failed to add depth to frame buffer!")
 
-                .build()
-                .expect("failed to build main framebuffer!")
-            )
-        );
-
-
+            .build()
+            .expect("failed to build main framebuffer!")
+        ));
 
         //start the commadn buffer for this frame
         let command_buffer: AutoCommandBufferBuilder =
@@ -295,8 +288,7 @@ impl FrameSystem{
                 self.queue.family()
             )
             .expect("failed to create tmp buffer!");
-
-            FrameStage::LightCompute(command_buffer)
+        FrameStage::LightCompute(command_buffer)
     }
 
     ///changes to the next render pass, returns the same if already at the last pass

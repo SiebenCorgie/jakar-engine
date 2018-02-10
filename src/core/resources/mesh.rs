@@ -5,7 +5,6 @@ use collision;
 
 use vulkano;
 
-
 use core::ReturnBoundInfo;
 use core::resources::material;
 
@@ -50,12 +49,16 @@ impl Vertex{
 pub struct Mesh {
     pub name: String,
 
+    device: Arc<vulkano::device::Device>,
+
     ///Holds the raw vertices of this mesh
     vertices: Vec<Vertex>,
     ///Holds the vulkan buffer, gets change if the vertices change
     vertex_buffer: Arc<vulkano::buffer::BufferAccess + Send + Sync>,
 
     indices: Vec<u32>,
+
+    index_buffer: Arc<vulkano::buffer::cpu_access::CpuAccessibleBuffer<[u32]>>,
 
     material: Arc<Mutex<material::Material>>,
 
@@ -78,18 +81,28 @@ impl Mesh {
         let mut vertices: Vec<Vertex> = Vec::new();
         vertices.push(Vertex::new([0.0; 3], [0.0; 2], [0.0; 3], [0.0; 4], [0.0; 4]));
 
+
+
         let sample_vertex_buffer = vulkano::buffer::cpu_access::CpuAccessibleBuffer
                                     ::from_iter(device.clone(), vulkano::buffer::BufferUsage::all(), vertices.iter().cloned())
                                     .expect("failed to create buffer");
 
+        let sample_index_buffer = vulkano::buffer::cpu_access::CpuAccessibleBuffer
+            ::from_iter(device.clone(), vulkano::buffer::BufferUsage::all(), Vec::new().iter().cloned())
+            .expect("failed to create index buffer 02");
+
         Mesh{
             name: String::from(name),
+
+            device: device.clone(),
 
             //TODO Create a persistend vertex and indice buffer
             vertices: vertices,
             vertex_buffer: sample_vertex_buffer,
 
             indices: Vec::new(),
+
+            index_buffer: sample_index_buffer,
 
             material: material,
 
@@ -99,13 +112,14 @@ impl Mesh {
 
     ///Sets the vertex and indice buffer to a new set of `Vertex` and `u32` indices
     ///The device and queue are needed for rebuilding the buffer
-    pub fn set_vertices_and_indices(&mut self, vertices: Vec<Vertex>, indices: Vec<u32>,
-        device: Arc<vulkano::device::Device>,
-        queue: Arc<vulkano::device::Queue>){
+    pub fn set_vertices_and_indices(&mut self, vertices: Vec<Vertex>, indices: Vec<u32>){
+
+        //Set the new values
         self.vertices = vertices;
-        //Rebuild vertex buffer with new vertices
-        self.re_create_vertex_buffer(device.clone(), queue.clone());
         self.indices = indices;
+        //Rebuild vertex and indice buffer with new vertices
+        self.re_create_buffer();
+        //self.indices = indices;
     }
 
     ///Returns the name of the material this mesh uses
@@ -197,27 +211,25 @@ impl Mesh {
     }
 
     ///Recreates the vertex buffer from a specified device and queue
-    pub fn re_create_vertex_buffer(&mut self, device: Arc<vulkano::device::Device>,
-        queue: Arc<vulkano::device::Queue>)
+    pub fn re_create_buffer(&mut self)
     {
-        let vertex_buffer = vulkano::buffer::cpu_access::CpuAccessibleBuffer
-                                    ::from_iter(device.clone(), vulkano::buffer::BufferUsage::all(),
+        self.vertex_buffer = vulkano::buffer::cpu_access::CpuAccessibleBuffer
+                                    ::from_iter(self.device.clone(), vulkano::buffer::BufferUsage::all(),
                                     self.vertices.iter().cloned()
                                 ).expect("failed to create buffer");
-        //self.vertex_buffer = vertex_buffer;
-        self.vertex_buffer = vertex_buffer;
+
+        self.index_buffer = vulkano::buffer::cpu_access::CpuAccessibleBuffer
+            ::from_iter(self.device.clone(), vulkano::buffer::BufferUsage::all(), self.indices.iter().cloned())
+            .expect("failed to create index buffer 02");
+
     }
 
 
     ///Returns a index bufffer for this mesh
-    pub fn get_index_buffer(&self, device: Arc<vulkano::device::Device>,
-        queue: Arc<vulkano::device::Queue>) ->
+    pub fn get_index_buffer(&self) ->
         Arc<vulkano::buffer::cpu_access::CpuAccessibleBuffer<[u32]>>
     {
-
-        vulkano::buffer::cpu_access::CpuAccessibleBuffer
-            ::from_iter(device.clone(), vulkano::buffer::BufferUsage::all(), self.indices.iter().cloned())
-            .expect("failed to create index buffer 02")
+        self.index_buffer.clone()
     }
 
 }

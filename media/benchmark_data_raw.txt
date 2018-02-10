@@ -30,3 +30,25 @@ FrameTime: 9.788332ms
 Which is 0.10216245fps
 This Frame after waiting: 98.12513
 ==============================================
+NEW in clustered:
+==============================================
+RENDER INFO:
+	Nedded 0.160563 ms to get all opaque meshes
+	Nedded 0.02313 ms to update the light set!
+Dispatched compute buffer
+	Nedded 0.034811 ms to dispatch compute shader
+	Nedded 0.141712 ms to draw all opaque meshes
+	Nedded 0.132373 ms to draw all transparent meshes!
+	Finished adding meshes
+	Changed to subpass
+	Added postprogress thingy
+	Ending frame
+FrameTime: 1.794419ms
+
+
+==============================================
+Cluster speed (small scene):
+32,8,32 ~35fps sponza
+64,16,64 ~18 sponza
+16,4,16 ~55 sponza
+16,16,16 ~45 sponza
