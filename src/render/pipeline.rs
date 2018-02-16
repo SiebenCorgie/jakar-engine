@@ -77,7 +77,11 @@ impl Pipeline{
                     //build the return
                     shader
                 }
-
+                shader_impls::ShaderTypes::HdrResolve => {
+                    let shader = shader_impls::load_shader(device.clone(), shader_impls::ShaderTypes::HdrResolve);
+                    println!("Generated hdr resolve Shader", );
+                    shader
+                }
                 shader_impls::ShaderTypes::PostProgress => {
                     let shader = shader_impls::load_shader(device.clone(), shader_impls::ShaderTypes::PostProgress);
                     println!("Generated PostProgress Shader", );
@@ -391,6 +395,26 @@ impl Pipeline{
                     //Finally put this in an arc and return along the inputs
                     (Arc::new(pipeline), inputs)
                 },
+                shader_impls::JakarShaders::HdrResolve((vs, fs, vbd)) => {
+                    //take the current pipeline builder
+                    println!("Building pipeline based on Hdr Resolve shader and vertex ...", );
+                    let pipeline = renderpass_pipeline
+                    .take()
+                    .expect("failed to get pipeline #1")
+                    //settup the vertex buffer definition
+                    .vertex_input(
+                        vbd
+                    )
+                    //now add the vertex and fragment shader, then return the new created pipeline and the inputs
+                    .vertex_shader(vs.main_entry_point(), ())
+                    .fragment_shader(fs.main_entry_point(), ()) //This doen't need any specialisation constants
+                    //now build
+                    .build(device)
+                    .expect("failed to build pipeline for Hdr resolve shader set!");
+                    let inputs = PipelineInput::with_none();
+                    //Finally put this in an arc and return along the inputs
+                    (Arc::new(pipeline), inputs)
+                }
                 shader_impls::JakarShaders::PostProgress((vs, fs, vbd)) => {
                     //take the current pipeline builder
                     println!("Building pipeline based on PostProgress shader and vertex ...", );
@@ -448,6 +472,9 @@ impl Pipeline{
             },
             shader_impls::ShaderTypes::Wireframe => {
                 //println!("Using: Wireframe shader set", );
+            },
+            shader_impls::ShaderTypes::HdrResolve => {
+                //println!("Using: PostProgress shader set", );
             },
             shader_impls::ShaderTypes::PostProgress => {
                 //println!("Using: PostProgress shader set", );

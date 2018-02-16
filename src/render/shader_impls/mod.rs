@@ -49,6 +49,8 @@ pub mod default_pstprg_vertex;
 ///The default post progress fragment shader (does all the work)
 pub mod default_pstprg_fragment;
 
+///Sort out HDR fragments for later processing
+pub mod hdr_resolve;
 
 ///Holds a list of all available shader types which can be loaded
 pub enum JakarShaders {
@@ -70,6 +72,13 @@ pub enum JakarShaders {
             vulkano::pipeline::vertex::SingleBufferDefinition::<Vertex>
         )
     ),
+    HdrResolve(
+        (
+            default_pstprg_vertex::Shader,
+            hdr_resolve::Shader,
+            vulkano::pipeline::vertex::SingleBufferDefinition::<post_progress::PostProgressVertex>
+        )
+    ),
     PostProgress(
         (
             default_pstprg_vertex::Shader,
@@ -87,6 +96,7 @@ pub enum JakarShaders {
 pub enum ShaderTypes {
     PbrOpaque,
     Wireframe,
+    HdrResolve,
     PostProgress
 }
 
@@ -100,6 +110,9 @@ impl ShaderTypes{
             }
             &ShaderTypes::Wireframe => {
                 render::SubPassType::Forward.get_id()
+            }
+            &ShaderTypes::HdrResolve => {
+                render::SubPassType::HdrSorting.get_id()
             }
             &ShaderTypes::PostProgress => {
                 render::SubPassType::PostProgress.get_id()
@@ -139,6 +152,14 @@ pub fn load_shader(device: Arc<vulkano::device::Device>, shader_type: ShaderType
 
 
             JakarShaders::Wireframe((vs, fs, inputs, vbd))
+        }
+        ShaderTypes::HdrResolve => {
+            println!("Loading Hdr resolve shader ...", );
+            let vs = default_pstprg_vertex::Shader::load(device.clone()).expect("failed to load vertex pbr shader");
+            let fs = hdr_resolve::Shader::load(device).expect("failed to load fragment pbr shader");
+            //Create the vertex buffer definition
+            let vbd = vulkano::pipeline::vertex::SingleBufferDefinition::<post_progress::PostProgressVertex>::new();
+            JakarShaders::HdrResolve((vs, fs, vbd))
         }
         ShaderTypes::PostProgress => {
             println!("Loading Post progress shader ...", );

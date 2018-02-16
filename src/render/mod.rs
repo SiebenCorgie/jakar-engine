@@ -36,6 +36,7 @@ pub mod shader_impls;
 pub enum SubPassType {
     LightCompute,
     Forward,
+    HdrSorting,
     PostProgress,
     Finished
 }
@@ -49,11 +50,14 @@ impl SubPassType{
             &SubPassType::Forward =>{ //the first pass in the rendering
                 0
             },
-            &SubPassType::PostProgress => { //the second
+            &SubPassType::HdrSorting => { //the second
                 1
             },
-            &SubPassType::Finished => { //no actual renderpass atm, alter maybe
+            &SubPassType::PostProgress => { //the second
                 2
+            },
+            &SubPassType::Finished => { //no actual renderpass atm, alter maybe
+                3
             }
         }
     }

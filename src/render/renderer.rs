@@ -406,13 +406,21 @@ impl Renderer {
             println!("\tRE: Changed to subpass", );
         }
 
+        //Sort HDR's
+        command_buffer = self.post_progress.sort_hdr(
+            command_buffer,
+            &self.frame_system
+        );
+
+        //Performe next pass
+        command_buffer = self.frame_system.next_pass(command_buffer);
+
         //perform the post progressing
         command_buffer = self.post_progress.execute(
             command_buffer,
-            self.frame_system.get_forward_hdr_image(),
-            self.frame_system.get_forward_hdr_depth(),
             &self.frame_system
         );
+
 
         if should_capture{
             println!("\tRE: Added postprogress thingy", );

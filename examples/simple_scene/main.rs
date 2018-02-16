@@ -57,7 +57,7 @@ fn main() {
     };
 
 
-    engine.get_asset_manager().import_gltf("TestScene", "examples/simple_scene/Sponza/Sponza.gltf");
+    engine.get_asset_manager().import_gltf("TestScene", "examples/simple_scene/TestScenes/Cube_Plane.gltf");
 
 
     let mut light_tree =jakar_tree::tree::Tree::new(
@@ -120,9 +120,9 @@ fn main() {
     light_tree.update();
     engine.get_asset_manager().get_active_scene().join_at_root(&light_tree);
     engine.get_asset_manager().get_active_scene().update();
-    println!("THE SCENE ==================================================", );
-    engine.get_asset_manager().get_active_scene().print_tree();
-    println!("END ========================================================", );
+    //println!("THE SCENE ==================================================", );
+    //engine.get_asset_manager().get_active_scene().print_tree();
+    //println!("END ========================================================", );
     let mut scene_added = false;
 
     'game_loop: loop{
@@ -191,16 +191,16 @@ fn main() {
                 add_vec)
             );
 
-            if light.attributes.transform.disp.x > 10.0{
-                light.attributes.transform.disp.x = -10.0;
+            if light.attributes.transform.disp.x > 20.0{
+                light.attributes.transform.disp.x = -20.0;
             }
 
-            if light.attributes.transform.disp.y > 3.0{
-                light.attributes.transform.disp.y = -3.0;
+            if light.attributes.transform.disp.y > 5.0{
+                light.attributes.transform.disp.y = -5.0;
             }
 
-            if light.attributes.transform.disp.z > 10.0{
-                light.attributes.transform.disp.z = -10.0;
+            if light.attributes.transform.disp.z > 20.0{
+                light.attributes.transform.disp.z = -20.0;
             }
 
             //light.add_job(jobs::SceneJobs::Move(Vector3::new(10.0, 10.0, 10.0)));

@@ -434,6 +434,17 @@ impl RenderBuilder {
             device.clone(),
             frame_system.get_post_progress_id()
         );
+        let resolve_pipeline = pipeline_manager_arc.lock()
+        .expect("failed to lock new pipeline manager")
+        .get_pipeline_by_config(
+            pipeline_builder::PipelineConfig::default()
+                .with_shader(super::shader_impls::ShaderTypes::HdrResolve)
+                .with_depth_and_stencil_settings(
+                    pipeline_builder::DepthStencilConfig::NoDepthNoStencil
+                ),
+            device.clone(),
+            frame_system.get_resolve_id()
+        );
 
 
 
@@ -441,6 +452,7 @@ impl RenderBuilder {
         let post_progress = post_progress::PostProgress::new(
             engine_settings.clone(),
             post_progress_pipeline,
+            resolve_pipeline,
             device.clone()
         );
 

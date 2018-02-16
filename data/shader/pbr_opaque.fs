@@ -197,14 +197,21 @@ vec3 srgb_to_linear(vec3 c) {
 // ----------------------------------------------------------------------------
 //calculates the light falloff based on a distance and a radius
 //shamlessly stolen from epics paper: Real Shading in Unreal Engine 4
+//but currently using one from frostbite... have to decice...
+// https://seblagarde.files.wordpress.com/2015/07/course_notes_moving_frostbite_to_pbr_v32.pdf
 //Source: https://cdn2.unrealengine.com/Resources/files/2013SiggraphPresentationsNotes-26915738.pdf figure (9)
 float calcFalloff(float dist, float radius){
-
+/*
   float dtr = dist/radius;
   float falloff_top = clamp(1 - (dtr*dtr*dtr*dtr), 0.0, 1.0);
   float falloff = falloff_top / (dist*dist + 1);
   return falloff;
-
+*/
+  float invSqrAttRadius = 1/(radius * radius);
+  float square_dis = dist * dist;
+  float  factor = square_dis * invSqrAttRadius;
+  float  smoothFactor = clamp(1.0f - factor * factor, 0.0, 1.0);
+  return  smoothFactor * smoothFactor;
 
 
 }

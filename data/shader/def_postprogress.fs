@@ -5,7 +5,9 @@
 
 //tries to get the input attachment
 layout(input_attachment_index = 0, set = 0, binding = 0) uniform subpassInputMS color_input;
-layout(input_attachment_index = 0, set = 0, binding = 1) uniform subpassInputMS depths_input;
+layout(input_attachment_index = 1, set = 0, binding = 1) uniform subpassInputMS depths_input;
+
+//layout(set = 0, binding = 2) uniform sampler2D s_color;
 
 //Get the uvs
 layout(location = 0) in vec2 inter_coord;
@@ -23,9 +25,11 @@ layout(set = 1, binding = 0) uniform hdr_settings{
   float far;
   int sampling_rate;
   int show_mode;
-
 }u_hdr_settings;
+//layout(set = 1, binding = 1) uniform sampler2D hdr_fragments;
 
+//The inputs for the hdr -> ldr pass
+//layout(set = 1, binding = 1) uniform sampler2D down_scale_image;
 
 vec4 resolve_msaa(){
   vec4 result = vec4(0.0);

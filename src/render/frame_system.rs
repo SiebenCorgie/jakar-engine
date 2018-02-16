@@ -18,6 +18,8 @@ pub enum FrameStage {
     LightCompute(AutoCommandBufferBuilder),
     ///The first stage allows to add objects to an command buffer
     Forward(AutoCommandBufferBuilder),
+    //Creates a image which only holds HDR fragments
+    HdrSorting(AutoCommandBufferBuilder),
     ///Is used to take the image from the first buffer and preform tone mapping on it
     Postprogress(AutoCommandBufferBuilder),
     ///Is used when next_frame() is called on the last pass
@@ -36,6 +38,10 @@ impl FrameStage{
 
             &FrameStage::Forward(_) =>{
                 let id_type = render::SubPassType::Forward;
+                id_type.get_id()
+            },
+            &FrameStage::HdrSorting(_) =>{
+                let id_type = render::SubPassType::HdrSorting;
                 id_type.get_id()
             },
             &FrameStage::Postprogress(_) =>{
@@ -77,6 +83,8 @@ pub struct FrameSystem {
     forward_hdr_depth: Arc<ImageViewAccess + Send + Sync>,
     //this holds a multi sampled image (later hdr)
     forward_hdr_image: Arc<ImageViewAccess  + Send + Sync>, //TODO reimplement
+
+    hdr_fragments: Arc<ImageViewAccess  + Send + Sync>,
 
     static_msaa_factor: u32,
 
@@ -133,6 +141,10 @@ impl FrameSystem{
             device.clone(), current_dimensions, static_msaa_factor, msaa_depth_format)
             .expect("failed to create depth buffer!");
 
+        let hdr_fragments = AttachmentImage::sampled_input_attachment(device.clone(),
+        current_dimensions,
+        hdr_msaa_format).expect("failed to create hdr buffer!");
+
 
         println!("Created images the first time", );
 
@@ -156,6 +168,14 @@ impl FrameSystem{
                         samples: static_msaa_factor,
                     },
 
+                    //Holds only fragments with at leas one value over 1.0
+                    hdr_fragments: {
+                        load: Clear,
+                        store: Store,
+                        format: hdr_msaa_format,
+                        samples: 1,
+                    },
+
                     //the final image
                     color: {
                         load: Clear,
@@ -166,11 +186,18 @@ impl FrameSystem{
                 },
                 passes:[
                     {
-                        color: [raw_render_color], //TODO change to msaa
+                        color: [raw_render_color],
                         depth_stencil: {raw_render_depth},
                         input: []
                     },
 
+                    //Resolves msaa and creates a HDR fragment buffer
+                    {
+                        color: [hdr_fragments],
+                        depth_stencil: {},
+                        input: [raw_render_color]
+                    },
+                    
                     {
                         color: [color],
                         depth_stencil: {},
@@ -215,6 +242,8 @@ impl FrameSystem{
             //this holds a multi sampled image in hdr format
             forward_hdr_image: raw_render_color,
 
+            hdr_fragments: hdr_fragments,
+
             static_msaa_factor: static_msaa_factor,
 
             image_hdr_msaa_format: hdr_msaa_format,
@@ -241,6 +270,11 @@ impl FrameSystem{
         self.forward_hdr_depth = AttachmentImage::transient_multisampled_input_attachment(
             self.device.clone(), new_dimensions, self.static_msaa_factor, self.image_msaa_depth_format)
             .expect("failed to create depth buffer!");
+
+        self.hdr_fragments = AttachmentImage::sampled_input_attachment(self.device.clone(),
+        new_dimensions,
+        self.image_hdr_msaa_format).expect("failed to create hdr buffer!");
+
         //After all, create the frame dynamic states
         self.dynamic_state = vulkano::command_buffer::DynamicState{
             line_width: None,
@@ -272,6 +306,8 @@ impl FrameSystem{
             .add(self.forward_hdr_image.clone()).expect("failed to add msaa image")
             //the multi sampled depth image
             .add(self.forward_hdr_depth.clone()).expect("failed to add msaa depth buffer")
+            //The hdr format
+            .add(self.hdr_fragments.clone()).expect("failed to add hdr_fragments image")
             //The color pass
             .add(target_image.clone()).expect("failed to add image to frame buffer!")
             //and its depth pass
@@ -308,7 +344,8 @@ impl FrameSystem{
                 let clearing_values = vec![
                     [0.1, 0.1, 0.1, 1.0].into(), //forward color hdr
                     1f32.into(), //forward depth
-                    [0.1, 0.1, 0.1, 1.0].into(), //post progress / frame buffer image
+                    [0.0, 0.0, 0.0, 1.0].into(),
+                    [0.0, 0.0, 0.0, 1.0].into(), //post progress / frame buffer image
                     //1f32.into(), //
                 ];
                 let next = cb.begin_render_pass(main_fb, false, clearing_values)
@@ -319,7 +356,12 @@ impl FrameSystem{
 
             FrameStage::Forward(cb) => {
                 //change to next subpass
-                let next_stage = cb.next_subpass(false).expect("failed to change to next render pass");
+                let next_stage = cb.next_subpass(false).expect("failed to change to Hdr Sorting render pass");
+                FrameStage::HdrSorting(next_stage)
+            }
+
+            FrameStage::HdrSorting(cb) => {
+                let next_stage = cb.next_subpass(false).expect("failed to change to PP render pass");
                 FrameStage::Postprogress(next_stage)
             }
 
@@ -351,6 +393,11 @@ impl FrameSystem{
         self.forward_hdr_depth.clone()
     }
 
+    ///Returns the hdr fragments image
+    pub fn get_hdr_fragments(&self) -> Arc<ImageViewAccess +Sync + Send>{
+        self.hdr_fragments.clone()
+    }
+
     ///Returns the currently used main_renderpass layout
     pub fn get_main_renderpass(&self) -> Arc<RenderPassAbstract + Send + Sync>{
         self.main_renderpass.clone()
@@ -373,5 +420,12 @@ impl FrameSystem{
         let id_type = render::SubPassType::PostProgress;
         id_type.get_id()
     }
+
+    ///Resolveing step's ID
+    pub fn get_resolve_id(&self) -> u32{
+        let id_type = render::SubPassType::HdrSorting;
+        id_type.get_id()
+    }
+
 
 }

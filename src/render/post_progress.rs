@@ -12,6 +12,11 @@ use vulkano::descriptor::descriptor_set::PersistentDescriptorSet;
 use vulkano::image::traits::ImageViewAccess;
 use vulkano::buffer::device_local::DeviceLocalBuffer;
 use vulkano::buffer::cpu_pool::CpuBufferPool;
+use vulkano::image::immutable::ImmutableImage;
+use vulkano::image::MipmapsCount;
+use vulkano::image::ImageUsage;
+use vulkano::sampler::Filter;
+use vulkano::sampler::Sampler;
 
 use std::sync::{Arc, Mutex};
 
@@ -39,9 +44,12 @@ impl_vertex!(PostProgressVertex, position, tex_coord);
 ///Is able to perform the post progressing on a command buffer based on a stored pipeline
 pub struct PostProgress{
     engine_settings: Arc<Mutex<engine_settings::EngineSettings>>,
+    device: Arc<vulkano::device::Device>,
     pipeline: Arc<pipeline::Pipeline>,
+    resolve_pipe: Arc<pipeline::Pipeline>,
+    default_sampler: Arc<Sampler>,
     screen_vertex_buffer: Arc<vulkano::buffer::BufferAccess + Send + Sync>,
-    settings_pool: vulkano::buffer::cpu_pool::CpuBufferPool<default_pstprg_fragment::ty::hdr_settings>
+    settings_pool: vulkano::buffer::cpu_pool::CpuBufferPool<default_pstprg_fragment::ty::hdr_settings>,
 }
 
 
@@ -50,6 +58,7 @@ impl PostProgress{
     pub fn new(
         engine_settings: Arc<Mutex<engine_settings::EngineSettings>>,
         post_progress_pipeline: Arc<pipeline::Pipeline>,
+        resolve_pipe: Arc<pipeline::Pipeline>,
         device: Arc<vulkano::device::Device>
     ) -> Self{
         //generate a vertex buffer
@@ -72,20 +81,99 @@ impl PostProgress{
             device.clone(), vulkano::buffer::BufferUsage::all()
         );
 
+        let default_sampler = Sampler::simple_repeat_linear_no_mipmap(device.clone());
+
         PostProgress{
+            device: device,
             engine_settings: engine_settings,
             pipeline: post_progress_pipeline,
+            resolve_pipe: resolve_pipe,
+            default_sampler: default_sampler,
             screen_vertex_buffer: sample_vertex_buffer,
             settings_pool: settings_pool,
         }
     }
 
+    fn get_hdr_settings(&mut self) -> vulkano::buffer::cpu_pool::CpuBufferPoolSubbuffer
+    <default_pstprg_fragment::ty::hdr_settings, Arc<vulkano::memory::pool::StdMemoryPool>> {
+        //Might add screen extend
+        let (exposure, gamma, msaa, show_mode_int, far, near) = {
+            let mut es_lck = self.engine_settings
+            .lock()
+            .expect("failed to lock settings for frame creation");
+
+            let exposure = es_lck.get_render_settings().get_exposure();
+            let gamma = es_lck.get_render_settings().get_gamma();
+            let msaa = es_lck.get_render_settings().get_msaa_factor();
+            let debug_int = es_lck.get_render_settings().get_debug_view().as_shader_int();
+            let far_plane = es_lck.camera.far_plane.clone();
+            let near_plane = es_lck.camera.near_plane.clone();
+            (exposure, gamma, msaa, debug_int, far_plane, near_plane)
+        };
+
+        let hdr_settings_data = default_pstprg_fragment::ty::hdr_settings{
+              exposure: exposure,
+              gamma: gamma,
+              sampling_rate: msaa as i32,
+              show_mode: show_mode_int,
+              near: near,
+              far: far,
+        };
+
+
+        //the settings for this pass
+        self.settings_pool.next(hdr_settings_data).expect("failed to alloc HDR settings")
+    }
+
+    pub fn sort_hdr(&mut self,
+        command_buffer: FrameStage,
+        frame_system: &FrameSystem,
+    ) -> FrameStage{
+        //match the current stage, if wrong, panic
+        match command_buffer{
+            FrameStage::HdrSorting(cb) => {
+                //debug
+                self.pipeline.print_shader_name();
+                //create the descriptor set for the current image
+                let attachments_ds = PersistentDescriptorSet::start(self.resolve_pipe.get_pipeline_ref(), 0) //at binding 0
+                    .add_image(frame_system.get_forward_hdr_image())
+                    .expect("failed to add hdr_image to postprogress descriptor set")
+                    .build()
+                    .expect("failed to build postprogress cb");
+
+                //the settings for this pass
+                let settings = self.get_hdr_settings();
+
+                let settings_buffer = PersistentDescriptorSet::start(self.resolve_pipe.get_pipeline_ref(), 1) //At binding 1
+                    .add_buffer(settings)
+                    .expect("failed to add hdr image settings buffer to post progress attachment")
+                    .build()
+                    .expect("failed to build settings attachment for postprogress pass");
+
+                //perform the post progress
+                let mut command_buffer = cb;
+                command_buffer = command_buffer.draw(
+                    self.resolve_pipe.get_pipeline_ref(),
+                    frame_system.get_dynamic_state().clone(),
+                    vec![self.screen_vertex_buffer.clone()],
+                    (attachments_ds, settings_buffer),
+                    ()
+                ).expect("failed to add draw call for the sorting plane");
+
+                return FrameStage::HdrSorting(command_buffer);
+            },
+            _ => {
+                println!("Can't execute post_progress, wrong frame", );
+            }
+        }
+
+        command_buffer
+    }
+
     ///Executes the post progress on the recived command buffer and returns it, returns the buffer
     /// unchanged if it is in the wrong stage.
-    pub fn execute(&self,
+    pub fn execute(&mut self,
         command_buffer: FrameStage,
-        hdr_image: Arc<ImageViewAccess  + Send + Sync>,
-        depth_buffer: Arc<ImageViewAccess  + Send + Sync>,
         frame_system: &FrameSystem,
     ) -> FrameStage{
         //match the current stage, if wrong, panic
@@ -95,50 +183,22 @@ impl PostProgress{
                 self.pipeline.print_shader_name();
                 //create the descriptor set for the current image
                 let attachments_ds = PersistentDescriptorSet::start(self.pipeline.get_pipeline_ref(), 0) //at binding 0
-                    .add_image(hdr_image)
+                    .add_image(frame_system.get_forward_hdr_image())
                     .expect("failed to add hdr_image to postprogress descriptor set")
-                    .add_image(depth_buffer)
+                    .add_image(frame_system.get_forward_hdr_depth())
                     .expect("failed to add depth image")
+
                     .build()
                     .expect("failed to build postprogress cb");
 
-                //Might add screen extend
-                let (exposure, gamma, msaa, show_mode_int, far, near) = {
-                    let mut es_lck = self.engine_settings
-                    .lock()
-                    .expect("failed to lock settings for frame creation");
-
-                    let exposure = es_lck.get_render_settings().get_exposure();
-                    let gamma = es_lck.get_render_settings().get_gamma();
-                    let msaa = es_lck.get_render_settings().get_msaa_factor();
-                    let debug_int = es_lck.get_render_settings().get_debug_view().as_shader_int();
-                    let far_plane = es_lck.camera.far_plane.clone();
-                    let near_plane = es_lck.camera.near_plane.clone();
-                    (exposure, gamma, msaa, debug_int, far_plane, near_plane)
-                };
-
-                let hdr_settings_data = default_pstprg_fragment::ty::hdr_settings{
-                      exposure: exposure,
-                      gamma: gamma,
-                      sampling_rate: msaa as i32,
-                      show_mode: show_mode_int,
-                      near: near,
-                      far: far,
-                };
-
-
                 //the settings for this pass
-                let settings = match self.settings_pool.next(hdr_settings_data){
-                    Ok(set) => set,
-                    Err(_) => {
-                        println!("Failed to allocate subbuffer for hdr pass", );
-                        return FrameStage::Postprogress(cb);
-                    }
-                };
+                let settings = self.get_hdr_settings();
 
                 let settings_buffer = PersistentDescriptorSet::start(self.pipeline.get_pipeline_ref(), 1) //At binding 1
                     .add_buffer(settings)
                     .expect("failed to add hdr image settings buffer to post progress attachment")
+                    //.add_sampled_image(frame_system.get_hdr_fragments(), self.default_sampler.clone())
+                    //.expect("failed to add sampled attachment")
                     .build()
                     .expect("failed to build settings attachment for postprogress pass");
 

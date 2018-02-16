@@ -304,7 +304,7 @@ impl PipelineConfig{
     }
 
 
-    ///Compares self ti another config, returns true if they are the same and false if not
+    ///Compares self to another config, returns true if they are the same and false if not
     pub fn compare(&self, other_conf: &PipelineConfig) -> bool{
 
         if self.shader_set != other_conf.shader_set{
