@@ -33,16 +33,16 @@ My target is to handle most of the non fatal errors and at least end the system 
 
 The graphical target is defined by these key points:
 
- [ ] PBR shading
- [x] normal mapping
- [ ] parallax occlusion mapping
- [x] HDR rendering
- [x] dynamic lighting (point, spot and directional lights for now)
- [ ] bloom
- [ ] DOF
- [x] translucency
- [ ] masked materials
- [x] many dynamic lights through clustered light culling
+- [] PBR shading
+- [x] normal mapping
+- [] parallax occlusion mapping
+- [x] HDR rendering
+- [x] dynamic lighting (point, spot and directional lights for now)
+- [] bloom
+- [] DOF
+- [x] translucency
+- [] masked materials
+- [x] many dynamic lights through clustered light culling
 
 This will be accomplished by static Shaders + different material definition for
 now. In later development this system could be changed to a UE4 type
