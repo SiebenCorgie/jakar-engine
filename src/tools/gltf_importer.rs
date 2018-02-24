@@ -11,6 +11,7 @@ use core::ReturnBoundInfo;
 use render::pipeline_builder;
 use render::pipeline_manager;
 use render;
+use render::render_passes::RenderPassConf;
 
 use vulkano;
 use vulkano::pipeline::blend::LogicOp;
@@ -316,6 +317,8 @@ pub fn load_gltf_material(
     let requirements = pipeline_manager::PipelineRequirements{
         blend_type: blending_mode,
         culling: cull_mode,
+        render_pass: RenderPassConf::ObjectPass,
+        shader_set: "Pbr".to_string(),
     };
 
 
@@ -337,7 +340,7 @@ pub fn load_gltf_material(
         let mut pipeline_manager_lck = pipeline_manager.lock().expect("failed to lock pipe manager");
         //Build the pipeline by the requirements
         let pipeline = (*pipeline_manager_lck).get_pipeline_by_requirements(
-            requirements, device.clone(), render::SubPassType::Forward.get_id() //need the forwad id
+            requirements, render::SubPassType::Forward.get_id() //need the forwad id
         );
 
 

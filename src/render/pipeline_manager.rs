@@ -2,8 +2,9 @@ use std::collections::BTreeMap;
 
 use rt_error;
 use render::pipeline;
+use render::render_passes::{RenderPasses, RenderPassConf};
 use render::pipeline_builder;
-use render::shader_impls;
+use render::shader_set::ShaderManager;
 
 use core::engine_settings;
 
@@ -20,6 +21,10 @@ pub struct PipelineRequirements {
     pub blend_type: pipeline_builder::BlendTypes,
     ///Describes which side of an polygone should be discarded
     pub culling: pipeline_builder::CullMode,
+    ///Describes the needed render pass type
+    pub render_pass: RenderPassConf,
+    ///Describes the shader set that should be used
+    pub shader_set: String,
 }
 
 impl PipelineRequirements{
@@ -30,6 +35,12 @@ impl PipelineRequirements{
         }
 
         if self.culling != other.culling{
+            return false;
+        }
+        if self.render_pass != other.render_pass{
+            return false;
+        }
+        if self.shader_set != other.shader_set{
             return false;
         }
 
@@ -44,62 +55,33 @@ pub struct PipelineManager {
     engine_settings: Arc<Mutex<engine_settings::EngineSettings>>,
     //stores all the pipelines
     pipelines: BTreeMap<String, Arc<pipeline::Pipeline>>,
-    //stores the main_renderpass used for the pipeline creation
-    main_renderpass: Arc<vulkano::framebuffer::RenderPassAbstract + Send + Sync>,
+    //Manages the useable shader sets. Loads them when needed onec and can provide copys of the sets.
+    shader_manager: ShaderManager,
     //strores the device this pipeline is based on
     device: Arc<vulkano::device::Device>,
+    //A copy the available render passes. They will be used to translate the pass used in the
+    //pipeline config
+    passes: RenderPasses,
 }
 
 
 
 impl PipelineManager{
 
-    ///Creates a pipeline Manager with:
-    /// - DefaultPipeline (useful for any kind of pbr material)
-    /// - PreDepth (Used internaly)
+    ///Creates a pipeline Manager without any pipeline, they have to be loaded from a config.
     pub fn new(
         device: Arc<vulkano::device::Device>,
         l_engine_settings: Arc<Mutex<engine_settings::EngineSettings>>,
-        main_renderpass: Arc<vulkano::framebuffer::RenderPassAbstract + Send + Sync>,
+        passes: RenderPasses,
     ) -> Self
     {
-        let mut b_tree_map = BTreeMap::new();
-        //Creates a default pipeline from a default shader
-
-        //the default inputs (all for the best visual graphics)
-        let default_pipeline = pipeline_builder::PipelineConfig::default();
-        let subpass_id = default_pipeline.shader_set.get_subpass_id();
-        let default_pipeline = Arc::new(
-            pipeline::Pipeline::new(
-                device.clone(),
-                default_pipeline,
-                l_engine_settings.clone(),
-                framebuffer::Subpass::from(
-                    main_renderpass.clone(), subpass_id
-                )
-                .expect("failed to create subpass from main_renderpass"),
-            )
-        );
-
-        b_tree_map.insert(String::from("DefaultPipeline"), default_pipeline);
-
         PipelineManager{
             engine_settings: l_engine_settings,
-            pipelines: b_tree_map,
-            main_renderpass: main_renderpass,
+            pipelines: BTreeMap::new(),
+            shader_manager: ShaderManager::new(device.clone()),
             device: device,
+            passes: passes,
         }
-    }
-
-    ///Should always return the normal PBR pipeline, if it panics, please file a bug report, this should not happen
-    pub fn get_default_pipeline(&self) -> Arc<pipeline::Pipeline>{
-
-        match self.pipelines.get(&String::from("DefaultPipeline")){
-            Some(pipe) => return pipe.clone(),
-
-            None =>rt_error("PIPELINE_MANAGER", "PIPELINE MANAGER: Could not find default pipe this should not happen"),
-        }
-        panic!("Crash could not get default pipeline!")
     }
 
 
@@ -119,11 +101,11 @@ impl PipelineManager{
             Some(ref mut pipe) => return pipe.clone(),
             None => rt_error("PIPELINE_MANAGER","Could not find pipe"),
         }
-        self.get_default_pipeline()
+        panic!("Paniced because we could not find the correct pipeline!")
     }
 
-    ///Adds a pipeline based on a name, configuration and target subpass. Returns the created pipeline
-    pub fn add_pipeline(&mut self, name: &str, config: pipeline_builder::PipelineConfig, subpass_id: u32)
+    ///Adds a pipeline based on a name, configuration. Returns the created pipeline
+    pub fn add_pipeline(&mut self, name: &str, config: pipeline_builder::PipelineConfig)
      -> Arc<pipeline::Pipeline>{
         //first of all make a unique name
         let unique_name = {
@@ -141,12 +123,15 @@ impl PipelineManager{
 
         };
 
+        let (pass, shader_set) = (config.render_pass.clone(), config.shader_set.clone());
+
         let pipe = pipeline::Pipeline::new(
             self.device.clone(),
             config,
             self.engine_settings.clone(),
-            framebuffer::Subpass::from(self.main_renderpass.clone(), subpass_id)
-                .expect("failed to get subpass at pipeline creation"),
+            self.passes.conf_to_pass(pass),
+            self.shader_manager.get_shader_set(shader_set)
+            .expect("failed to get correct shader set for pipeline... set a right one!")
         );
 
         let arc_pipe = Arc::new(pipe);
@@ -160,19 +145,14 @@ impl PipelineManager{
     pub fn get_pipeline_by_config(
         &mut self,
         needed_configuration: pipeline_builder::PipelineConfig,
-        device: Arc<vulkano::device::Device>,
-        needed_subpass_id: u32
     ) -> Arc<pipeline::Pipeline> {
 
         //first of all test the available pipelines for this config
         for (_, pipe) in self.pipelines.iter(){
             //Test for the configuration
             if pipe.pipeline_config.compare(&needed_configuration){
-                //test the subpass
-                if pipe.sub_pass == needed_subpass_id{
-                    //Found the right pipeline based on the supplied config!
-                    return pipe.clone()
-                }
+                //If the config matches, return this one, else create new one
+                return pipe.clone()
             }
         }
 
@@ -183,13 +163,16 @@ impl PipelineManager{
             &needed_configuration.blending_operation, &needed_configuration.cull_mode
         );
 
+
+        let (pass, shader_set) = (needed_configuration.render_pass.clone(), needed_configuration.shader_set.clone());
         //now build the new pipeline and put it in an arc for cloning
         let new_pipe = Arc::new(pipeline::Pipeline::new(
-            device,
+            self.device.clone(),
             needed_configuration,
             self.engine_settings.clone(),
-            framebuffer::Subpass::from(self.main_renderpass.clone(), needed_subpass_id)
-                .expect("failed to get subpass at pipeline creation"),
+            self.passes.conf_to_pass(pass),
+            self.shader_manager.get_shader_set(shader_set)
+            .expect("failed to get shader set for pipeline.. that shoudn't not happen")
         ));
 
         self.pipelines.insert(pipe_name.clone(), new_pipe);
@@ -205,7 +188,6 @@ impl PipelineManager{
     pub fn get_pipeline_by_requirements(
         &mut self,
         requirements: PipelineRequirements,
-        device: Arc<vulkano::device::Device>,
         needed_subpass_id: u32
     ) -> Arc<pipeline::Pipeline> {
 
@@ -217,10 +199,12 @@ impl PipelineManager{
             let current_self_req = PipelineRequirements{
                 blend_type: pipe.pipeline_config.blending_operation.clone(),
                 culling: pipe.pipeline_config.cull_mode.clone(),
+                render_pass: pipe.pipeline_config.render_pass.clone(),
+                shader_set: pipe.pipeline_config.shader_set.clone()
             };
 
             if current_self_req.compare(&requirements){
-                if pipe.sub_pass == needed_subpass_id{
+                if pipe.pipeline_config.sub_pass_id == needed_subpass_id{
                     println!("Found correct pipeline based on the requirements", );
                     return pipe.clone();
                 }
@@ -235,26 +219,15 @@ impl PipelineManager{
             //overwrite with needed config
             pipeline_conf = pipeline_conf.with_blending(requirements.blend_type.clone());
             pipeline_conf = pipeline_conf.with_cull_mode(requirements.culling.clone());
+            //Set some additional info
+            pipeline_conf = pipeline_conf.with_render_pass(requirements.render_pass.clone());
+            pipeline_conf = pipeline_conf.with_shader(requirements.shader_set.clone());
             (requirements.blend_type, requirements.culling)
         };
 
         //CREATING_PIPE==============================================
 
-        //now build the new pipeline and put it in an arc for cloning
-        let new_pipe = Arc::new(pipeline::Pipeline::new(
-            device,
-            pipeline_conf,
-            self.engine_settings.clone(),
-
-            framebuffer::Subpass::from(self.main_renderpass.clone(), needed_subpass_id)
-            .expect("failed to get subpass at pipeline creation"),
-        ));
-
-        let pipe_name = self.create_pipeline_name(&blend_type, &cull_mode);
-
-        self.pipelines.insert(pipe_name.clone(), new_pipe);
-        //now return the new pipe
-        self.get_pipeline_by_name(&pipe_name)
+        self.get_pipeline_by_config(pipeline_conf)
     }
 
     ///A helper function to create nice pipeline names

@@ -12,5 +12,13 @@ layout(set = 2, binding = 0) uniform TextureUsageInfo {
   uint b_emissive;
 } u_tex_usage_info;
 
+layout(set = 2, binding = 1) uniform TextureFactors {
+  vec4 albedo_factor;
+  vec3 emissive_factor;
+  float normal_factor;
+  float metal_factor;
+  float roughness_factor;
+  float occlusion_factor;
+} u_tex_fac;
 
 void main(){}

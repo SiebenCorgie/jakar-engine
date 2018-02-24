@@ -1,7 +1,7 @@
 
 //use render::shader_impls::pbr_fragment;
-use render::shader_impls::default_data;
-use render::shader_impls::lights;
+use render::shader::shader_inputs::default_data;
+use render::shader::shader_inputs::lights;
 
 
 use vulkano::buffer::cpu_pool::CpuBufferPoolSubbuffer;

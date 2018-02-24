@@ -30,7 +30,15 @@ pub mod light_culling_system;
 
 ///An module which collects all the shader implementations, these are usually derived from
 ///vulkano-shader-derive
-pub mod shader_impls;
+pub mod shader;
+
+///This modules defines how a shader set and its inputs work. The engine can create pipelines based on the
+/// shader sets and creates the descriptorsets on runtime based on the input definitions defined in the shader set.
+pub mod shader_set;
+
+///Defines the usable render passes for this engine
+pub mod render_passes;
+
 
 // A Helper enum to specify which supass id something want, manly used in amterial creation
 pub enum SubPassType {

@@ -8,7 +8,7 @@ use vulkano::descriptor::descriptor_set::DescriptorSet;
 use vulkano::descriptor::descriptor_set::PersistentDescriptorSet;
 use vulkano::buffer::*;
 use vulkano::pipeline::ComputePipeline;
-use render::shader_impls::lights;
+use render::shader::shader_inputs::lights;
 use vulkano::buffer::cpu_pool::CpuBufferPoolSubbuffer;
 use vulkano::buffer::device_local::DeviceLocalBuffer;
 use vulkano;

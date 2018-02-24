@@ -1,6 +1,5 @@
 
-use render::shader_impls::default_pstprg_fragment;
-use render::light_culling_system::light_cull_shader;
+use render::shader::shaders::default_pstprg_fragment;
 use render::pipeline;
 use render::frame_system::FrameStage;
 use render::frame_system::FrameSystem;
@@ -10,12 +9,7 @@ use core::engine_settings;
 use vulkano;
 use vulkano::descriptor::descriptor_set::PersistentDescriptorSet;
 use vulkano::image::traits::ImageViewAccess;
-use vulkano::buffer::device_local::DeviceLocalBuffer;
 use vulkano::buffer::cpu_pool::CpuBufferPool;
-use vulkano::image::immutable::ImmutableImage;
-use vulkano::image::MipmapsCount;
-use vulkano::image::ImageUsage;
-use vulkano::sampler::Filter;
 use vulkano::sampler::Sampler;
 
 use std::sync::{Arc, Mutex};

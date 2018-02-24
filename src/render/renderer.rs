@@ -6,6 +6,7 @@ use render::render_helper;
 use render::frame_system;
 use render::post_progress;
 use render::light_culling_system;
+use render::render_passes::RenderPasses;
 
 use core::next_tree::SceneTree;
 use core::engine_settings;
@@ -37,8 +38,6 @@ pub enum RendererState {
     ENDED
 }
 
-
-
 ///The main renderer. Should be created through a RenderBuilder
 pub struct Renderer  {
     ///Holds the renderers pipeline_manager
@@ -54,6 +53,8 @@ pub struct Renderer  {
 
     frame_system: frame_system::FrameSystem,
     light_culling_system: light_culling_system::PreDpethSystem,
+
+    render_passes: RenderPasses,
 
     ///The post progresser
     post_progress: post_progress::PostProgress,
@@ -84,6 +85,7 @@ impl Renderer {
         frame_system: frame_system::FrameSystem,
 
         post_progress: post_progress::PostProgress,
+        render_passes: RenderPasses,
         light_culling_system: light_culling_system::PreDpethSystem,
 
         recreate_swapchain: bool,
@@ -101,6 +103,7 @@ impl Renderer {
             //Helper systems, the frame system handles... well a frame, the post progress writes the
             //static post_progress pass.AcquireError
             frame_system: frame_system,
+            render_passes: render_passes,
             light_culling_system: light_culling_system,
             post_progress: post_progress,
 

@@ -6,6 +6,7 @@ use core::engine_settings;
 use render::pipeline_manager;
 use core::resources::texture::Texture;
 use vulkano;
+use render;
 ///Handles all available materials
 pub struct MaterialManager {
     //TODO comapare if a Vec<material> + search algorith would be faster
@@ -29,57 +30,37 @@ impl MaterialManager {
         none_texture: Arc<Texture>,
 
     )->Self{
-        //We'll have to check for a default pipeline, otherwise the Manager creation could fail
-        {
-            let pipeline_copy = pipeline_manager.clone();
-            {
-                if !(*pipeline_copy).lock()
-                    .expect("Failed to lock pipeline manager in material manager creation")
-                    .has_pipeline("DefaultPipeline")
-                {
-                    //println!("STATUS: MATERIAL_MANAGER: Oups, this programm has no default pipeline, PANIC!", );
-                    panic!("this engine has no default pipeline :(");
-                }
-            }
-        }
-
-
-        //println!("STATUS: MATERIAL_MANAGER: Checked pipeline for default pipeline in material manager creation", );
-        //Creates a fallback material to which the programm can fallback in case of a "materal not found"
-
-        let default_pipe = {
-            let mut pipe_lck = pipeline_manager.lock().expect("failed to lock pipeline manager");
-            (*pipe_lck).get_default_pipeline()
-        };
-
-        //finally create the material from the textures
-        //this will serve as fallback for any unsuccessful `get_material()`
-        let fallback_material = Arc::new(
-            Mutex::new(
-                material::MaterialBuilder::new(
-                    Some(albedo_texture),
-                    Some(normal_texture),
-                    Some(physical_texture),
-                    None, //currently no occlusion texture
-                    None,
-                    none_texture
-                )
-                .build(
-                    "fallback",
-                    default_pipe,
-                    uniform_manager.clone(),
-                    device.clone(),
-                )
-            )
-        );
 
         let mut tmp_map = BTreeMap::new();
-        //and finnaly insert
-        tmp_map.insert(String::from("fallback"), fallback_material);
+        let default_mat = material::MaterialBuilder::new(
+            Some(albedo_texture),
+            Some(normal_texture),
+            Some(physical_texture),
+            None,
+            None,
+            none_texture,
+        );
+
+        //materials can only be used in the object pass, there for we create a default pipeline
+        // used for the material.
+        let pipe = {
+            let mut pipe_lock = pipeline_manager.lock().expect("failed to lock pipe man");
+            let config = render::pipeline_builder::PipelineConfig::default()
+            .with_shader("Pbr".to_string())
+            .with_render_pass(render::render_passes::RenderPassConf::ObjectPass);
+            pipe_lock.get_pipeline_by_config(config)
+        };
+
+        let fallback_mat = default_mat.build(
+            "fallback",
+            pipe,
+            uniform_manager.clone(),
+            device.clone());
+        tmp_map.insert("fallback".to_string(), Arc::new(Mutex::new(fallback_mat)));
+
 
         MaterialManager{
             material_vault: tmp_map,
-            //renderer_inst: render.clone(),
         }
     }
 

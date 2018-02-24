@@ -3,7 +3,7 @@ use cgmath::*;
 use collision;
 
 
-use render::shader_impls::lights;
+use render::shader::shader_inputs::lights;
 use core::ReturnBoundInfo;
 
 //use std::sync::{Arc,Mutex};

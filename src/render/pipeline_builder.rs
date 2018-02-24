@@ -1,11 +1,11 @@
-use vulkano;
 use vulkano::pipeline;
 use vulkano::pipeline::blend::AttachmentBlend;
 use vulkano::pipeline::blend::LogicOp;
 use vulkano::pipeline::input_assembly::PrimitiveTopology;
+use render::render_passes::RenderPassConf;
+use render::shader::*;
 
 use std::sync::Arc;
-use render::shader_impls;
 
 ///Collects all possible vertex buffer types
 pub enum VertexBufferType {
@@ -119,7 +119,7 @@ pub struct PipelineConfig {
 
     ///Defines the shader type of the loaded pipeline.
     ///TODO this should be moved in a less static abroach, but I don't know how atm.
-    pub shader_set: shader_impls::ShaderTypes,
+    pub shader_set: String,
 
     ///Describes how vertices must be grouped together to form primitives.
     pub topology_type: PrimitiveTopology,
@@ -155,14 +155,12 @@ pub struct PipelineConfig {
     pub blending_constant: Option<[f32; 4]>,
 
     //Sets the render pass / subpass to use
-    //pub render_pass: Arc<vulkano::framebuffer::Subpass>,
+    pub render_pass: RenderPassConf,
 
-    //Sets the Id of the sub pass in this render pass to use. If you have only one pass (the main pass),
-    //use the `id: 0`.
-    //pub sub_pass_id: u32,
+    ///Sets the Id of the sub pass in its render pass to use. If you have only one pass (the main pass),
+    /// use the `id: 0`.
+    pub sub_pass_id: u32,
 
-    //Is some if we are using per sample shading aka. multisampling
-    //pub sample_count: Option<u32>,
 }
 
 impl PipelineConfig{
@@ -182,7 +180,7 @@ impl PipelineConfig{
     pub fn default() -> Self {
 
         PipelineConfig {
-            shader_set: shader_impls::ShaderTypes::PbrOpaque,
+            shader_set: String::from("NoneShaderSet"),
             topology_type: PrimitiveTopology::TriangleList,
             viewport_scissors: ViewportScissorsBehavoir::DynamicViewportScissorsIrrelevant(1), //TODO find out what the 1 has to do
             has_depth_clamp: false,
@@ -193,22 +191,14 @@ impl PipelineConfig{
             blending_operation: BlendTypes::BlendPassThrough,
             disabled_logic_op: false,
             blending_constant: Some([0.0; 4]),
-            //subpass: renderpass,
-            //sub_pass_id: 0,
-            //sample_count: None,
+            render_pass: RenderPassConf::ObjectPass,
+            sub_pass_id: 0,
         }
-    }
-
-    ///Sets a sampling count
-    #[inline]
-    pub fn with_sampling_count(mut self, count: u32) -> Self{
-        //self.sample_count = Some(count);
-        self
     }
 
     ///Changes the shader set to a custom value
     #[inline]
-    pub fn with_shader(mut self, shader_set: shader_impls::ShaderTypes) -> Self{
+    pub fn with_shader(mut self, shader_set: String) -> Self{
         self.shader_set = shader_set;
         self
     }
@@ -303,6 +293,22 @@ impl PipelineConfig{
         self
     }
 
+    ///Sets the subpass for this pipeline.
+    #[inline]
+    pub fn with_render_pass(mut self, new: RenderPassConf) -> Self{
+        self.render_pass = new;
+        self
+    }
+
+    ///Sets the subpass for this pipeline.
+    #[inline]
+    pub fn with_subpass_id(mut self, new: u32) -> Self{
+        self.sub_pass_id = new;
+        self
+    }
+
+
+
 
     ///Compares self to another config, returns true if they are the same and false if not
     pub fn compare(&self, other_conf: &PipelineConfig) -> bool{
@@ -341,57 +347,16 @@ impl PipelineConfig{
         if self.blending_constant != other_conf.blending_constant{
             return false;
         }
+        //TODO make more robust
+        if self.render_pass != other_conf.render_pass{
+            return false;
+        }
+        if self.sub_pass_id != other_conf.sub_pass_id{
+            return false;
+        }
 
         //all is nice
         true
     }
 
-}
-
-
-
-///Describes the input needed for the shaders in this pipeline to work.
-///
-/// #panics
-///
-///This could panic if the input is defined wrong, mostly the engine won't build though
-#[derive(Copy, Clone)]
-pub struct PipelineInput {
-
-    ///Describes the mostly used data of projection and view matrix as well as model transform and camera
-    ///position.
-    pub data: bool,
-
-    ///True if any of the following textures is send and used from the material description:
-    ///
-    /// - Albedo
-    /// - Normal
-    /// - MetallicRoughness
-    /// - Ao
-    /// - Emissive
-    pub has_textures: bool,
-
-    ///Is true if the shader recives light information
-    pub has_light: bool,
-
-}
-
-impl PipelineInput {
-    ///Creates a `PipelineInput` which includes all inputs available
-    pub fn new_all() -> Self{
-        PipelineInput{
-            data: true,
-            has_textures: true,
-            has_light: true,
-        }
-    }
-
-    ///Creates a config where everything is turned of *except* data which is always needed
-    pub fn with_none() -> Self{
-        PipelineInput{
-            data: true,
-            has_textures: false,
-            has_light: false,
-        }
-    }
 }

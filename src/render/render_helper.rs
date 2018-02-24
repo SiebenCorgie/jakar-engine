@@ -6,7 +6,7 @@ use core::next_tree::*;
 use render::frame_system;
 use render::pipeline_manager;
 use render::pipeline_builder;
-use render::shader_impls;
+use render::shader;
 use render::uniform_manager;
 
 use std::sync::{Arc, Mutex};
@@ -86,10 +86,11 @@ pub fn add_bound_draw(
             let mut pipeline_needed = pipeline_builder::PipelineConfig::default();
             //Setup the wireframe shader and the topology type
             pipeline_needed.topology_type = vulkano::pipeline::input_assembly::PrimitiveTopology::LineList;
-            pipeline_needed.shader_set = shader_impls::ShaderTypes::Wireframe;
+            pipeline_needed.shader_set = "Wireframe".to_string();
+            pipeline_needed.sub_pass_id = id as u32;
 
             let mut pipeline_lck = pipeline_manager.lock().expect("failed to lock pipeline manager");
-            let pipeline = pipeline_lck.get_pipeline_by_config(pipeline_needed, device.clone(), id as u32);
+            let pipeline = pipeline_lck.get_pipeline_by_config(pipeline_needed);
             //now we get out self the points of the bound and create a vertex buffer form it
 
             let mut min = object_node.attributes.get_value_bound().min; //already in worldspace

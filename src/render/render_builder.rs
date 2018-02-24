@@ -398,14 +398,21 @@ impl RenderBuilder {
         //start the future chain
         let previous_frame = Box::new(vulkano::sync::now(device.clone())) as Box<GpuFuture>;
 
+        println!("Starting frame passes", );
+        let passes = render::render_passes::RenderPasses::new(
+            device.clone(),
+            swapchain.format(),
+            engine_settings.clone(),
+        );
 
         println!("Starting frame system", );
         //now create us a default frame system
         let frame_system = frame_system::FrameSystem::new(
             engine_settings.clone(),
             device.clone(),
+            passes.clone(),
             queue.clone(),
-            swapchain.format()
+
         );
         println!("Finished the frame system", );
         //Creates the renderers pipeline manager , will be packed into the arc mutex later
@@ -414,7 +421,7 @@ impl RenderBuilder {
                 pipeline_manager::PipelineManager::new(
                     device.clone(),
                     engine_settings.clone(),
-                    frame_system.get_main_renderpass(),
+                    passes.clone(),
                 )
             )
         );
@@ -427,23 +434,22 @@ impl RenderBuilder {
         .expect("failed to lock new pipeline manager")
         .get_pipeline_by_config(
             pipeline_builder::PipelineConfig::default()
-                .with_shader(super::shader_impls::ShaderTypes::PostProgress)
+                .with_subpass_id(super::SubPassType::PostProgress.get_id())
+                .with_shader("PpExposure".to_string())
                 .with_depth_and_stencil_settings(
                     pipeline_builder::DepthStencilConfig::NoDepthNoStencil
                 ),
-            device.clone(),
-            frame_system.get_post_progress_id()
         );
+
         let resolve_pipeline = pipeline_manager_arc.lock()
         .expect("failed to lock new pipeline manager")
         .get_pipeline_by_config(
             pipeline_builder::PipelineConfig::default()
-                .with_shader(super::shader_impls::ShaderTypes::HdrResolve)
+                .with_subpass_id(super::SubPassType::HdrSorting.get_id())
+                .with_shader("PpResolveHdr".to_string())
                 .with_depth_and_stencil_settings(
                     pipeline_builder::DepthStencilConfig::NoDepthNoStencil
                 ),
-            device.clone(),
-            frame_system.get_resolve_id()
         );
 
 
@@ -477,6 +483,7 @@ impl RenderBuilder {
 
             frame_system,
             post_progress,
+            passes,
             light_culling_system,
 
             false,

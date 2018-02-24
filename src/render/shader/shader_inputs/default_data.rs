@@ -1,4 +1,4 @@
 #[derive(VulkanoShader)]
 #[ty = "fragment"]
-#[path = "data/shader/pbr_texture_factors.glsl"]
+#[path = "data/shader/input_info/default_data.glsl"]
 struct Dummy;

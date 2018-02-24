@@ -22,13 +22,13 @@ use core::engine_settings;
 use core::resources::texture;
 use core::resources::material;
 use core::resources::empty;
+use render;
 
 use rt_error;
 
 use render::uniform_manager;
 use render::pipeline_manager;
-use render::shader_impls::default_data;
-use render::shader_impls::lights;
+use render::shader::shader_inputs::default_data;
 
 use input::KeyMap;
 
@@ -523,13 +523,18 @@ impl AssetManager {
     }
 
     ///Takes an `material::MaterialBuilder` as well as the `name` for the new material
-    ///and adds it to the internam manager
+    ///and adds it to the internal manager. It assumes that this material is used on a mesh in the
+    /// object pass as well as that it is opaque.
     pub fn add_material_to_manager(&mut self, material: material::MaterialBuilder, name: &str)
     -> Result<String, String>
     {
         let default_pipeline = {
             let mut pipe_lck = self.pipeline_manager.lock().expect("failed to lock pipeline manager");
-            (*pipe_lck).get_default_pipeline()
+            //Assume that we want a material for the object pass
+            let config = render::pipeline_builder::PipelineConfig::default()
+            .with_shader("Pbr".to_string())
+            .with_render_pass(render::render_passes::RenderPassConf::ObjectPass);
+            pipe_lck.get_pipeline_by_config(config)
         };
 
         let final_material = material.build(

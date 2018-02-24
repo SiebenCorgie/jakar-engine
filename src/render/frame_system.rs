@@ -12,6 +12,7 @@ use vulkano::format::Format;
 use vulkano;
 use vulkano::sync::GpuFuture;
 use std::sync::{Arc, Mutex};
+
 ///Describes the current stage the command buffer is in
 pub enum FrameStage {
     ///Is a stage between the first and the second render pass, it does the light culling etc.
@@ -64,6 +65,8 @@ impl FrameStage{
 ///Also store the render pass and decides what images and attachments to add.
 pub struct FrameSystem {
     engine_settings:  Arc<Mutex<engine_settings::EngineSettings>>,
+    //list of the available passes
+    passes: render::render_passes::RenderPasses,
 
     //Stores the dynamic render states used for this frame
     /*TODO:
@@ -72,8 +75,6 @@ pub struct FrameSystem {
     to have.
     */
     dynamic_state: vulkano::command_buffer::DynamicState,
-
-    main_renderpass: Arc<RenderPassAbstract + Send + Sync>,
 
     //Sometimes holds the newly build main framebuffer, but gets taken out when switching from
     // pre-depth -> compute -> forward pass
@@ -86,16 +87,11 @@ pub struct FrameSystem {
 
     hdr_fragments: Arc<ImageViewAccess  + Send + Sync>,
 
-    static_msaa_factor: u32,
-
     //a copy of the device
     device: Arc<vulkano::device::Device>,
     //a copy of the queue
     queue: Arc<vulkano::device::Queue>,
 
-    image_hdr_msaa_format: Format,
-    image_msaa_depth_format: Format,
-    swapchain_format: Format,
 
 
 }
@@ -105,8 +101,8 @@ impl FrameSystem{
     pub fn new(
         settings: Arc<Mutex<engine_settings::EngineSettings>>,
         device: Arc<vulkano::device::Device>,
+        passes: render::render_passes::RenderPasses,
         target_queue: Arc<vulkano::device::Queue>,
-        swapchain_format: Format
     ) -> Self{
 
         //get our selfs a easy to read render_settings insance :)
@@ -125,10 +121,10 @@ impl FrameSystem{
             .get_dimensions()
         };
 
-        let static_msaa_factor = render_settings.get_msaa_factor();
+        let static_msaa_factor = passes.object_pass.static_msaa_factor;
 
-        let hdr_msaa_format = vulkano::format::Format::R16G16B16A16Sfloat;
-        let msaa_depth_format = vulkano::format::Format::D16Unorm;
+        let hdr_msaa_format = passes.object_pass.image_hdr_msaa_format;
+        let msaa_depth_format = passes.object_pass.image_msaa_depth_format;
 
         //Creates a buffer for the msaa image
         let raw_render_color = AttachmentImage::transient_multisampled_input_attachment(device.clone(),
@@ -148,67 +144,7 @@ impl FrameSystem{
 
         println!("Created images the first time", );
 
-        //Setup the render_pass layout for the forward pass
-        let main_renderpass = Arc::new(
-            ordered_passes_renderpass!(target_queue.device().clone(),
-                attachments: {
-                    // The first framebuffer attachment is the raw_render_color image.
-                    raw_render_color: {
-                        load: Clear,
-                        store: Store,
-                        format: hdr_msaa_format, //Defined that it works by the vulkan implementation
-                        samples: static_msaa_factor,     // This has to match the image definition.
-                    },
 
-                    //the second one is the msaa depth buffer
-                    raw_render_depth: {
-                        load: Clear,
-                        store: DontCare,
-                        format: msaa_depth_format, //works per vulkan definition
-                        samples: static_msaa_factor,
-                    },
-
-                    //Holds only fragments with at leas one value over 1.0
-                    hdr_fragments: {
-                        load: Clear,
-                        store: Store,
-                        format: hdr_msaa_format,
-                        samples: 1,
-                    },
-
-                    //the final image
-                    color: {
-                        load: Clear,
-                        store: Store,
-                        format: swapchain_format, //this needs to have the format which is presentable to the window
-                        samples: 1, //target image is not sampled
-                    }
-                },
-                passes:[
-                    {
-                        color: [raw_render_color],
-                        depth_stencil: {raw_render_depth},
-                        input: []
-                    },
-
-                    //Resolves msaa and creates a HDR fragment buffer
-                    {
-                        color: [hdr_fragments],
-                        depth_stencil: {},
-                        input: [raw_render_color]
-                    },
-                    
-                    {
-                        color: [color],
-                        depth_stencil: {},
-                        input: [raw_render_color]
-                        //resolve: [color]
-                    }
-
-                ]
-
-            ).expect("failed to create main render_pass")
-        );
         println!("Created main_renderpass", );
         //At this point we build the state, now we have to create the configuration for it as well
         //to be used, dynmaicly while drawing
@@ -230,8 +166,7 @@ impl FrameSystem{
             dynamic_state: dynamic_state,
 
             engine_settings: settings,
-
-            main_renderpass: main_renderpass,
+            passes: passes,
             //Get created when starting a frame for later use
             current_main_frame_buffer: None,
 
@@ -244,11 +179,6 @@ impl FrameSystem{
 
             hdr_fragments: hdr_fragments,
 
-            static_msaa_factor: static_msaa_factor,
-
-            image_hdr_msaa_format: hdr_msaa_format,
-            image_msaa_depth_format: msaa_depth_format,
-            swapchain_format: swapchain_format,
             device: device,
             queue: target_queue,
         }
@@ -262,18 +192,24 @@ impl FrameSystem{
             .get_dimensions()
         };
 
+        let static_msaa_factor = self.passes.object_pass.static_msaa_factor;
+
+        let hdr_msaa_format = self.passes.object_pass.image_hdr_msaa_format;
+        let msaa_depth_format = self.passes.object_pass.image_msaa_depth_format;
+
+
         self.forward_hdr_image = AttachmentImage::transient_multisampled_input_attachment(
             self.device.clone(),
-            new_dimensions, self.static_msaa_factor, self.image_hdr_msaa_format).expect("failed to create msaa buffer!");
+            new_dimensions, static_msaa_factor, hdr_msaa_format).expect("failed to create msaa buffer!");
 
         //Create a multisampled depth buffer depth buffer
         self.forward_hdr_depth = AttachmentImage::transient_multisampled_input_attachment(
-            self.device.clone(), new_dimensions, self.static_msaa_factor, self.image_msaa_depth_format)
+            self.device.clone(), new_dimensions, static_msaa_factor, msaa_depth_format)
             .expect("failed to create depth buffer!");
 
         self.hdr_fragments = AttachmentImage::sampled_input_attachment(self.device.clone(),
         new_dimensions,
-        self.image_hdr_msaa_format).expect("failed to create hdr buffer!");
+        hdr_msaa_format).expect("failed to create hdr buffer!");
 
         //After all, create the frame dynamic states
         self.dynamic_state = vulkano::command_buffer::DynamicState{
@@ -299,7 +235,7 @@ impl FrameSystem{
 
         //Create the main frame buffer
         self.current_main_frame_buffer = Some(Arc::new(
-            vulkano::framebuffer::Framebuffer::start(self.main_renderpass.clone())
+            vulkano::framebuffer::Framebuffer::start(self.passes.object_pass.render_pass.clone())
             //Add the pre depth image
             //.add(self.pre_depth_buffer.clone()).expect("Failed to add pre depth buffer to framebuffer")
             //the msaa image
@@ -398,11 +334,6 @@ impl FrameSystem{
         self.hdr_fragments.clone()
     }
 
-    ///Returns the currently used main_renderpass layout
-    pub fn get_main_renderpass(&self) -> Arc<RenderPassAbstract + Send + Sync>{
-        self.main_renderpass.clone()
-    }
-
     ///Returns the current, up to date dynamic state. Should be used for every onscreen rendering.
     pub fn get_dynamic_state(&self) -> &vulkano::command_buffer::DynamicState{
         &self.dynamic_state
@@ -426,6 +357,5 @@ impl FrameSystem{
         let id_type = render::SubPassType::HdrSorting;
         id_type.get_id()
     }
-
 
 }
