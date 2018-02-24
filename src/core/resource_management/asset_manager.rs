@@ -99,7 +99,6 @@ impl AssetManager {
             &pipeline_manager,
             &device,
             &uniform_manager,
-            &settings,
             fallback_alb,
             fallback_nrm,
             fallback_phy,
@@ -505,7 +504,6 @@ impl AssetManager {
             path,
             self.device.clone(),
             self.queue.clone(),
-            self.settings.clone()
         );
         new_texture
     }
@@ -524,9 +522,9 @@ impl AssetManager {
 
     ///Takes an `material::MaterialBuilder` as well as the `name` for the new material
     ///and adds it to the internal manager. It assumes that this material is used on a mesh in the
-    /// object pass as well as that it is opaque.
+    /// object pass as well as that it is opaque. It returns the name this material was actually added under.
     pub fn add_material_to_manager(&mut self, material: material::MaterialBuilder, name: &str)
-    -> Result<String, String>
+    -> String
     {
         let default_pipeline = {
             let mut pipe_lck = self.pipeline_manager.lock().expect("failed to lock pipeline manager");

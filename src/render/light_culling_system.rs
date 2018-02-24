@@ -1,8 +1,5 @@
 use render::uniform_manager;
 use render::frame_system;
-use render::pipeline;
-use jakar_tree;
-use core::next_tree;
 
 use vulkano::descriptor::descriptor_set::DescriptorSet;
 use vulkano::descriptor::descriptor_set::PersistentDescriptorSet;
@@ -13,8 +10,6 @@ use vulkano::buffer::cpu_pool::CpuBufferPoolSubbuffer;
 use vulkano::buffer::device_local::DeviceLocalBuffer;
 use vulkano;
 
-use cgmath::*;
-
 use std::sync::{Arc,Mutex};
 
 ///TODO Description how we (I) do this
@@ -22,7 +17,6 @@ use std::sync::{Arc,Mutex};
 pub struct PreDpethSystem {
     uniform_manager: Arc<Mutex<uniform_manager::UniformManager>>,
     device: Arc<vulkano::device::Device>,
-    queue: Arc<vulkano::device::Queue>,
 
     //Gets allocated ones and is used to attach the current cluster data to other shaders
     cluster_buffer: Arc<DeviceLocalBuffer<light_cull_shader::ty::ClusterBuffer>>,
@@ -68,7 +62,6 @@ impl PreDpethSystem{
         PreDpethSystem{
             uniform_manager: uniform_manager,
             device: device,
-            queue: queue,
 
             cluster_buffer: persistent_cluster_buffer,
 
@@ -108,14 +101,6 @@ impl PreDpethSystem{
                     ComputePipeline::new(self.device.clone(), &shader.main_entry_point(), &()
                 )
                 .expect("failed to create compute pipeline"));
-
-                //Get the current camera data
-                let camera_data = {
-                    let mut uniform_manager_lck = self.uniform_manager
-                    .lock().expect("Failed to lock unfiorm_mng");
-
-                    uniform_manager_lck.get_subbuffer_data(Matrix4::identity())
-                };
 
                 //adds the light buffers (all lights and indice buffer)
                 let set_01 = Arc::new(PersistentDescriptorSet::start(compute_pipeline.clone(), 0)

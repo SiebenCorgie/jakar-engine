@@ -8,9 +8,7 @@ use core::engine_settings;
 
 use vulkano;
 use vulkano::descriptor::descriptor_set::PersistentDescriptorSet;
-use vulkano::image::traits::ImageViewAccess;
 use vulkano::buffer::cpu_pool::CpuBufferPool;
-use vulkano::sampler::Sampler;
 
 use std::sync::{Arc, Mutex};
 
@@ -38,10 +36,8 @@ impl_vertex!(PostProgressVertex, position, tex_coord);
 ///Is able to perform the post progressing on a command buffer based on a stored pipeline
 pub struct PostProgress{
     engine_settings: Arc<Mutex<engine_settings::EngineSettings>>,
-    device: Arc<vulkano::device::Device>,
     pipeline: Arc<pipeline::Pipeline>,
     resolve_pipe: Arc<pipeline::Pipeline>,
-    default_sampler: Arc<Sampler>,
     screen_vertex_buffer: Arc<vulkano::buffer::BufferAccess + Send + Sync>,
     settings_pool: vulkano::buffer::cpu_pool::CpuBufferPool<default_pstprg_fragment::ty::hdr_settings>,
 }
@@ -75,14 +71,11 @@ impl PostProgress{
             device.clone(), vulkano::buffer::BufferUsage::all()
         );
 
-        let default_sampler = Sampler::simple_repeat_linear_no_mipmap(device.clone());
 
         PostProgress{
-            device: device,
             engine_settings: engine_settings,
             pipeline: post_progress_pipeline,
             resolve_pipe: resolve_pipe,
-            default_sampler: default_sampler,
             screen_vertex_buffer: sample_vertex_buffer,
             settings_pool: settings_pool,
         }

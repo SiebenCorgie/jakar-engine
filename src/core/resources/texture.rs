@@ -1,4 +1,4 @@
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc};
 
 use vulkano::image::immutable::ImmutableImage;
 use vulkano::sampler::Filter;
@@ -8,14 +8,11 @@ use vulkano::device::Device;
 use vulkano::device::Queue;
 use vulkano::sampler::Sampler;
 use vulkano::image::Dimensions::Dim2d;
-use vulkano::format::FormatDesc;
 use vulkano::sync::GpuFuture;
 use vulkano;
 
 use image;
 use image::DynamicImage::*;
-
-use core::engine_settings;
 
 pub struct TextureBuilder {
     //sampler
@@ -63,7 +60,6 @@ pub struct TextureBuilder {
     image_data: Option<Vec<u8>>,
     device: Arc<Device>,
     queue: Arc<Queue>,
-    engine_settings: Arc<Mutex<engine_settings::EngineSettings>>,
 }
 
 ///a small struct used to return image information
@@ -80,7 +76,6 @@ impl TextureBuilder {
         image_path: &str,
         device: Arc<Device>,
         queue: Arc<Queue>,
-        engine_settings: Arc<Mutex<engine_settings::EngineSettings>>
     ) -> Self{
         //Create the default builder
         TextureBuilder{
@@ -127,7 +122,6 @@ impl TextureBuilder {
             image_data: None,
             device: device,
             queue: queue,
-            engine_settings: engine_settings,
         }
     }
 
@@ -136,7 +130,6 @@ impl TextureBuilder {
         data: Vec<u8>,
         device: Arc<Device>,
         queue: Arc<Queue>,
-        engine_settings: Arc<Mutex<engine_settings::EngineSettings>>
     ) -> Self{
         //Create the default builder
         TextureBuilder{
@@ -183,7 +176,6 @@ impl TextureBuilder {
             image_data: Some(data),
             device: device,
             queue: queue,
-            engine_settings: engine_settings,
         }
     }
 
@@ -313,7 +305,7 @@ impl TextureBuilder {
 
         // This variable will be modified during the function, and will correspond to when the
         // transfer commands are finished.
-        let mut final_future = Box::new(vulkano::sync::now(self.queue.device().clone())) as Box<vulkano::sync::GpuFuture>;
+        let final_future = Box::new(vulkano::sync::now(self.queue.device().clone())) as Box<vulkano::sync::GpuFuture>;
 
         //Setup a sampler from the info
         let tmp_sampler = Sampler::new(
@@ -443,7 +435,7 @@ impl TextureBuilder {
                 .expect("failed to create immutable image")
             };
             //drop the future to wait for gpu
-            final_future = Box::new(final_future.join(tex_future));
+            let _  = Box::new(final_future.join(tex_future));
 
             texture_tmp
         };

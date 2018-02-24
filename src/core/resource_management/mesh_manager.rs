@@ -1,10 +1,5 @@
 
 use core::resources::mesh;
-use jakar_tree::node;
-use core::next_tree::*;
-//use tools::assimp_importer;
-
-use vulkano;
 
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};

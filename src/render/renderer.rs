@@ -10,23 +10,20 @@ use render::render_passes::RenderPasses;
 
 use core::next_tree::SceneTree;
 use core::engine_settings;
-use core::resources::camera::Camera;
 //use core::simple_scene_system::node_helper;
 use core::next_tree;
 use jakar_tree;
 
 use vulkano;
 use vulkano::command_buffer::AutoCommandBufferBuilder;
-use vulkano::framebuffer::RenderPassAbstract;
 use vulkano::swapchain::SwapchainCreationError;
 use vulkano::swapchain::SwapchainAcquireFuture;
 use vulkano::swapchain::AcquireError;
 use vulkano::sync::GpuFuture;
-use vulkano::instance::debug::{DebugCallback, MessageTypes};
 
 
 use std::sync::{Arc,Mutex};
-use std::time::{Instant,Duration};
+use std::time::{Instant};
 use std::mem;
 
 ///An enum describing states of the renderer
@@ -34,7 +31,6 @@ use std::mem;
 pub enum RendererState {
     RUNNING,
     WAITING,
-    SHOULD_END,
     ENDED
 }
 
@@ -496,7 +492,7 @@ impl Renderer {
     where AutoCommandBufferBuilder: Sized + 'static
     {
 
-        let mut time_step = Instant::now();
+        //let mut time_step = Instant::now();
 
 
         match frame_stage{
@@ -606,21 +602,13 @@ impl Renderer {
         self.engine_settings.clone()
     }
 
-}
+    ///Returns the available renderpasses
+    pub fn get_render_passes(&self) -> RenderPasses{
+        self.render_passes.clone()
+    }
 
-/*TODO:
-The Functions
-Start the renderer
-The Renderer is fixed fo now, it will always draw the same frame but will update its content everytime
-this will be done via a Arc<content> / clone methode.
-For instance the uniform_set 01 will be supplied by the camera system for model and camera info
-the set_02 will be supplied by the material system in cooperation with the pipeline system to bind
-the correct pipeline and uniform set at the right mesh
-the vertex buffer will be copied from each mesh which will be rendered. The scene system will have its own
-loop.
-Last but not least, at some point the the renderer will calculate the forward+ light pass and give the
-info to a ligh handeling system. But this is not implemented yet and won't be so fast. I have
-to find out how to calculate this forward pass (ref: https://www.slideshare.net/takahiroharada/forward-34779335
-and https://takahiroharada.files.wordpress.com/2015/04/forward_plus.pdf and
-https://www.3dgep.com/forward-plus/#Forward)
-*/
+    ///Returns the current engine state
+    pub fn get_engine_state(&self) -> Arc<Mutex<RendererState>>{
+        self.state.clone()
+    }
+}

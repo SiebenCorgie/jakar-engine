@@ -1,11 +1,9 @@
-use core::resources::{texture, material, empty, mesh, light, camera};
-use core::resources::camera::Camera;
+use core::resources::{texture, material, empty, mesh};
 //use core::simple_scene_system::node;
 use jakar_tree::*;
 use core::next_tree::*;
-use jakar_tree::node::{Attribute, NodeContent};
+use jakar_tree::node::{Attribute};
 
-use core::resource_management::{material_manager, mesh_manager, scene_manager, texture_manager};
 use core;
 use core::ReturnBoundInfo;
 use render::pipeline_builder;
@@ -14,13 +12,11 @@ use render;
 use render::render_passes::RenderPassConf;
 
 use vulkano;
-use vulkano::pipeline::blend::LogicOp;
 
 use cgmath::*;
 
 use gltf;
 use gltf_importer;
-use image;
 
 use std::path::Path;
 use std::sync::{Arc, Mutex};
@@ -57,7 +53,6 @@ pub fn load_gltf_texture(
                     data.to_vec(),
                     (*texture_manager_lck).get_device(),
                     (*texture_manager_lck).get_queue(),
-                    (*texture_manager_lck).get_settings(),
                 )
             },
             gltf::image::Data::Uri{uri, mime_type} =>{
@@ -68,7 +63,6 @@ pub fn load_gltf_texture(
                     path.to_str().expect("failed to create string from path"),
                     (*texture_manager_lck).get_device(),
                     (*texture_manager_lck).get_queue(),
-                    (*texture_manager_lck).get_settings(),
                 )
             }
         }
@@ -363,14 +357,10 @@ pub fn load_gltf_material(
     let mut material_manager_lck = material_manager.lock().expect("failed to lock material manager");
     //Add it and return its
     //println!("Finished loading material with name: {}", material_name);
-    let material_in_manager_name = {
-        match (*material_manager_lck).add_material(final_material){
-            Ok(k) => k,
-            Err(e) => e,
-        }
-    };
+    let name = (*material_manager_lck).add_material(final_material);
 
-    (*material_manager_lck).get_material(&material_in_manager_name)
+
+    (*material_manager_lck).get_material(&name)
 }
 
 ///Loads gltf primitves in an Vec<mesh::Mesh> and adds them to the managers as well as their textures
@@ -431,17 +421,12 @@ pub fn load_gltf_mesh(
 
         let mesh_name = scene_name.clone() + "_mesh_" + &primitive_index.to_string();
 
-        let (device, queue) = {
+        let device = {
             let device = {
                 let managers_lck = managers.lock().expect("failed to lock managers struct");
                 (*managers_lck).device.clone()
             };
-            let queue = {
-                let managers_lck = managers.lock().expect("failed to lock managers struct");
-                (*managers_lck).queue.clone()
-            };
-
-            (device, queue)
+            device
         };
 
         //get the fallback material for the mesh creation, if there is another materail set for
@@ -459,7 +444,6 @@ pub fn load_gltf_mesh(
         let mut add_mesh = mesh::Mesh::new(
             &mesh_name,
             device.clone(),
-            queue.clone(),
             fallback_material
         );
         //create a dummy and fill it
@@ -697,7 +681,7 @@ pub fn load_gltf_node(
     let mut node_attributes = attributes::NodeAttributes::default();
     node_attributes.transform = node_transform;
     //add the empty to the parent node in tree
-    tree.add(empty_value, parent_node_name.clone(), Some(node_attributes));
+    let _ = tree.add(empty_value, parent_node_name.clone(), Some(node_attributes));
 
     //check for a mesh in the gltf_node
     match gltf_node.mesh(){
@@ -715,7 +699,7 @@ pub fn load_gltf_node(
             //create a node from every mesh and add it to the own Node
             for prim in primitives{
                 //create the mesh node
-                let mesh_name = new_name.clone() + "_mesh_" + &mesh.index().to_string();
+                let _ = new_name.clone() + "_mesh_" + &mesh.index().to_string();
                 //now we lock the mesh for a moment to decide:
                 // transparency
                 // bound
@@ -778,7 +762,7 @@ pub fn load_gltf_node(
     //iterate through them, always create a node, load it and add it to the current parent
     if gltf_node.children().len() > 0{
         for child in gltf_node.children(){
-            let new_child = load_gltf_node(
+            let _ = load_gltf_node(
                 &child,
                 scene_name,
                 Some(node_transform),

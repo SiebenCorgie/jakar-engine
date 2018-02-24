@@ -38,7 +38,6 @@ impl TextureManager{
             "data/nothing.png",
             device.clone(),
             queue.clone(),
-            engine_settings.clone()
         )
         .build_with_name("none");
 
@@ -47,7 +46,6 @@ impl TextureManager{
             "data/fallback_alb.png",
             device.clone(),
             queue.clone(),
-            engine_settings.clone()
         )
         .build_with_name("fallback_albedo");
 
@@ -55,7 +53,6 @@ impl TextureManager{
             "data/fallback_nrm.png",
             device.clone(),
             queue.clone(),
-            engine_settings.clone()
         )
         .build_with_name("fallback_normal");
 
@@ -63,7 +60,6 @@ impl TextureManager{
             "data/fallback_physical.png",
             device.clone(),
             queue.clone(),
-            engine_settings.clone()
         )
         .build_with_name("fallback_physical");
 
@@ -143,12 +139,9 @@ impl TextureManager{
 
     ///Removes the texture from the manager, keep in mind that any copy will live till it is droped
     ///by its holder.
-    ///TODO verfiy that not index 0-3 is delted (used for the system)
     pub fn remove_texture(mut self, texture_name: &str) -> Result<(), &'static str>{
-
-
         match self.textures.remove(&String::from(texture_name)){
-            Some(t) => return Ok({}),
+            Some(_) => return Ok({}),
             None => Err("the texture could not removed because it is not in the manager"),
         }
     }

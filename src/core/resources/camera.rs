@@ -295,12 +295,14 @@ impl Camera for DefaultCamera{
 
 
         //from https://matthewwellings.com/blog/the-new-vulkan-coordinate-system/
+        /*
         let bias: Matrix4<f32> = Matrix4::new(
             1.0, 0.0, 0.0, 0.0,
             0.0, -1.0, 0.0, 0.0,
             0.0, 0.0, 0.5, 0.5,
             0.0, 0.0, 0.0, 1.0
         );
+        */
         //bias has to be multiplied to comply with the opengl -> vulkan coorinate system
         //(+y is down and depth is -1.0 - 1.0)
         //bias *

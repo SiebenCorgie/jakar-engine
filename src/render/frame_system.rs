@@ -1,16 +1,12 @@
-use core::render_settings;
 use core::engine_settings;
 use render;
 
 use vulkano::image::traits::ImageViewAccess;
 use vulkano::image::traits::ImageAccess;
-use vulkano::framebuffer::RenderPassAbstract;
 use vulkano::image::attachment::AttachmentImage;
 use vulkano::command_buffer::AutoCommandBufferBuilder;
 use vulkano::framebuffer::FramebufferAbstract;
-use vulkano::format::Format;
 use vulkano;
-use vulkano::sync::GpuFuture;
 use std::sync::{Arc, Mutex};
 
 ///Describes the current stage the command buffer is in
@@ -104,15 +100,6 @@ impl FrameSystem{
         passes: render::render_passes::RenderPasses,
         target_queue: Arc<vulkano::device::Queue>,
     ) -> Self{
-
-        //get our selfs a easy to read render_settings insance :)
-        let render_settings = {
-            settings
-            .lock()
-            .expect("failed to lock settings for frame creation")
-            .get_render_settings()
-            .clone()
-        };
 
         let current_dimensions = {
             settings

@@ -4,14 +4,11 @@ use rt_error;
 use render::pipeline;
 use render::render_passes::{RenderPasses, RenderPassConf};
 use render::pipeline_builder;
-use render::shader_set::ShaderManager;
+use render::shader_manager::ShaderManager;
 
-use core::engine_settings;
-
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc};
 
 use vulkano;
-use vulkano::framebuffer;
 
 ///Contains the requirements an material can have for a pipeline.
 /// Can be used to search for an pipeline which has thoose requirements or, if there is non, create one.
@@ -51,8 +48,6 @@ impl PipelineRequirements{
 
 ///Manages all available pipeline
 pub struct PipelineManager {
-    //A reference to the settings, used later to get specialistaion constants and other special settings
-    engine_settings: Arc<Mutex<engine_settings::EngineSettings>>,
     //stores all the pipelines
     pipelines: BTreeMap<String, Arc<pipeline::Pipeline>>,
     //Manages the useable shader sets. Loads them when needed onec and can provide copys of the sets.
@@ -71,12 +66,10 @@ impl PipelineManager{
     ///Creates a pipeline Manager without any pipeline, they have to be loaded from a config.
     pub fn new(
         device: Arc<vulkano::device::Device>,
-        l_engine_settings: Arc<Mutex<engine_settings::EngineSettings>>,
         passes: RenderPasses,
     ) -> Self
     {
         PipelineManager{
-            engine_settings: l_engine_settings,
             pipelines: BTreeMap::new(),
             shader_manager: ShaderManager::new(device.clone()),
             device: device,
@@ -128,7 +121,6 @@ impl PipelineManager{
         let pipe = pipeline::Pipeline::new(
             self.device.clone(),
             config,
-            self.engine_settings.clone(),
             self.passes.conf_to_pass(pass),
             self.shader_manager.get_shader_set(shader_set)
             .expect("failed to get correct shader set for pipeline... set a right one!")
@@ -169,7 +161,6 @@ impl PipelineManager{
         let new_pipe = Arc::new(pipeline::Pipeline::new(
             self.device.clone(),
             needed_configuration,
-            self.engine_settings.clone(),
             self.passes.conf_to_pass(pass),
             self.shader_manager.get_shader_set(shader_set)
             .expect("failed to get shader set for pipeline.. that shoudn't not happen")
@@ -213,17 +204,15 @@ impl PipelineManager{
 
         //We found no pipe with the required attributes. Thats why we'll create one with the required
         // atribs.
-        let mut pipeline_conf = pipeline_builder::PipelineConfig::default();
-        //get two variables to get the name and overwerite the default pipeline conf if needed
-        let (blend_type, cull_mode) = {
-            //overwrite with needed config
-            pipeline_conf = pipeline_conf.with_blending(requirements.blend_type.clone());
-            pipeline_conf = pipeline_conf.with_cull_mode(requirements.culling.clone());
-            //Set some additional info
-            pipeline_conf = pipeline_conf.with_render_pass(requirements.render_pass.clone());
-            pipeline_conf = pipeline_conf.with_shader(requirements.shader_set.clone());
-            (requirements.blend_type, requirements.culling)
-        };
+        let pipeline_conf = pipeline_builder::PipelineConfig::default()
+        //overwrite with needed config
+        .with_blending(requirements.blend_type.clone())
+        .with_cull_mode(requirements.culling.clone())
+        //Set some additional info
+        .with_render_pass(requirements.render_pass.clone())
+        .with_shader(requirements.shader_set.clone());
+
+
 
         //CREATING_PIPE==============================================
 

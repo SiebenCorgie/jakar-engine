@@ -1,6 +1,6 @@
 use super::shaders::wireframe_fragment;
 use super::shaders::wireframe_vertex;
-use render::shader_set::*;
+use render::shader_manager::*;
 use core::resources::mesh::Vertex;
 use super::shader_inputs::DescriptorSetFamiliy;
 use render::pipeline_builder::PipelineConfig;

@@ -1,6 +1,6 @@
 use super::shaders::pbr_fragment;
 use super::shaders::pbr_vertex;
-use render::shader_set::*;
+use render::shader_manager::*;
 use super::shader_inputs::DescriptorSetFamiliy;
 use core::resources::mesh::Vertex;
 use render::pipeline_builder::PipelineConfig;

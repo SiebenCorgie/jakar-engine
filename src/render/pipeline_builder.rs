@@ -3,9 +3,6 @@ use vulkano::pipeline::blend::AttachmentBlend;
 use vulkano::pipeline::blend::LogicOp;
 use vulkano::pipeline::input_assembly::PrimitiveTopology;
 use render::render_passes::RenderPassConf;
-use render::shader::*;
-
-use std::sync::Arc;
 
 ///Collects all possible vertex buffer types
 pub enum VertexBufferType {

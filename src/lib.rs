@@ -209,7 +209,6 @@ impl JakarEngine {
                 let render_status = render_builder.create(
                     (*input_sys).get_events_loop(),
                     render_settings,
-                    (*input_sys).get_key_map()
                 );
 
                 //now we match the craetion status, if sucessful, we can return the renderer

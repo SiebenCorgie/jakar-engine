@@ -34,7 +34,7 @@ pub mod shader;
 
 ///This modules defines how a shader set and its inputs work. The engine can create pipelines based on the
 /// shader sets and creates the descriptorsets on runtime based on the input definitions defined in the shader set.
-pub mod shader_set;
+pub mod shader_manager;
 
 ///Defines the usable render passes for this engine
 pub mod render_passes;

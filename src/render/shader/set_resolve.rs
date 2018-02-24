@@ -3,7 +3,7 @@ use super::shaders::default_pstprg_vertex;
 use render::post_progress::PostProgressVertex;
 use super::shader_inputs::DescriptorSetFamiliy;
 use render::pipeline_builder::PipelineConfig;
-use render::shader_set::ToPipeline;
+use render::shader_manager::ToPipeline;
 
 use vulkano;
 use vulkano::pipeline::vertex::SingleBufferDefinition;

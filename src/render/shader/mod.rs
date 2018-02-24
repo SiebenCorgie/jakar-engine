@@ -18,8 +18,8 @@ pub mod set_wireframe;
 
 use vulkano::device::Device;
 
-use render::shader_set::ToPipeline;
-use render::shader_set::ShaderLibrary;
+use render::shader_manager::ToPipeline;
+use render::shader_manager::ShaderLibrary;
 
 use std::sync::Arc;
 

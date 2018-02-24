@@ -6,7 +6,6 @@ use core::next_tree::*;
 use render::frame_system;
 use render::pipeline_manager;
 use render::pipeline_builder;
-use render::shader;
 use render::uniform_manager;
 
 use std::sync::{Arc, Mutex};
@@ -54,10 +53,13 @@ pub fn order_by_distance(
 
         //now reorder the meshes reversed into a vec and send them to the render thread
         let mut return_vector = Vec::new();
-        for (id, mesh) in ordered_meshes.into_iter().rev(){
+        for (_, mesh) in ordered_meshes.into_iter().rev(){
             return_vector.push(mesh);
         }
-        sender.send(return_vector);
+        match sender.send(return_vector){
+            Ok(_) => {},
+            Err(er) => panic!("failed to send ordered meshes! {:?}", er)
+        }
 
     });
 

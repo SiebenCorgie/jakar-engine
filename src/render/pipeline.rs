@@ -1,18 +1,13 @@
 
 use vulkano;
 use vulkano::pipeline;
-use vulkano::pipeline::GraphicsPipelineAbstract;
 use vulkano::framebuffer::RenderPassAbstract;
-use vulkano::framebuffer::Subpass;
 
-use core::engine_settings;
-
-use render::shader;
 use render::pipeline_builder::*;
-use render::shader_set;
+use render::shader_manager;
 use render::shader::shader_inputs::DescriptorSetFamiliy;
 
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc};
 
 ///Definition of a single pipeline together with its creation and deleting behavoir
 ///
@@ -38,9 +33,8 @@ impl Pipeline{
     pub fn new(
         device: Arc<vulkano::device::Device>,
         pipeline_configuration: PipelineConfig,
-        engine_settings: Arc<Mutex<engine_settings::EngineSettings>>,
         render_pass: Arc<RenderPassAbstract + Send + Sync>,
-        shader_set: Arc<shader_set::ToPipeline>,
+        shader_set: Arc<shader_manager::ToPipeline>,
     )
         -> Self
 

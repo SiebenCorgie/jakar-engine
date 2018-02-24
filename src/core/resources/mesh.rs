@@ -70,7 +70,6 @@ impl Mesh {
     pub fn new(
         name: &str,
         device: Arc<vulkano::device::Device>,
-        queue: Arc<vulkano::device::Queue>,
         material: Arc<Mutex<material::Material>>
         )
         ->Self{

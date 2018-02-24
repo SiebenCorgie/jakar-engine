@@ -11,8 +11,6 @@ use core::engine_settings;
 ///Controlles a window created with the renderer
 pub struct Window {
     window: vulkano_win::Window,
-
-    engine_settings: Arc<Mutex<engine_settings::EngineSettings>>,
 }
 
 
@@ -77,7 +75,6 @@ impl Window{
 
         Window{
             window: window,
-            engine_settings: engine_settings.clone(),
         }
     }
 

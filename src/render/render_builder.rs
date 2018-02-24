@@ -16,7 +16,6 @@ use render::post_progress;
 use render::light_culling_system;
 
 use core::engine_settings;
-use input::KeyMap;
 
 ///Describes how the handler should load the layers, by default set to NoLayer
 pub enum LayerLoading{
@@ -102,7 +101,6 @@ impl RenderBuilder {
         self,
         events_loop: Arc<Mutex<winit::EventsLoop>>,
         engine_settings: Arc<Mutex<engine_settings::EngineSettings>>,
-        key_map: Arc<Mutex<KeyMap>>,
     ) -> Result<(render::renderer::Renderer, Box<GpuFuture>), String>{
         println!("Starting Vulkan Renderer!", );
         //Init Vulkan
@@ -224,7 +222,7 @@ impl RenderBuilder {
                         } else {
                             panic!("no-impl");
                         };
-                        //println!("STATUS: RENDER: {} {}: {}", msg.layer_prefix, ty, msg.description);
+                        println!("STATUS: RENDER: {} {}: {}", msg.layer_prefix, ty, msg.description);
                     }).ok();
                 },
                 engine_settings::BuildType::ReleaseWithDebugMessages => {
@@ -245,7 +243,7 @@ impl RenderBuilder {
                             } else {
                                 panic!("no-impl");
                             };
-                            //println!("STATUS: RENDER: {} {}: {}", msg.layer_prefix, ty, msg.description);
+                            println!("STATUS: RENDER: {} {}: {}", msg.layer_prefix, ty, msg.description);
                         }
                     ).ok();
                 }
@@ -253,9 +251,10 @@ impl RenderBuilder {
         }
 
         //Using a physical device according to the builder settings
+        //TODO use the name
         let physical_device_tmp = {
             match self.preferred_physical_device{
-                Some(pref_dev) =>{
+                Some(_) =>{
                     //try to get a device with this name, else rank the devices in the iterator
                     // if the iterator is > 1
                     let mut local_devices = vulkano::instance::PhysicalDevice::enumerate(&instance);
@@ -420,7 +419,6 @@ impl RenderBuilder {
             Mutex::new(
                 pipeline_manager::PipelineManager::new(
                     device.clone(),
-                    engine_settings.clone(),
                     passes.clone(),
                 )
             )
