@@ -1,4 +1,4 @@
-use super::shaders::hdr_resolve;
+use super::shaders::blur;
 use super::shaders::default_pstprg_vertex;
 use render::post_progress::PostProgressVertex;
 use super::shader_inputs::DescriptorSetFamiliy;
@@ -17,9 +17,9 @@ use vulkano::device::Device;
 use std::sync::Arc;
 
 
-pub struct ResolveSet {
+pub struct BlurSet {
     pub vertex_shader: Arc<default_pstprg_vertex::Shader>,
-    pub fragment_shader: Arc<hdr_resolve::Shader>,
+    pub fragment_shader: Arc<blur::Shader>,
 
     pub vertex_layout: SingleBufferDefinition<PostProgressVertex>,
 
@@ -29,20 +29,20 @@ pub struct ResolveSet {
 }
 
 
-impl ResolveSet{
+impl BlurSet{
     pub fn load(device: Arc<vulkano::device::Device>) -> Self{
         //Load the shaders
         let v_s = default_pstprg_vertex::Shader::load(device.clone()).expect("failed to load vertex shader!");
-        let f_s = hdr_resolve::Shader::load(device.clone()).expect("failed to load vertex shader!");
+        let f_s = blur::Shader::load(device.clone()).expect("failed to load vertex shader!");
 
         //Configure the inputs
         let mut descriptors = Vec::new();
-        descriptors.push(DescriptorSetFamiliy::MultisampledColor);
-        descriptors.push(DescriptorSetFamiliy::PostProgressData);
+        descriptors.push(DescriptorSetFamiliy::HdrFragments);
+        descriptors.push(DescriptorSetFamiliy::BlurSettings);
 
         let vertex_buffer_def = SingleBufferDefinition::<PostProgressVertex>::new();
 
-        ResolveSet{
+        BlurSet{
             vertex_shader: Arc::new(v_s),
             fragment_shader: Arc::new(f_s),
             vertex_layout: vertex_buffer_def,
@@ -52,7 +52,7 @@ impl ResolveSet{
 }
 
 
-impl ToPipeline for ResolveSet{
+impl ToPipeline for BlurSet{
     ///Converts the builder to a real pipeline
     fn to_pipeline (&self,
         builder: GraphicsPipelineBuilder<BufferlessDefinition, EEPD, (), EEPD, (), EEPD, (), EEPD, (), EEPD, (), ()>,
@@ -60,7 +60,7 @@ impl ToPipeline for ResolveSet{
         render_pass: Arc<RenderPassAbstract + Send + Sync>,
         device: Arc<Device>,
     ) -> (Arc<GraphicsPipelineAbstract + Send + Sync>, Vec<DescriptorSetFamiliy>){
-        println!("Building pipeline based on Resolve shader and vertex ...", );
+        println!("Building pipeline based on Blur shader and vertex ...", );
         //take the current pipeline builder
         let pipeline: Arc<GraphicsPipelineAbstract + Send + Sync> = Arc::new(
             builder

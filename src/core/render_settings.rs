@@ -22,6 +22,22 @@ impl DebugView{
     }
 }
 
+///BlurSettings.
+#[derive(Clone)]
+pub struct BlurSettings {
+    pub strength: f32,
+    pub scale: f32,
+}
+
+impl BlurSettings{
+    pub fn new(scale: f32, strength: f32) -> Self{
+        BlurSettings{
+            strength: strength,
+            scale: scale
+        }
+    }
+}
+
 ///Descibes settings the renderer can have. Most of the values can't be changed after
 /// starting the engine.
 ///Things to keep in mind:
@@ -43,6 +59,9 @@ pub struct RenderSettings {
     ///Defines the exposure used to correct the HDR image down to LDR
     exposure: f32,
 
+    ///Defines the blur settings. Mainly strength and scale.
+    blur: BlurSettings,
+
     ///The engine should render the bounds
     debug_bounds: bool,
 
@@ -51,11 +70,6 @@ pub struct RenderSettings {
 
     //TODO: add things like "max render distance" for objects
 
-    ///Describes the max values for each light, ** can only be changed before starting the engine **
-    max_lights: LightSpecConstants,
-    //turns false when the lights value is first read. From this time no changes can
-    //be made to the max light values, to prevent wrong or changing constant types.
-    first_light_getter: bool,
 }
 
 
@@ -81,17 +95,14 @@ impl RenderSettings{
             v_sync: false,
             gamma: 2.2,
             exposure: 1.0,
+            blur: BlurSettings{
+                strength: 1.5,
+                scale: 1.0,
+            },
 
             debug_bounds: false,
             debug_view: DebugView::Shaded,
 
-            max_lights: LightSpecConstants{
-                max_point_lights: 512,
-                max_dir_lights: 6,
-                max_spot_lights: 512
-            },
-
-            first_light_getter: true,
         }
     }
 
@@ -246,62 +257,25 @@ impl RenderSettings{
         self.has_changed = true;
     }
 
-    ///Returns the light specialisation constants
-    pub fn get_light_specialisation(&mut self) -> LightSpecConstants{
-        self.max_lights.clone()
-    }
 
-    ///Sets a new max value for point lights, does nothing if the max values have been read before
-    pub fn with_max_point_lights(mut self, new_max: u32) -> Self{
-        if self.first_light_getter{
-            self.max_lights.max_point_lights = new_max as i32;
-        }
-
+    ///Sets the current blur settings. Don't overdo it or your rendered image will look like a Michael Bay movie.
+    #[inline]
+    pub fn with_blur(mut self, scale: f32, strength: f32) -> Self{
+        self.blur = BlurSettings::new(scale, strength);
         self
     }
 
-    ///Sets a new max value for directional lights, does nothing if the max values have been read before
-    pub fn with_max_directional_lights(mut self, new_max: u32) -> Self{
-        if self.first_light_getter{
-            self.max_lights.max_dir_lights = new_max as i32;
-        }
-
-        self
+    ///Sets the current blur settings. Don't overdo it or your rendered image will look like a Michael Bay movie.
+    #[inline]
+    pub fn set_blur(&mut self, scale: f32, strength: f32){
+        self.blur = BlurSettings::new(scale, strength);
     }
 
-    ///Sets a new max value for spot lights, does nothing if the max values have been read before
-    pub fn with_max_spot_lights(mut self, new_max: u32) -> Self{
-        if self.first_light_getter{
-            self.max_lights.max_spot_lights = new_max as i32;
-        }
-
-        self
+    ///Returns the current blur settings. They might change per frame.
+    #[inline]
+    pub fn get_blur(&self,) -> BlurSettings{
+        self.blur.clone()
     }
-
-    ///Returns the max value for point lights, this is static after engine inizialisation.
-    pub fn get_max_point_lights(&mut self) -> i32{
-        if self.first_light_getter{
-            self.first_light_getter = false;
-        }
-        self.max_lights.max_point_lights
-    }
-
-    ///Returns the max value for directional lights, this is static after engine inizialisation.
-    pub fn get_max_directional_lights(&mut self) -> i32{
-        if self.first_light_getter{
-            self.first_light_getter = false;
-        }
-        self.max_lights.max_point_lights
-    }
-
-    ///Returns the max value for spot lights, this is static after engine inizialisation.
-    pub fn get_max_spot_lights(&mut self) -> i32{
-        if self.first_light_getter{
-            self.first_light_getter = false;
-        }
-        self.max_lights.max_point_lights
-    }
-
 
 
     ///If `new` is `true`, the bounds of each renderable object are drawn.
@@ -315,17 +289,6 @@ impl RenderSettings{
         self.debug_bounds
     }
 
-}
-
-
-
-// `#[repr(C)]` guarantees that the struct has a specific layout
-#[repr(C)]
-#[derive(Clone)]
-pub struct LightSpecConstants {
-    max_point_lights: i32,
-    max_dir_lights: i32,
-    max_spot_lights: i32,
 }
 
 ///Tests for power of two

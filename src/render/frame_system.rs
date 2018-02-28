@@ -17,6 +17,11 @@ pub enum FrameStage {
     Forward(AutoCommandBufferBuilder),
     //Creates a image which only holds HDR fragments
     HdrSorting(AutoCommandBufferBuilder),
+    ///Blurs Horizontal
+    Blur_H(AutoCommandBufferBuilder),
+    ///Blurs vertical
+    Blur_V(AutoCommandBufferBuilder),
+
     ///Is used to take the image from the first buffer and preform tone mapping on it
     Postprogress(AutoCommandBufferBuilder),
     ///Is used when next_frame() is called on the last pass
@@ -37,6 +42,14 @@ impl FrameStage{
                 let id_type = render::SubPassType::Forward;
                 id_type.get_id()
             },
+            &FrameStage::Blur_H(_) =>{
+                let id_type = render::SubPassType::Blur;
+                id_type.get_id()
+            },
+            &FrameStage::Blur_V(_) =>{
+                let id_type = render::SubPassType::Blur;
+                id_type.get_id()
+            },
             &FrameStage::HdrSorting(_) =>{
                 let id_type = render::SubPassType::HdrSorting;
                 id_type.get_id()
@@ -54,6 +67,103 @@ impl FrameStage{
     }
 }
 
+///Collects the images from the MainRenderPass
+pub struct ObjectPassImages {
+    //The buffer to which the multi sampled depth gets written
+    pub forward_hdr_depth: Arc<ImageViewAccess + Send + Sync>,
+    //Holds the raw multisampled hdr colors
+    pub forward_hdr_image: Arc<ImageViewAccess  + Send + Sync>, //TODO reimplement
+    //Adter sorting the hdr fragments (used for bluring)
+    pub hdr_fragments: Arc<ImageViewAccess  + Send + Sync>,
+    //The ldr fragments
+    pub ldr_fragments: Arc<ImageViewAccess  + Send + Sync>,
+}
+
+impl ObjectPassImages{
+    pub fn new(
+        settings: Arc<Mutex<engine_settings::EngineSettings>>,
+        passes: &render::render_passes::RenderPasses,
+        device: Arc<vulkano::device::Device>
+    ) -> Self{
+
+        let current_dimensions = {
+            settings
+            .lock()
+            .expect("failed to lock settings for frame creation")
+            .get_dimensions()
+        };
+
+        let static_msaa_factor = passes.static_msaa_factor;
+
+        let hdr_msaa_format = passes.image_hdr_msaa_format;
+        let msaa_depth_format = passes.image_msaa_depth_format;
+
+        //Creates a buffer for the msaa image
+        let forward_hdr_color = AttachmentImage::transient_multisampled_input_attachment(device.clone(),
+        current_dimensions, static_msaa_factor,
+        hdr_msaa_format).expect("failed to create raw_render_color buffer!");
+
+
+        //Create a multisampled depth buffer depth buffer
+        let forward_hdr_depth = AttachmentImage::transient_multisampled_input_attachment(
+            device.clone(), current_dimensions, static_msaa_factor, msaa_depth_format)
+            .expect("failed to create forward_hdr_depth buffer!");
+
+        let hdr_fragments = AttachmentImage::sampled_input_attachment(device.clone(),
+        current_dimensions,
+        hdr_msaa_format).expect("failed to create hdr_fragments buffer!");
+
+        let ldr_fragments = AttachmentImage::sampled_input_attachment(device.clone(),
+        current_dimensions,
+        hdr_msaa_format).expect("failed to create ldr_fragments buffer!");
+
+        ObjectPassImages{
+            forward_hdr_depth: forward_hdr_depth,
+            forward_hdr_image: forward_hdr_color,
+            hdr_fragments: hdr_fragments,
+            ldr_fragments: ldr_fragments,
+        }
+    }
+}
+
+
+///Collects the two BlurImages
+pub struct BlurImages {
+    pub after_blur_h: Arc<ImageViewAccess  + Send + Sync>,
+    pub after_blur_v: Arc<ImageViewAccess  + Send + Sync>,
+}
+
+impl BlurImages{
+    pub fn new(
+        settings: Arc<Mutex<engine_settings::EngineSettings>>,
+        passes: &render::render_passes::RenderPasses,
+        device: Arc<vulkano::device::Device>
+    ) -> Self{
+
+        let current_dimensions = {
+            settings
+            .lock()
+            .expect("failed to lock settings for frame creation")
+            .get_dimensions()
+        };
+
+        let hdr_msaa_format = passes.image_hdr_msaa_format;
+
+        //We need two sampled images
+        let after_blur_h = AttachmentImage::sampled_input_attachment(device.clone(),
+        current_dimensions,
+        hdr_msaa_format).expect("failed to create after_blur_h buffer!");
+
+        let after_blur_v = AttachmentImage::sampled_input_attachment(device.clone(),
+        current_dimensions,
+        hdr_msaa_format).expect("failed to create after_blur_v buffer!");
+
+        BlurImages{
+            after_blur_h: after_blur_h,
+            after_blur_v: after_blur_v,
+        }
+    }
+}
 
 
 ///Handles the frame attachment and attachment recreation based on settings. Can start a new
@@ -64,7 +174,11 @@ pub struct FrameSystem {
     //list of the available passes
     passes: render::render_passes::RenderPasses,
 
-    //Stores the dynamic render states used for this frame
+    //The current collection of the object pass images
+    pub object_pass_images: ObjectPassImages,
+    ///The current collection of blur images
+    pub blur_pass_images: BlurImages,
+
     /*TODO:
     * It would be nice to be able to configure the dynamic state. Things like "reversed" depth
     (from 1.0 - 0.0) or something like configuring wireframe line width. But that would be a nice
@@ -74,14 +188,12 @@ pub struct FrameSystem {
 
     //Sometimes holds the newly build main framebuffer, but gets taken out when switching from
     // pre-depth -> compute -> forward pass
-    current_main_frame_buffer: Option<Arc<FramebufferAbstract + Send + Sync>>,
+    object_pass_fb: Option<Arc<FramebufferAbstract + Send + Sync>>,
+    blur_pass_h_fb: Option<Arc<FramebufferAbstract + Send + Sync>>,
+    blur_pass_v_fb: Option<Arc<FramebufferAbstract + Send + Sync>>,
+    assemble_pass_fb: Option<Arc<FramebufferAbstract + Send + Sync>>,
 
-    //The buffer to which the multi sampled depth gets written
-    forward_hdr_depth: Arc<ImageViewAccess + Send + Sync>,
-    //this holds a multi sampled image (later hdr)
-    forward_hdr_image: Arc<ImageViewAccess  + Send + Sync>, //TODO reimplement
 
-    hdr_fragments: Arc<ImageViewAccess  + Send + Sync>,
 
     //a copy of the device
     device: Arc<vulkano::device::Device>,
@@ -108,29 +220,8 @@ impl FrameSystem{
             .get_dimensions()
         };
 
-        let static_msaa_factor = passes.object_pass.static_msaa_factor;
-
-        let hdr_msaa_format = passes.object_pass.image_hdr_msaa_format;
-        let msaa_depth_format = passes.object_pass.image_msaa_depth_format;
-
-        //Creates a buffer for the msaa image
-        let raw_render_color = AttachmentImage::transient_multisampled_input_attachment(device.clone(),
-        current_dimensions, static_msaa_factor,
-        hdr_msaa_format).expect("failed to create msaa buffer!");
-
-
-        //Create a multisampled depth buffer depth buffer
-        let forward_hdr_depth = AttachmentImage::transient_multisampled_input_attachment(
-            device.clone(), current_dimensions, static_msaa_factor, msaa_depth_format)
-            .expect("failed to create depth buffer!");
-
-        let hdr_fragments = AttachmentImage::sampled_input_attachment(device.clone(),
-        current_dimensions,
-        hdr_msaa_format).expect("failed to create hdr buffer!");
-
-
-        println!("Created images the first time", );
-
+        let object_pass_images = ObjectPassImages::new(settings.clone(), &passes, device.clone());
+        let blur_pass_images = BlurImages::new(settings.clone(), &passes, device.clone());
 
         println!("Created main_renderpass", );
         //At this point we build the state, now we have to create the configuration for it as well
@@ -145,9 +236,6 @@ impl FrameSystem{
             scissors: None,
         };
 
-
-        println!("Finished main_renderpass", );
-
         FrameSystem{
 
             dynamic_state: dynamic_state,
@@ -155,16 +243,13 @@ impl FrameSystem{
             engine_settings: settings,
             passes: passes,
             //Get created when starting a frame for later use
-            current_main_frame_buffer: None,
+            object_pass_fb: None,
+            blur_pass_h_fb: None,
+            blur_pass_v_fb: None,
+            assemble_pass_fb: None,
 
-            ///The depth buffer for the compute shader
-
-            //The buffer to which the depth gets written
-            forward_hdr_depth: forward_hdr_depth,
-            //this holds a multi sampled image in hdr format
-            forward_hdr_image: raw_render_color,
-
-            hdr_fragments: hdr_fragments,
+            object_pass_images: object_pass_images,
+            blur_pass_images: blur_pass_images,
 
             device: device,
             queue: target_queue,
@@ -173,30 +258,24 @@ impl FrameSystem{
 
     ///Recreates all attachments with the right size
     pub fn recreate_attachments(&mut self){
+        self.object_pass_images = ObjectPassImages::new(
+            self.engine_settings.clone(),
+            &self.passes,
+            self.device.clone()
+        );
+
+        self.blur_pass_images = BlurImages::new(
+            self.engine_settings.clone(),
+            &self.passes,
+            self.device.clone()
+        );
+
         let new_dimensions = {
-            self.engine_settings.lock()
-            .expect("failed to get new dimenstions in frame system update")
+            self.engine_settings
+            .lock()
+            .expect("failed to lock settings for frame creation")
             .get_dimensions()
         };
-
-        let static_msaa_factor = self.passes.object_pass.static_msaa_factor;
-
-        let hdr_msaa_format = self.passes.object_pass.image_hdr_msaa_format;
-        let msaa_depth_format = self.passes.object_pass.image_msaa_depth_format;
-
-
-        self.forward_hdr_image = AttachmentImage::transient_multisampled_input_attachment(
-            self.device.clone(),
-            new_dimensions, static_msaa_factor, hdr_msaa_format).expect("failed to create msaa buffer!");
-
-        //Create a multisampled depth buffer depth buffer
-        self.forward_hdr_depth = AttachmentImage::transient_multisampled_input_attachment(
-            self.device.clone(), new_dimensions, static_msaa_factor, msaa_depth_format)
-            .expect("failed to create depth buffer!");
-
-        self.hdr_fragments = AttachmentImage::sampled_input_attachment(self.device.clone(),
-        new_dimensions,
-        hdr_msaa_format).expect("failed to create hdr buffer!");
 
         //After all, create the frame dynamic states
         self.dynamic_state = vulkano::command_buffer::DynamicState{
@@ -215,29 +294,50 @@ impl FrameSystem{
     pub fn new_frame<I>(&mut self, target_image: I) -> FrameStage
     where I: ImageAccess + ImageViewAccess + Clone + Send + Sync + 'static
     {
-        //Recreate images if needed:
-        //doing this now in the check_images() function of the renderer
-        //check the frame dimensions, if changed (happens if the swapchain changes),
-        //recreate all attachments
 
-        //Create the main frame buffer
-        self.current_main_frame_buffer = Some(Arc::new(
+        //Create the object pass frame buffer
+        self.object_pass_fb = Some(Arc::new(
             vulkano::framebuffer::Framebuffer::start(self.passes.object_pass.render_pass.clone())
-            //Add the pre depth image
-            //.add(self.pre_depth_buffer.clone()).expect("Failed to add pre depth buffer to framebuffer")
             //the msaa image
-            .add(self.forward_hdr_image.clone()).expect("failed to add msaa image")
+            .add(self.object_pass_images.forward_hdr_image.clone()).expect("failed to add msaa image")
             //the multi sampled depth image
-            .add(self.forward_hdr_depth.clone()).expect("failed to add msaa depth buffer")
+            .add(self.object_pass_images.forward_hdr_depth.clone()).expect("failed to add msaa depth buffer")
             //The hdr format
-            .add(self.hdr_fragments.clone()).expect("failed to add hdr_fragments image")
+            .add(self.object_pass_images.hdr_fragments.clone()).expect("failed to add hdr_fragments image")
             //The color pass
-            .add(target_image.clone()).expect("failed to add image to frame buffer!")
-            //and its depth pass
-            //.add(self.depth_buffer.clone()).expect("failed to add depth to frame buffer!")
+            .add(self.object_pass_images.ldr_fragments.clone()).expect("failed to add image to frame buffer!")
 
             .build()
             .expect("failed to build main framebuffer!")
+        ));
+
+        //Now the blur pass frame buffer
+        self.blur_pass_h_fb = Some(Arc::new(
+            vulkano::framebuffer::Framebuffer::start(self.passes.blur_pass.render_pass.clone())
+            //Only writes to after h
+            .add(self.blur_pass_images.after_blur_h.clone()).expect("failed to add after_blur_h image")
+            .build()
+            .expect("failed to build main framebuffer!")
+        ));
+
+
+        //same for v pass
+        self.blur_pass_v_fb = Some(Arc::new(
+            vulkano::framebuffer::Framebuffer::start(self.passes.blur_pass.render_pass.clone())
+            //Only writes to after v
+            .add(self.blur_pass_images.after_blur_v.clone()).expect("failed to add after_blur_v image")
+            .build()
+            .expect("failed to build main framebuffer!")
+        ));
+
+        //The assemble stage reads the other pictures from descriptor sets and writes to the
+        //swapchain image
+        self.assemble_pass_fb = Some(Arc::new(
+            vulkano::framebuffer::Framebuffer::start(self.passes.assemble.render_pass.clone())
+            //Only writes to after v
+            .add(target_image).expect("failed to add assemble image")
+            .build()
+            .expect("failed to build assemble framebuffer!")
         ));
 
         //start the commadn buffer for this frame
@@ -257,7 +357,7 @@ impl FrameSystem{
             FrameStage::LightCompute(cb) => {
                 //first of all try to get the main frame buffer, if not possible, panic
                 let main_fb = {
-                    match self.current_main_frame_buffer.take(){
+                    match self.object_pass_fb.take(){
                         Some(fb) => fb,
                         None => panic!("Could not find main frame buffer!"),
                     }
@@ -284,13 +384,52 @@ impl FrameSystem{
             }
 
             FrameStage::HdrSorting(cb) => {
-                let next_stage = cb.next_subpass(false).expect("failed to change to PP render pass");
-                FrameStage::Postprogress(next_stage)
+                //Starting the first blur pass
+                let blur_h_fb = self.blur_pass_h_fb.take().expect("there was no blur_h image :(");
+                let clearings = vec![
+                    [0.0, 0.0, 0.0, 0.0].into()
+                ];
+
+                let next = cb
+                .end_render_pass().expect("failed to end object pass")
+                .begin_render_pass(blur_h_fb, false, clearings).expect("failed to start blur_h pass");
+
+                FrameStage::Blur_H(next)
+            }
+
+            FrameStage::Blur_H(cb) => {
+                //Starting the second blur pass
+                let blur_v_fb = self.blur_pass_v_fb.take().expect("there was no blur_v image :(");
+                let clearings = vec![
+                    [0.0, 0.0, 0.0, 0.0].into()
+                ];
+
+                let next = cb
+                .end_render_pass().expect("failed to end blur_h pass")
+                .begin_render_pass(blur_v_fb, false, clearings).expect("failed to start blur_h pass");
+
+                FrameStage::Blur_V(next)
+            }
+
+            FrameStage::Blur_V(cb)=> {
+                let assemble_fb = self.assemble_pass_fb.take().expect("there was no assemble image");
+                let clearings = vec![
+                    [0.0, 0.0, 0.0, 0.0].into()
+                ];
+                let next = cb
+                .end_render_pass().expect("failed to end blur_v pass")
+                .begin_render_pass(assemble_fb, false, clearings).expect("failed to start assemble pass");
+
+                FrameStage::Postprogress(next)
             }
 
             FrameStage::Postprogress(cb) => {
-                //println!("Is already at the last stage, end it!", );
-                FrameStage::Finished(cb)
+                //Finish this frame
+                let new = cb
+                .end_render_pass().expect("failed to end command buffer");
+
+
+                FrameStage::Finished(new)
             }
 
             FrameStage::Finished(cb) => FrameStage::Finished(cb),
@@ -304,21 +443,6 @@ impl FrameSystem{
             FrameStage::Finished(cb) => Ok(cb),
             _ => Err("Could not end frame, wrong frame state!".to_string())
         }
-    }
-
-    ///Returns the msaa image
-    pub fn get_forward_hdr_image(&self) -> Arc<ImageViewAccess +Sync + Send>{
-        self.forward_hdr_image.clone()
-    }
-
-    ///Returns the msaa depth image
-    pub fn get_forward_hdr_depth(&self) -> Arc<ImageViewAccess +Sync + Send>{
-        self.forward_hdr_depth.clone()
-    }
-
-    ///Returns the hdr fragments image
-    pub fn get_hdr_fragments(&self) -> Arc<ImageViewAccess +Sync + Send>{
-        self.hdr_fragments.clone()
     }
 
     ///Returns the current, up to date dynamic state. Should be used for every onscreen rendering.

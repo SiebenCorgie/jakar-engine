@@ -719,12 +719,11 @@ impl Material {
     ///Returns the 4th desciptor set responsible for the lighting information based on the current lights in the culling system
     #[inline]
     pub fn get_set_04(
-        &self, compute_sys: &mut light_culling_system::PreDpethSystem
+        &self, compute_sys: &mut light_culling_system::LightClusterSystem
     ) -> Arc<DescriptorSet + Send + Sync>{
 
         //This has to be build based on the currently used light lists in the compute system.
         compute_sys.get_light_descriptorset(3, self.get_vulkano_pipeline()) //for pbr materials this has to be the three
-
     }
 
     ///Sets a new pipeline

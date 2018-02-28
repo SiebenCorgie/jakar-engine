@@ -36,8 +36,8 @@ fn main() {
     .in_release_mode()
     .with_input_poll_speed(400)
     .with_fullscreen_mode(false)
-    .with_cursor_state(winit::CursorState::Grab)
-    .with_cursor_visibility(winit::MouseCursor::NoneCursor)
+    .with_cursor_state(winit::CursorState::Normal)
+    .with_cursor_visibility(winit::MouseCursor::Default)
     .with_render_settings(graphics_settings)
     .with_asset_update_speed(100)
     .with_max_fps(200)
@@ -46,6 +46,7 @@ fn main() {
         near_plane: 0.1,
     })
     ;
+
 
     //Start the engine
     let mut engine = match jakar_engine::JakarEngine::start(Some(settings)){
@@ -258,6 +259,19 @@ fn main() {
             let settings = engine.get_settings();
             settings.lock().expect("fail debug false").get_render_settings().set_debug_view(jakar_engine::core::render_settings::DebugView::Shaded);
         }
+
+        if engine.get_asset_manager().get_keymap().p{
+            let settings = engine.get_settings();
+            let current_strength = settings.lock().expect("fail debug false").get_render_settings().get_blur().strength;
+            let current_scale = settings.lock().expect("fail debug false").get_render_settings().get_blur().scale;
+            settings.lock().expect("fail debug false").get_render_settings().set_blur(current_scale + 0.05, current_strength + 0.05);
+        }
+
+        if engine.get_asset_manager().get_keymap().o{
+            let settings = engine.get_settings();
+            let current_strength = settings.lock().expect("fail debug false").get_render_settings().get_blur().strength;
+            let current_scale = settings.lock().expect("fail debug false").get_render_settings().get_blur().scale;
+            settings.lock().expect("fail debug false").get_render_settings().set_blur(current_scale - 0.05, current_strength - 0.05);        }
 
 
 

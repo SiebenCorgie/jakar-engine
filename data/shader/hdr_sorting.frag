@@ -19,7 +19,8 @@ layout(location = 1) in vec2 v_pos;
 
 
 //outputs the fragment color
-layout(location = 0) out vec4 HDRColor;
+layout(location = 0) out vec4 LdrColor;
+layout(location = 1) out vec4 HdrColor;
 
 vec4 resolve_msaa(){
   vec4 result = vec4(0.0);
@@ -35,13 +36,15 @@ vec4 resolve_msaa(){
 void main()
 {
 
-  vec4 hdrColor = resolve_msaa();
+  vec4 resolved_color = resolve_msaa();
 
-  if(hdrColor.x > 1.0 ||hdrColor.y > 1.0 ||hdrColor.z > 1.0 ){
-    HDRColor = hdrColor;
+  if(resolved_color.x > 1.0 ||resolved_color.y > 1.0 ||resolved_color.z > 1.0 ){
+    HdrColor = resolved_color;
   }else{
-    HDRColor = vec4(vec3(0.0), 1.0);
+    HdrColor = vec4(0.0);
   }
+
+  LdrColor = resolved_color;
 
 
 }

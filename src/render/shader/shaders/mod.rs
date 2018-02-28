@@ -18,3 +18,6 @@ pub mod default_pstprg_fragment;
 
 ///Sort out HDR fragments for later processing
 pub mod hdr_resolve;
+
+///Blurs the attached texture based on some settings
+pub mod blur;

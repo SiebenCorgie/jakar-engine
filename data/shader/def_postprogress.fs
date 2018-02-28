@@ -4,10 +4,9 @@
 
 
 //tries to get the input attachment
-layout(input_attachment_index = 0, set = 0, binding = 0) uniform subpassInputMS color_input;
+layout(set = 0, binding = 0) uniform sampler2D color_input;
 layout(input_attachment_index = 1, set = 0, binding = 1) uniform subpassInputMS depths_input;
-
-//layout(set = 0, binding = 2) uniform sampler2D s_color;
+layout(set = 0, binding = 2) uniform sampler2D hdr_fragments;
 
 //Get the uvs
 layout(location = 0) in vec2 inter_coord;
@@ -26,21 +25,7 @@ layout(set = 1, binding = 0) uniform hdr_settings{
   int sampling_rate;
   int show_mode;
 }u_hdr_settings;
-//layout(set = 1, binding = 1) uniform sampler2D hdr_fragments;
 
-//The inputs for the hdr -> ldr pass
-//layout(set = 1, binding = 1) uniform sampler2D down_scale_image;
-
-vec4 resolve_msaa(){
-  vec4 result = vec4(0.0);
-	for (int i = 0; i < u_hdr_settings.sampling_rate || i<= 16; i++)
-	{
-		vec4 val = subpassLoad(color_input, i);
-		result += val;
-	}
-	// Average resolved samples
-  return result / u_hdr_settings.sampling_rate;
-}
 
 float linear_depth(float depth){
   float f= u_hdr_settings.far;
@@ -64,10 +49,10 @@ void main()
     return;
   }
 
-  //Heat map
+  //BlurImage
   if (u_hdr_settings.show_mode == 1) {
 
-    FragColor = vec4(vec3(1.0, 0.0, 0.0), 1.0);
+    FragColor = texture(hdr_fragments, inter_coord);
     return;
   }
 
@@ -81,7 +66,12 @@ void main()
   }
 
 
-  vec3 hdrColor = resolve_msaa().rgb;
+  //Add the blur to the image
+
+
+  vec3 hdrColor = texture(color_input, inter_coord).rgb;
+  vec3 bloomColor = texture(hdr_fragments, inter_coord).rgb;
+  hdrColor += bloomColor; // additive blending
 
   // Exposure tone mapping
   vec3 mapped = vec3(1.0) - exp(-hdrColor * u_hdr_settings.exposure);

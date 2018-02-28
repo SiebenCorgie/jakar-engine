@@ -9,17 +9,10 @@ use core::engine_settings::EngineSettings;
 #[derive(Clone)]
 pub struct ObjectPass {
     pub render_pass: Arc<RenderPassAbstract + Send + Sync>,
-    pub image_hdr_msaa_format: Format,
-    pub image_msaa_depth_format: Format,
-    pub swapchain_format: Format,
-    pub static_msaa_factor: u32,
 }
 
 impl ObjectPass{
-    pub fn new(device: Arc<Device>, swapchain_format: Format, msaa_factor: u32,) -> Self{
-
-        let hdr_msaa_format = vulkano::format::Format::R16G16B16A16Sfloat;
-        let msaa_depth_format = vulkano::format::Format::D16Unorm;
+    pub fn new(device: Arc<Device>, swapchain_format: Format, msaa_factor: u32, hdr_msaa_format: Format, msaa_depth_format: Format) -> Self{
 
         //Setup the render_pass layout for the forward pass
         let main_renderpass = Arc::new(
@@ -48,13 +41,12 @@ impl ObjectPass{
                         format: hdr_msaa_format,
                         samples: 1,
                     },
-
-                    //the final image
-                    color: {
+                    //The non hdr framgnets
+                    ldr_fragments: {
                         load: Clear,
                         store: Store,
-                        format: swapchain_format, //this needs to have the format which is presentable to the window
-                        samples: 1, //target image is not sampled
+                        format: hdr_msaa_format,
+                        samples: 1,
                     }
                 },
                 passes:[
@@ -66,18 +58,10 @@ impl ObjectPass{
 
                     //Resolves msaa and creates a HDR fragment buffer
                     {
-                        color: [hdr_fragments],
+                        color: [ldr_fragments, hdr_fragments],
                         depth_stencil: {},
                         input: [raw_render_color]
-                    },
-
-                    {
-                        color: [color],
-                        depth_stencil: {},
-                        input: [raw_render_color]
-                        //resolve: [color]
                     }
-
                 ]
 
             ).expect("failed to create main render_pass")
@@ -85,23 +69,114 @@ impl ObjectPass{
 
         ObjectPass{
             render_pass: main_renderpass,
-            image_hdr_msaa_format: hdr_msaa_format,
-            image_msaa_depth_format: msaa_depth_format,
-            swapchain_format: swapchain_format,
-            static_msaa_factor: msaa_factor,
         }
     }
 
 }
 
+///Is able to blur fragments based on settings supplied with the first descriptor set
+#[derive(Clone)]
+pub struct BlurPass {
+    pub render_pass: Arc<RenderPassAbstract + Send + Sync>,
+}
+
+impl BlurPass {
+    pub fn new(device: Arc<Device>, swapchain_format: Format, hdr_msaa_format: Format) -> Self{
+        let render_pass = Arc::new(
+            ordered_passes_renderpass!(device.clone(),
+                attachments: {
+                    //The non hdr framgnets
+                    out_hdr_fragments: {
+                        load: Clear,
+                        store: Store,
+                        format: hdr_msaa_format,
+                        samples: 1,
+                    }
+                },
+                passes:[
+                    //The actual pass
+                    {
+                        color: [out_hdr_fragments],
+                        depth_stencil: {},
+                        input: []
+                    }
+                ]
+
+            ).expect("failed to create main render_pass")
+        );
+
+        BlurPass{
+            render_pass: render_pass,
+        }
+    }
+}
+
+///Takes currently:
+/// - LDR Fragments
+/// - Blured hdr fragments
+///
+/// Thoose are assembled to the final imaged and then tone mapping etc. is applied
+#[derive(Clone)]
+pub struct AssemblePass {
+    pub render_pass: Arc<RenderPassAbstract + Send + Sync>,
+}
+
+impl AssemblePass{
+    pub fn new(device: Arc<Device>, swapchain_format: Format) -> Self{
+        let render_pass = Arc::new(
+            ordered_passes_renderpass!(device.clone(),
+                attachments: {
+                    final_image: {
+                        load: Clear,
+                        store: Store,
+                        format: swapchain_format,
+                        samples: 1,
+                    }
+                },
+                passes:[
+                    //The actual pass
+                    {
+                        color: [final_image],
+                        depth_stencil: {},
+                        input: []
+                    }
+                ]
+
+            ).expect("failed to create main render_pass")
+        );
+
+        AssemblePass{
+            render_pass: render_pass,
+        }
+    }
+}
+
+//TODO create pass
+
 ///A collection of the available render pass definitions.
 #[derive(Clone)]
 pub struct RenderPasses {
+    ///Renderst the objects in a forward manor, in a second pass the msaa is resolved and the image
+    /// is split in a hdr and ldr part.
     pub object_pass: ObjectPass,
+    ///Blurs the first texture and writes it blured based on settings to the output
+    pub blur_pass: BlurPass,
+    ///Takes all the generated images and combines them to the final image
+    pub assemble: AssemblePass,
+
+
+    //Holds all the used formats
+    pub image_hdr_msaa_format: Format,
+    pub image_msaa_depth_format: Format,
+    pub swapchain_format: Format,
+    pub static_msaa_factor: u32,
 }
 
 impl RenderPasses{
     pub fn new(device: Arc<Device>, swapchain_format: Format, settings: Arc<Mutex<EngineSettings>>) -> Self{
+
+        let hdr_msaa_format = vulkano::format::Format::R16G16B16A16Sfloat;
+        let msaa_depth_format = vulkano::format::Format::D16Unorm;
 
         let msaa_factor = {
             let mut set_lck = settings.lock().expect("failed to lock settings");
@@ -109,16 +184,27 @@ impl RenderPasses{
         };
 
 
-        let object_pass = ObjectPass::new(device, swapchain_format, msaa_factor);
+        let object_pass = ObjectPass::new(device.clone(), swapchain_format, msaa_factor, hdr_msaa_format, msaa_depth_format);
+        let blur_pass = BlurPass::new(device.clone(), swapchain_format, hdr_msaa_format);
+        let assemble = AssemblePass::new(device.clone(), swapchain_format);
 
         RenderPasses{
             object_pass: object_pass,
+            blur_pass: blur_pass,
+            assemble: assemble,
+
+            image_hdr_msaa_format: hdr_msaa_format,
+            image_msaa_depth_format: msaa_depth_format,
+            swapchain_format: swapchain_format,
+            static_msaa_factor: msaa_factor,
         }
     }
 
     pub fn conf_to_pass(&self, conf: RenderPassConf) -> Arc<RenderPassAbstract + Send + Sync>{
         match conf{
-            RenderPassConf::ObjectPass => self.object_pass.render_pass.clone()
+            RenderPassConf::ObjectPass => self.object_pass.render_pass.clone(),
+            RenderPassConf::BlurPass => self.blur_pass.render_pass.clone(),
+            RenderPassConf::AssemblePass => self.assemble.render_pass.clone(),
         }
     }
 }
@@ -129,4 +215,6 @@ impl RenderPasses{
 pub enum RenderPassConf{
     ///Currently renders everything, from the objects to the post progress.
     ObjectPass,
+    BlurPass,
+    AssemblePass,
 }

@@ -48,7 +48,7 @@ pub struct Renderer  {
     images: Vec<Arc<vulkano::image::SwapchainImage>>,
 
     frame_system: frame_system::FrameSystem,
-    light_culling_system: light_culling_system::PreDpethSystem,
+    light_culling_system: light_culling_system::LightClusterSystem,
 
     render_passes: RenderPasses,
 
@@ -82,7 +82,7 @@ impl Renderer {
 
         post_progress: post_progress::PostProgress,
         render_passes: RenderPasses,
-        light_culling_system: light_culling_system::PreDpethSystem,
+        light_culling_system: light_culling_system::LightClusterSystem,
 
         recreate_swapchain: bool,
         engine_settings: Arc<Mutex<engine_settings::EngineSettings>>,
@@ -414,8 +414,25 @@ impl Renderer {
         //Performe next pass
         command_buffer = self.frame_system.next_pass(command_buffer);
 
+        //Do BlurH
+        command_buffer = self.post_progress.execute_blur(
+            command_buffer,
+            &self.frame_system,
+        );
+
+        //Change to BlurV
+        command_buffer = self.frame_system.next_pass(command_buffer);
+        //Do BlurV
+        command_buffer = self.post_progress.execute_blur(
+            command_buffer,
+            &self.frame_system,
+        );
+
+        //Change to assemble stage
+        command_buffer = self.frame_system.next_pass(command_buffer);
+
         //perform the post progressing
-        command_buffer = self.post_progress.execute(
+        command_buffer = self.post_progress.assemble_image(
             command_buffer,
             &self.frame_system
         );
@@ -428,6 +445,7 @@ impl Renderer {
 
         //now finish the frame
         command_buffer = self.frame_system.next_pass(command_buffer);
+        //And retrieve the ended command buffer
         let finished_command_buffer = {
             match self.frame_system.finish_frame(command_buffer){
                 Ok(cb) => cb,
@@ -444,9 +462,7 @@ impl Renderer {
 
 
         //thanks firewater
-        let real_cb = finished_command_buffer
-        .end_render_pass().expect("failed to end command buffer")
-        .build().expect("failed to build command buffer");
+        let real_cb = finished_command_buffer.build().expect("failed to build command buffer");
 
 
         let after_prev_and_aq = this_frame.join(acquire_future);
@@ -454,7 +470,6 @@ impl Renderer {
         let before_present_frame = after_prev_and_aq.then_execute(self.queue.clone(), real_cb)
         .expect("failed to add execute to the frame");
 
-        //test copy the depth buffer as the show image
 
         //now present to the image
         let after_present_frame = vulkano::swapchain::present(

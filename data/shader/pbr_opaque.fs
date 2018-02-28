@@ -384,6 +384,14 @@ void main()
     ao = texture(t_Occlusion, v_TexCoord).r * u_tex_fac.occlusion_factor;
   }
 
+  //Set emessive color
+  vec3 emissive = vec3(0.0);
+  if (u_tex_usage_info.b_emissive != 1) {
+    emissive = vec3(u_tex_fac.emissive_factor);
+  }else{
+    emissive = texture(t_Emissive, v_TexCoord).rgb * u_tex_fac.emissive_factor;
+  }
+
   //TODO implemetn emmessive
   vec3 N;
   if (u_tex_usage_info.b_normal != 1){
@@ -428,26 +436,6 @@ void main()
 
     uint p_light_count = indice_buffer.data[cluster_size.x-1 - in_x][cluster_size.y-1 - in_y][cluster_size.z-1 - in_z].point_count;
 
-    uint value = p_light_count;
-
-    if (value < 500){
-      test_color = vec3(1.0, 0.0, 0.0);
-    }
-
-    if (value < 100){
-      //blue and some green
-      test_color  = vec3(0.0, 1.0, 0.0);
-    }
-
-    if (value < 10){
-      //only blue
-      test_color = vec3(0.0,0.0, 1.0);
-    }
-
-    if (value <= 0){
-      test_color = vec3(0.0);
-    }
-
 
     //Point Lights
     for(uint l_i = 0; l_i < p_light_count && l_i < 512; l_i++)
@@ -475,7 +463,7 @@ void main()
   // this ambient lighting with environment lighting).
   vec3 ambient = vec3(0.03) * albedo.xyz * ao;
 
-  vec3 color = ambient + Lo;
+  vec3 color = ambient + Lo + emissive;
 
   f_color = vec4(color, albedo.a);
 }

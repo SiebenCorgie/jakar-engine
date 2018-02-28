@@ -187,7 +187,7 @@ impl JakarEngine {
                         }
                         //Throw only errors
                         core::engine_settings::BuildType::ReleaseWithDebugMessages => {
-                            render_builder.layer_loading = render::render_builder::LayerLoading::NoLayer;
+                            render_builder.layer_loading = render::render_builder::LayerLoading::All;
                             render_builder.vulkan_messages = vulkano::instance::debug::MessageTypes::errors();
                         }
                         //Throw nothing

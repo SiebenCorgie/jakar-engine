@@ -16,6 +16,9 @@ pub mod set_resolve;
 ///A set of simple shader, used to draw wireframes in 3D space
 pub mod set_wireframe;
 
+///Blurs the attached texture based on the supplied settings
+pub mod set_blur;
+
 use vulkano::device::Device;
 
 use render::shader_manager::ToPipeline;
@@ -46,6 +49,7 @@ impl ShaderLibrary for DefaultShaderSets{
         match name.as_ref(){
             "Pbr" => true,
             "Wireframe" => true,
+            "PpBlur" => true,
             "PpExposure" => true,
             "PpResolveHdr" => true,
             _ => false,
@@ -56,6 +60,7 @@ impl ShaderLibrary for DefaultShaderSets{
         match name.as_ref(){
             "Pbr" => return Some(Arc::new(set_pbr::PbrSet::load(device))),
             "Wireframe" => return Some(Arc::new(set_wireframe::SetWireframe::load(device))),
+            "PpBlur" => return Some(Arc::new(set_blur::BlurSet::load(device))),
             "PpExposure" => return Some(Arc::new(set_post_progress::PostProgressSet::load(device))),
             "PpResolveHdr" => return Some(Arc::new(set_resolve::ResolveSet::load(device))),
             _ => {}, //will return none

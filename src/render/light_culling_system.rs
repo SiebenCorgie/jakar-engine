@@ -14,7 +14,7 @@ use std::sync::{Arc,Mutex};
 
 ///TODO Description how we (I) do this
 
-pub struct PreDpethSystem {
+pub struct LightClusterSystem {
     uniform_manager: Arc<Mutex<uniform_manager::UniformManager>>,
     device: Arc<vulkano::device::Device>,
 
@@ -30,7 +30,7 @@ pub struct PreDpethSystem {
     compute_shader: Arc<light_cull_shader::Shader>,
 }
 
-impl PreDpethSystem{
+impl LightClusterSystem{
     pub fn new(
         uniform_manager: Arc<Mutex<uniform_manager::UniformManager>>,
         device: Arc<vulkano::device::Device>,
@@ -59,7 +59,7 @@ impl PreDpethSystem{
         ).expect("failed to create cluster buffer!");
 
 
-        PreDpethSystem{
+        LightClusterSystem{
             uniform_manager: uniform_manager,
             device: device,
 

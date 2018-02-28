@@ -18,12 +18,16 @@ pub mod pbr_texture_sets;
 ///Keeps track of all the available shader inputs grouped by Descriptorset
 #[derive(Clone)]
 pub enum DescriptorSetFamiliy{
+    //Data for the objects
     CameraData,
     Lights,
     MaterialTextures,
     MaterialData,
-    
+    //PostProgress general data like exposure etc
     PostProgressData,
-
+    BlurSettings,
+    //attachments
     MultisampledColorAndDepth,
+    MultisampledColor,
+    HdrFragments,
 }

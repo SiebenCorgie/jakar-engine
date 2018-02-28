@@ -40,11 +40,12 @@ pub mod shader_manager;
 pub mod render_passes;
 
 
-// A Helper enum to specify which supass id something want, manly used in amterial creation
+// A Helper enum to specify which supass id something want, manly used in material creation
 pub enum SubPassType {
     LightCompute,
     Forward,
     HdrSorting,
+    Blur,
     PostProgress,
     Finished
 }
@@ -52,20 +53,27 @@ pub enum SubPassType {
 impl SubPassType{
     pub fn get_id(&self) -> u32{
         match self{
+            //ComputePass
             &SubPassType::LightCompute => { //is in its own compute queue
                 0
             },
+            //MainPass
             &SubPassType::Forward =>{ //the first pass in the rendering
                 0
             },
             &SubPassType::HdrSorting => { //the second
                 1
             },
+            //Blur pass
+            &SubPassType::Blur => { //the second
+                0
+            },
+            //AssemblePass
             &SubPassType::PostProgress => { //the second
-                2
+                0
             },
             &SubPassType::Finished => { //no actual renderpass atm, alter maybe
-                3
+                1
             }
         }
     }

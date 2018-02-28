@@ -14,10 +14,12 @@ use render::frame_system;
 use render::pipeline_builder;
 use render::post_progress;
 use render::light_culling_system;
+use render::render_passes::RenderPassConf;
 
 use core::engine_settings;
 
 ///Describes how the handler should load the layers, by default set to NoLayer
+#[derive(PartialEq, Clone)]
 pub enum LayerLoading{
     ///Should try to load all available layers.
     All,
@@ -32,9 +34,9 @@ pub enum LayerLoading{
 pub struct RenderBuilder {
     ///Describes the extensions needed to work properly. By **default** its only the extensions needed
     /// To create the window surface. The craetion will fail if those aren't met.
-    pub physical_extensions_needed: vulkano::instance::InstanceExtensions,
+    pub instance_extensions_needed: vulkano::instance::InstanceExtensions,
     ///Describes the extensions needed from the abstract device. **Default: only the swapchain is needed***
-    pub logical_extensions_needed: vulkano::device::DeviceExtensions,
+    pub device_extensions_needed: vulkano::device::DeviceExtensions,
 
     /// Describes the loaded layers. NOTE: First, the builder only tries to load the layer presented
     /// by an enum of the type `LayerLoading::Load`. If it is not present, it doesnt get loaded.
@@ -62,11 +64,13 @@ impl RenderBuilder {
     /// After the creation you are free to change any parameter.
     pub fn new() -> Self{
         //Init the default values
-        let physical_extensions_needed = vulkano_win::required_extensions();
-        let logical_extensions_needed = vulkano::device::DeviceExtensions {
+        let mut instance_extensions_needed = vulkano_win::required_extensions();
+        println!("Starting render builder", );
+        let device_extensions_needed = vulkano::device::DeviceExtensions {
             khr_swapchain: true,
             .. vulkano::device::DeviceExtensions::none()
         };
+
         let layers = LayerLoading::NoLayer;
         let vulkan_messages = vulkano::instance::debug::MessageTypes::errors();
         //Setup the features needed for the engine to run properly
@@ -81,8 +85,8 @@ impl RenderBuilder {
 
 
         RenderBuilder{
-            physical_extensions_needed: physical_extensions_needed,
-            logical_extensions_needed: logical_extensions_needed,
+            instance_extensions_needed: instance_extensions_needed,
+            device_extensions_needed: device_extensions_needed,
             layer_loading: layers,
             vulkan_messages: vulkan_messages,
             preferred_physical_device: None,
@@ -98,7 +102,7 @@ impl RenderBuilder {
     /// - layers are not supported (if needed)
     /// - no device found
     pub fn create(
-        self,
+        mut self,
         events_loop: Arc<Mutex<winit::EventsLoop>>,
         engine_settings: Arc<Mutex<engine_settings::EngineSettings>>,
     ) -> Result<(render::renderer::Renderer, Box<GpuFuture>), String>{
@@ -115,12 +119,23 @@ impl RenderBuilder {
             if (*(engine_settings.lock().expect("failed to lock settings in render builder")))
             .build_mode != engine_settings::BuildType::Release
             {
-                match self.layer_loading{
+                match self.layer_loading.clone(){
                     LayerLoading::All => {
+
                         let list = vulkano::instance::layers_list().expect("failed to get layer list");
                         let mut ret_list: Vec<String> = Vec::new();
+                        println!("LoadingAllDebugLayers", );
                         for item in list.into_iter(){
-                            ret_list.push(item.name().to_string());
+                            if item.name().to_string() == "VK_LAYER_RENDERDOC_Capture".to_string(){
+                                println!("\t{}", item.name().to_string());
+                                ret_list.push(item.name().to_string());
+                            }
+
+                            if item.name().to_string() == "VK_LAYER_LUNARG_standard_validation".to_string(){
+                                println!("\t{}", item.name().to_string());
+                                ret_list.push(item.name().to_string());
+                            }
+
                         }
                         ret_list
                     },
@@ -175,11 +190,34 @@ impl RenderBuilder {
         };
 
         println!("Created App Info", );
+        //Since we need some more logical extension if we want to use all debug layer, we query
+        //all possible layers from the physical device and register them for the run
+        let should_enable_all = {
+            if self.layer_loading == LayerLoading::All{
+                true
+            }else{
+                false
+            }
+        };
+
+        if should_enable_all{
+            self.instance_extensions_needed = self.instance_extensions_needed.intersection(
+                &vulkano::instance::InstanceExtensions{
+                    ext_debug_report: true,
+                    khr_surface: true,
+                    khr_xcb_surface: true,
+                    ..vulkano::instance::InstanceExtensions::none()
+                }
+            );
+            println!("InstanceExtensions: ", );
+            println!("\t{:?}", self.instance_extensions_needed);
+            println!("Loaded all core extensions", );
+        }
 
         //Create a vulkan instance from these extensions
         let try_instance = vulkano::instance::Instance::new(
             Some(&app_info),
-            &self.physical_extensions_needed, //TODO verify
+            &self.instance_extensions_needed, //TODO verify
             &debug_layers
         );
 
@@ -281,7 +319,18 @@ impl RenderBuilder {
             }
         };
 
-        println!("Selected first graphics card", );
+        println!("Selected best graphics card", );
+
+        if should_enable_all{
+            let extensions = vulkano::device::DeviceExtensions::supported_by_device(
+                physical_device.clone()
+            );
+            println!("Enabling all extensions to make debug layers work: ", );
+            println!("\t {:?}", extensions);
+            self.device_extensions_needed = self.device_extensions_needed.intersection(&extensions);
+            println!("Enabled all logical layers", );
+        }
+
 
         //and create a window for it
         let mut window = {
@@ -310,7 +359,7 @@ impl RenderBuilder {
 
         //TODO Test for extensions
         //select needed device extensions
-        let device_ext = self.logical_extensions_needed;
+        let device_ext = self.device_extensions_needed;
 
         //Ensre that each feature is supported
         if !physical_device.supported_features().superset_of(&self.minimal_features){
@@ -434,6 +483,7 @@ impl RenderBuilder {
             pipeline_builder::PipelineConfig::default()
                 .with_subpass_id(super::SubPassType::PostProgress.get_id())
                 .with_shader("PpExposure".to_string())
+                .with_render_pass(RenderPassConf::AssemblePass)
                 .with_depth_and_stencil_settings(
                     pipeline_builder::DepthStencilConfig::NoDepthNoStencil
                 ),
@@ -445,6 +495,19 @@ impl RenderBuilder {
             pipeline_builder::PipelineConfig::default()
                 .with_subpass_id(super::SubPassType::HdrSorting.get_id())
                 .with_shader("PpResolveHdr".to_string())
+                .with_render_pass(RenderPassConf::ObjectPass)
+                .with_depth_and_stencil_settings(
+                    pipeline_builder::DepthStencilConfig::NoDepthNoStencil
+                ),
+        );
+
+        let blur_pipeline = pipeline_manager_arc.lock()
+        .expect("failed to lock new pipeline manager")
+        .get_pipeline_by_config(
+            pipeline_builder::PipelineConfig::default()
+                .with_subpass_id(super::SubPassType::Blur.get_id())
+                .with_shader("PpBlur".to_string())
+                .with_render_pass(RenderPassConf::BlurPass)
                 .with_depth_and_stencil_settings(
                     pipeline_builder::DepthStencilConfig::NoDepthNoStencil
                 ),
@@ -457,11 +520,12 @@ impl RenderBuilder {
             engine_settings.clone(),
             post_progress_pipeline,
             resolve_pipeline,
+            blur_pipeline,
             device.clone()
         );
 
         println!("Creating light culling system", );
-        let light_culling_system = light_culling_system::PreDpethSystem::new(
+        let light_culling_system = light_culling_system::LightClusterSystem::new(
             uniform_manager.clone(),
             device.clone(),
             queue.clone()
