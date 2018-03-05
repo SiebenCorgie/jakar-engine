@@ -27,6 +27,7 @@ extern crate jakar_tree;
 pub mod core;
 ///The engines renderer currently WIP
 pub mod render;
+use render::renderer::BuildRender;
 ///A collection of helpfull tools for integration of data with the engine
 pub mod tools;
 ///A small thread who will run and administrate the winit window, as well as its input
@@ -76,7 +77,8 @@ pub struct JakarEngine {
     pub asset_manager: Arc<Mutex<core::resource_management::asset_manager::AssetManager>>,
     asset_thread: thread::JoinHandle<()>,
 
-    pub input_system: Arc<Mutex<input::Input>>,
+    pub input_system_messages: Arc<Mutex<Option<input::InputMessage>>>,
+    pub keymap: Arc<Mutex<input::KeyMap>>,
     input_thread: thread::JoinHandle<()>,
 
     pub engine_settings: Arc<Mutex<core::engine_settings::EngineSettings>>,
@@ -126,27 +128,73 @@ impl JakarEngine {
         //=========================================================================================
 
         //Start the input thread
-        //we don't need anything else because the input handler get closed by the implementation
-        //TODO handle thread in engine as well
 
-        let input_handler = Arc::new(
-            Mutex::new(
-                input::Input::new(engine_settings.clone())
-            )
-        );
-        //now start the thread and return it
-        let input_thread_handle = {
-            let mut input_sys = {
-                match input_handler.lock(){
-                    Ok(k) => k,
-                    Err(_) => return Err(CreationErrors::FailedToCreateInputManager),
+        //First of all we need two channel. The First one will send the instance of vulkano to the
+        // input creation process when the build is at that stage. The instance is needed to build a window.
+        // Since we can't send the EventLoop we have to send the Instnace, build the window in the input thread
+        // and the send the SendAble Window back to the render builder.
+        let (in_instance_send, in_instance_recv) = mpsc::channel();
+        let (in_window_send, in_window_recv) = mpsc::channel();
+        let (in_keymap_send, in_keymap_recv) = mpsc::channel();
+        //This object will be used to send messages to the input thread. Either for registering
+        //callbacks or to end the thread at the moment
+        let input_messages = Arc::new(Mutex::new(None));
+        //This one will end the input thread if needed
+        let input_engine_status = engine_status.clone();
+        //The settings used in the input thread
+        let input_engine_settings = engine_settings.clone();
+        //Reserved for the engine struct.
+        let engine_in_messages = input_messages.clone();
+        //Now start the input
+        println!("Starting input thread!", );
+        let input_thread_handle = thread::spawn(move || {
+            let mut input_system ={
+                match input::Input::new(
+                    input_engine_settings.clone(),
+                    in_instance_recv,
+                    in_window_send
+                ){
+                    Ok(in_sys) => in_sys, //all right
+                    Err(er) => {
+                        //lock the engine status and add the abord message
+                        *(input_engine_status.lock().expect("failed to lock status in input")) = EngineStatus::Aboarding(er);
+                        return;
+                    }
                 }
             };
 
-            //Start the input thread
-            (*input_sys).start()
-        };
+            println!("Finished input system starting thread now!", );
+            //Since we started the input successful we can now enter the loop od updating the input
+            //in the right speed
+            let max_input_speed = input_engine_settings
+            .lock().expect("failed to lock settings").max_input_speed.clone();
+
+            let mut time_step = Instant::now();
+
+            //now send the keymap pointer
+            match in_keymap_send.send(input_system.get_key_map()){
+                Ok(_) => {},
+                Err(_) => {
+                    println!("Failed to send keymap to main thread!", );
+
+                }
+            }
+
+            'input_loop: loop{
+                input_system.update();
+
+                time_step = sleep_rest_time(time_step, max_input_speed);
+
+                if *(input_engine_status.lock().expect("failed to lock status")) == EngineStatus::ENDING{
+                    println!("Ending Input thread...", );
+                    break;
+                }
+            }
+        });
+
         println!("Started Input system!", );
+
+
 
         //=========================================================================================
 
@@ -158,7 +206,6 @@ impl JakarEngine {
 
         //copy all relevant infos and move them into the thread
         let render_engine_status = engine_status.clone();
-        let render_input_system = input_handler.clone();
         let render_settings = engine_settings.clone();
         let render_thread = thread::spawn(move ||{
             //Now create the renderer
@@ -201,13 +248,11 @@ impl JakarEngine {
                 }
 
                 //===============================================
-                //lock the input system for the creation
-                let mut input_sys = render_input_system
-                .lock()
-                .expect("failed to lock input system before render start");
+                println!("Building renderer now!", );
                 //now build
                 let render_status = render_builder.create(
-                    (*input_sys).get_events_loop(),
+                    in_instance_send,
+                    in_window_recv,
                     render_settings,
                 );
 
@@ -215,10 +260,10 @@ impl JakarEngine {
                 // and the gpu future. If not, we set the Engine status to
                 // CreationErrors::FailedToCreateRenderer(Message)
                 match render_status{
-                    Ok(r) => {
+                    Ok((render,future)) => {
                         //wrapping the renderer in an Arc
-                        let arc_render = Arc::new(Mutex::new(r.0));
-                        let gpu_future_box = r.1;
+                        let arc_render = Arc::new(Mutex::new(render));
+                        let gpu_future_box = future;
                         //return both
                         (arc_render, gpu_future_box)
                     },
@@ -408,12 +453,26 @@ impl JakarEngine {
 
         //=========================================================================================
 
+        //Since renderer and therefore input system should be running now we ca recive the input keymap now
+        //Now recive the keymap and store it for the later engine struct
+        let key_map = {
+            match in_keymap_recv.recv(){
+                Ok(km) => km,
+                Err(_) => {
+                    println!("Failed to recive Key map!", );
+                    return Err(CreationErrors::FailedToCreateInputManager)
+                },
+            }
+        };
+
+
         //Same as the renderer, crate an reciver and sender for the asset manager,
         //also create clones for needed systems to create the asset manager
         let (asset_t_sender, asset_t_reciver) = mpsc::channel();
 
         let asset_t_status = engine_status.clone();
         let asset_t_settings = engine_settings.clone();
+        let asset_t_keymap = key_map.clone();
         let asset_t_pipeline_manager = {
             let mut ren_inst = renderer.lock().expect("failed to lock renderer");
             (*ren_inst).get_pipeline_manager()
@@ -430,7 +489,6 @@ impl JakarEngine {
             let ren_inst = renderer.lock().expect("failed to lock renderer");
             (*ren_inst).get_uniform_manager()
         };
-        let asset_t_input_handler = input_handler.clone();
         //Start the asset manager
         let asset_thread = thread::spawn(move ||{
             //dirst of all read some values we need later for the thread speed etc.
@@ -442,7 +500,6 @@ impl JakarEngine {
 
             //Create a asset manager for the renderer
             let asset_manager = {
-                let input_sys = asset_t_input_handler.lock().expect("failed to lock input system before start");
 
                 Arc::new(
                     Mutex::new(
@@ -452,7 +509,7 @@ impl JakarEngine {
                             asset_t_queue,
                             asset_t_uniform_manager,
                             asset_t_settings,
-                            (*input_sys).key_map.clone()
+                            asset_t_keymap
                         )
                     )
                 )
@@ -525,7 +582,8 @@ impl JakarEngine {
             asset_manager: asset_manager_inst,
             asset_thread: asset_thread,
 
-            input_system: input_handler,
+            input_system_messages: engine_in_messages,
+            keymap: key_map,
             input_thread: input_thread_handle,
 
             engine_settings: engine_settings,
@@ -542,11 +600,6 @@ impl JakarEngine {
         {
             let mut status_lck = self.engine_status.lock().expect("failed to lock engine status");
             (*status_lck) = EngineStatus::ENDING;
-        }
-        //now end input
-        {
-            let mut input_lock = self.input_system.lock().expect("failed to lock input");
-            (*input_lock).end();
         }
         //wait some milliseconds to give the threads some time as well as the gpu
         thread::sleep(Duration::from_millis(100));
@@ -619,9 +672,11 @@ impl JakarEngine {
     }
 
     ///Returns the input handler, for usage have a look at `get_asset_manager()`
-    pub fn get_input_handler<'a>(&'a mut self) -> MutexGuard<'a, input::Input>{
-        let input_lock = self.input_system.lock().expect("failed to lock input handler");
-        input_lock
+    pub fn get_current_keymap(&self) -> input::KeyMap{
+        let map = {
+            (self.keymap.lock().expect("Failed to get current keymap")).clone()
+        };
+        map
     }
 
     ///Returns a copy of the current settings. Can be used for instance to change the current graphics

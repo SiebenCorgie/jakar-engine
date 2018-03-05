@@ -234,6 +234,13 @@ pub fn load_gltf_material(
     };
 
     //We also need the texture factors
+
+    //if we have a emmision map and and/or a factor we'll also crank that up too max 100
+    let mut max_factor = 1.0;
+    if emissive.is_some() || mat.emissive_factor()[0] > 0.0 || mat.emissive_factor()[1] > 0.0 || mat.emissive_factor()[2] > 0.0{
+        max_factor = 100.0;
+    }
+
     let texture_factors = {
         material::MaterialFactors::new()
         .with_factor_albedo(pbr.base_color_factor())
@@ -242,16 +249,8 @@ pub fn load_gltf_material(
         .with_factor_roughness(pbr.roughness_factor())
         .with_factor_occlusion(mat.occlusion_texture().map_or(1.0, |t| t.strength()))
         .with_factor_emissive(mat.emissive_factor())
+        .with_max_emmision(max_factor)
     };
-    /*
-    println!("DEBUG: Factors:", );
-    println!("\t Albedo: {:?}", pbr.base_color_factor());
-    println!("\t Normal: {:?}", mat.normal_texture().map_or(1.0, |t| t.scale()));
-    println!("\t Metal: {:?}", pbr.metallic_factor());
-    println!("\t Roughness: {:?}", pbr.roughness_factor());
-    println!("\t Occlusion: {:?}", mat.occlusion_texture().map_or(1.0, |t| t.strength()));
-    println!("\t emmisive: {:?}", mat.emissive_factor());
-    */
     //get the manager
     let texture_manager = {
         let managers_lck = managers.lock().expect("failed to lock managers struct");

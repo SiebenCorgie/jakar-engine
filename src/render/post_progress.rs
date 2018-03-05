@@ -182,8 +182,8 @@ impl PostProgress{
 
         //get the command buffer and decide which blur to apply
         let (unw_cb, is_horizontal) = match command_buffer{
-            FrameStage::Blur_H(cb) => (cb, true),
-            FrameStage::Blur_V(cb) => (cb, false),
+            FrameStage::BlurH(cb) => (cb, true),
+            FrameStage::BlurV(cb) => (cb, false),
             _ => {
                 println!("We are in the wrong frame stage, no blur", );
                 panic!("wrong frame stage");
@@ -233,9 +233,9 @@ impl PostProgress{
 
         //now return the right stage
         if is_horizontal{
-            FrameStage::Blur_H(command_buffer)
+            FrameStage::BlurH(command_buffer)
         }else{
-            FrameStage::Blur_V(command_buffer)
+            FrameStage::BlurV(command_buffer)
         }
 
     }

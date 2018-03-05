@@ -15,6 +15,7 @@ layout(set = 2, binding = 0) uniform TextureUsageInfo {
 layout(set = 2, binding = 1) uniform TextureFactors {
   vec4 albedo_factor;
   vec3 emissive_factor;
+  float max_emission;
   float normal_factor;
   float metal_factor;
   float roughness_factor;

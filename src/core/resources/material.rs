@@ -134,6 +134,7 @@ pub struct MaterialFactors{
     albedo_factor: [f32; 4],
     normal_factor: f32,
     emissive_factor: [f32; 3],
+    max_emission: f32,
     metal_factor: f32,
     roughness_factor: f32,
     occlusion_factor: f32,
@@ -148,6 +149,7 @@ impl MaterialFactors{
             //this needs to be set to just blue for not manipulating the rest
             normal_factor: 1.0,
             emissive_factor: [1.0; 3],
+            max_emission: 1.0,
             metal_factor: 1.0,
             roughness_factor: 1.0,
             occlusion_factor: 1.0,
@@ -197,11 +199,19 @@ impl MaterialFactors{
         self
     }
 
+    ///Can be used to increase the maximuim emission factor. Good if you want to highligh something etc.
+    #[inline]
+    pub fn with_max_emmision(mut self, factor: f32) -> Self{
+        self.max_emission = factor;
+        self
+    }
+
     pub fn to_shader_factors(&self) -> pbr_texture_info::ty::TextureFactors{
         pbr_texture_info::ty::TextureFactors{
             albedo_factor: self.albedo_factor,
             normal_factor: self.normal_factor,
             emissive_factor: self.emissive_factor,
+            max_emission: self.max_emission,
             metal_factor: self.metal_factor,
             roughness_factor: self.roughness_factor,
             occlusion_factor: self.occlusion_factor,

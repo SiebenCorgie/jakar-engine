@@ -12,7 +12,7 @@ pub struct ObjectPass {
 }
 
 impl ObjectPass{
-    pub fn new(device: Arc<Device>, swapchain_format: Format, msaa_factor: u32, hdr_msaa_format: Format, msaa_depth_format: Format) -> Self{
+    pub fn new(device: Arc<Device>, msaa_factor: u32, hdr_msaa_format: Format, msaa_depth_format: Format) -> Self{
 
         //Setup the render_pass layout for the forward pass
         let main_renderpass = Arc::new(
@@ -81,7 +81,7 @@ pub struct BlurPass {
 }
 
 impl BlurPass {
-    pub fn new(device: Arc<Device>, swapchain_format: Format, hdr_msaa_format: Format) -> Self{
+    pub fn new(device: Arc<Device>, hdr_msaa_format: Format) -> Self{
         let render_pass = Arc::new(
             ordered_passes_renderpass!(device.clone(),
                 attachments: {
@@ -184,8 +184,8 @@ impl RenderPasses{
         };
 
 
-        let object_pass = ObjectPass::new(device.clone(), swapchain_format, msaa_factor, hdr_msaa_format, msaa_depth_format);
-        let blur_pass = BlurPass::new(device.clone(), swapchain_format, hdr_msaa_format);
+        let object_pass = ObjectPass::new(device.clone(),  msaa_factor, hdr_msaa_format, msaa_depth_format);
+        let blur_pass = BlurPass::new(device.clone(), hdr_msaa_format);
         let assemble = AssemblePass::new(device.clone(), swapchain_format);
 
         RenderPasses{

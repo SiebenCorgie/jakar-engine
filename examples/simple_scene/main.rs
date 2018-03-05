@@ -34,10 +34,12 @@ fn main() {
     .with_dimensions(1600, 900)
     .with_name("Jakar Instance")
     .in_release_mode()
-    .with_input_poll_speed(400)
+    .with_input_poll_speed(500)
     .with_fullscreen_mode(false)
-    .with_cursor_state(winit::CursorState::Normal)
-    .with_cursor_visibility(winit::MouseCursor::Default)
+    //.with_cursor_state(winit::CursorState::Normal)
+    .with_cursor_state(winit::CursorState::Grab)
+    //.with_cursor_visibility(winit::MouseCursor::Default)
+    .with_cursor_visibility(winit::MouseCursor::NoneCursor)
     .with_render_settings(graphics_settings)
     .with_asset_update_speed(100)
     .with_max_fps(200)
@@ -59,6 +61,7 @@ fn main() {
 
 
     engine.get_asset_manager().import_gltf("TestScene", "examples/simple_scene/TestScenes/Cube_Plane.gltf");
+    //engine.get_asset_manager().import_gltf("TestScene", "examples/simple_scene/Sponza/Sponza.gltf");
 
 
     let mut light_tree =jakar_tree::tree::Tree::new(
@@ -70,36 +73,43 @@ fn main() {
     //SUN========================================================================
     //add a matrix of lights
 
-    for x in -10..10{
-        for y in -10..10{
-            let mut point = light::LightPoint::new("LightPoint");
-            point.set_intensity(
-                5.0
-            );
-            point.set_color(
-                Vector3::new(
-                    (x + 5) as f32 / 15.0, (x + 10) as f32 / 100.0, (y + 5) as f32 / 15.0
-                )
-            );
-            point.set_radius(2.0);
+    let matrix_size = 5;
+    let spacing = 5.0;
 
-            let node_name = light_tree
-            .add_at_root(content::ContentType::PointLight(point), None);
+    for x in -(matrix_size)..matrix_size{
+        for y in -(matrix_size)..matrix_size{
+            for z in -(matrix_size)..matrix_size{
+                let mut point = light::LightPoint::new("LightPoint");
+                point.set_intensity(
+                    5.0
+                );
+                point.set_color(
+                    Vector3::new(
+                        (x + matrix_size) as f32 / matrix_size as f32,
+                        (y + matrix_size) as f32 / matrix_size as f32,
+                        (z + matrix_size) as f32 / matrix_size as f32
+                    )
+                );
+                point.set_radius(5.0);
 
-            //Set the location
-            match light_tree.get_node(&node_name.unwrap()){
-                Some(scene) => {
-                    scene.add_job(
-                        jobs::SceneJobs::Move(
-                            Vector3::new(
-                                x as f32 * 2.0,
-                                (x + y) as f32 * 2.0,
-                                y as f32 * 2.0
+                let node_name = light_tree
+                .add_at_root(content::ContentType::PointLight(point), None);
+
+                //Set the location
+                match light_tree.get_node(&node_name.unwrap()){
+                    Some(scene) => {
+                        scene.add_job(
+                            jobs::SceneJobs::Move(
+                                Vector3::new(
+                                    x as f32 * spacing,
+                                    y as f32 * spacing,
+                                    z as f32 * spacing
+                                )
                             )
-                        )
-                    );
+                        );
+                    }
+                    None => {println!("Could not find Light", );}, //get on with it
                 }
-                None => {println!("Could not find Light", );}, //get on with it
             }
         }
     }
@@ -183,29 +193,29 @@ fn main() {
             let mut light = engine_lock.get_active_scene().get_node(&i).unwrap();
 
             let add_vec = Vector3::new(
-                0.01,
-                0.02,
-                0.005
+                0.1,
+                0.3,
+                0.2
             );
 
-            light.add_job(jobs::SceneJobs::Move(
-                add_vec)
+            light.add_job(jobs::SceneJobs::RotateAroundPoint(
+                add_vec, Vector3::new(0.0,0.0,0.0))
             );
-
-            if light.attributes.transform.disp.x > 20.0{
-                light.attributes.transform.disp.x = -20.0;
+/*
+            if light.attributes.transform.disp.x > 10.0{
+                light.attributes.transform.disp.x = -10.0;
             }
 
             if light.attributes.transform.disp.y > 5.0{
                 light.attributes.transform.disp.y = -5.0;
             }
 
-            if light.attributes.transform.disp.z > 20.0{
-                light.attributes.transform.disp.z = -20.0;
+            if light.attributes.transform.disp.z > 10.0{
+                light.attributes.transform.disp.z = -10.0;
             }
 
             //light.add_job(jobs::SceneJobs::Move(Vector3::new(10.0, 10.0, 10.0)));
-
+*/
         }
 
 
@@ -215,59 +225,59 @@ fn main() {
             asset_manager.get_scene_manager().print_all_scenes();
         }
         */
-        if engine.get_asset_manager().get_keymap().p{
+        if engine.get_current_keymap().p{
             let settings = engine.get_settings();
             settings.lock().expect("fail up").capture_next_frame();
         }
 
-        if engine.get_asset_manager().get_keymap().up{
+        if engine.get_current_keymap().up{
             let settings = engine.get_settings();
             settings.lock().expect("fail up").get_render_settings().add_exposure(0.01);
         }
 
-        if engine.get_asset_manager().get_keymap().down{
+        if engine.get_current_keymap().down{
             let settings = engine.get_settings();
             settings.lock().expect("fail down").get_render_settings().add_exposure(-0.01);
         }
         //Set the debug settings
-        if engine.get_asset_manager().get_keymap().b{
+        if engine.get_current_keymap().b{
             let settings = engine.get_settings();
             settings.lock().expect("fail debug true").get_render_settings().set_debug_bound(true);
         }
         //Set the debug settings
-        if engine.get_asset_manager().get_keymap().n{
+        if engine.get_current_keymap().n{
             let settings = engine.get_settings();
             settings.lock().expect("fail debug false").get_render_settings().set_debug_bound(false);
         }
 
-        if engine.get_asset_manager().get_keymap().t_1{
+        if engine.get_current_keymap().t_1{
             let settings = engine.get_settings();
             settings.lock().expect("fail debug false").get_render_settings().set_debug_view(jakar_engine::core::render_settings::DebugView::ClusterId);
         }
 
-        if engine.get_asset_manager().get_keymap().t_2{
+        if engine.get_current_keymap().t_2{
             let settings = engine.get_settings();
             settings.lock().expect("fail debug false").get_render_settings().set_debug_view(jakar_engine::core::render_settings::DebugView::HeatMap);
         }
 
-        if engine.get_asset_manager().get_keymap().t_3{
+        if engine.get_current_keymap().t_3{
             let settings = engine.get_settings();
             settings.lock().expect("fail debug false").get_render_settings().set_debug_view(jakar_engine::core::render_settings::DebugView::MainDepth);
         }
 
-        if engine.get_asset_manager().get_keymap().t_4{
+        if engine.get_current_keymap().t_4{
             let settings = engine.get_settings();
             settings.lock().expect("fail debug false").get_render_settings().set_debug_view(jakar_engine::core::render_settings::DebugView::Shaded);
         }
 
-        if engine.get_asset_manager().get_keymap().p{
+        if engine.get_current_keymap().p{
             let settings = engine.get_settings();
             let current_strength = settings.lock().expect("fail debug false").get_render_settings().get_blur().strength;
             let current_scale = settings.lock().expect("fail debug false").get_render_settings().get_blur().scale;
             settings.lock().expect("fail debug false").get_render_settings().set_blur(current_scale + 0.05, current_strength + 0.05);
         }
 
-        if engine.get_asset_manager().get_keymap().o{
+        if engine.get_current_keymap().o{
             let settings = engine.get_settings();
             let current_strength = settings.lock().expect("fail debug false").get_render_settings().get_blur().strength;
             let current_scale = settings.lock().expect("fail debug false").get_render_settings().get_blur().scale;
@@ -277,9 +287,7 @@ fn main() {
 
 
         //test if a is pressed
-        if engine.get_asset_manager().get_keymap().escape{
-            //println!("Scene: ", );
-            //engine.get_asset_manager().get_active_scene().print_tree();
+        if engine.get_current_keymap().escape{
             engine.end();
             break;
         }

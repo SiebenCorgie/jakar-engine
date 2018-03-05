@@ -48,6 +48,7 @@ layout(set = 2, binding = 0) uniform TextureUsageInfo {
 layout(set = 2, binding = 1) uniform TextureFactors {
   vec4 albedo_factor;
   vec3 emissive_factor;
+  float max_emission;
   float normal_factor;
   float metal_factor;
   float roughness_factor;
@@ -387,9 +388,9 @@ void main()
   //Set emessive color
   vec3 emissive = vec3(0.0);
   if (u_tex_usage_info.b_emissive != 1) {
-    emissive = vec3(u_tex_fac.emissive_factor);
+    emissive = vec3(u_tex_fac.emissive_factor * u_tex_fac.max_emission);
   }else{
-    emissive = texture(t_Emissive, v_TexCoord).rgb * u_tex_fac.emissive_factor;
+    emissive = texture(t_Emissive, v_TexCoord).rgb * u_tex_fac.emissive_factor * u_tex_fac.max_emission;
   }
 
   //TODO implemetn emmessive

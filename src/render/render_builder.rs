@@ -1,20 +1,22 @@
 use vulkano;
-use winit;
 use vulkano::sync::GpuFuture;
 use vulkano_win;
 use vulkano::instance::debug::{DebugCallback, MessageTypes};
+use vulkano::instance::Instance;
 
 use std::sync::{Arc, Mutex};
+use std::sync::mpsc;
+use std::error::Error;
 
 use render;
 use render::pipeline_manager;
 use render::uniform_manager;
-use render::window;
 use render::frame_system;
 use render::pipeline_builder;
 use render::post_progress;
 use render::light_culling_system;
 use render::render_passes::RenderPassConf;
+use render::window::Window;
 
 use core::engine_settings;
 
@@ -64,7 +66,7 @@ impl RenderBuilder {
     /// After the creation you are free to change any parameter.
     pub fn new() -> Self{
         //Init the default values
-        let mut instance_extensions_needed = vulkano_win::required_extensions();
+        let instance_extensions_needed = vulkano_win::required_extensions();
         println!("Starting render builder", );
         let device_extensions_needed = vulkano::device::DeviceExtensions {
             khr_swapchain: true,
@@ -103,7 +105,8 @@ impl RenderBuilder {
     /// - no device found
     pub fn create(
         mut self,
-        events_loop: Arc<Mutex<winit::EventsLoop>>,
+        instance_sender: mpsc::Sender<Arc<Instance>>,
+        window_reciver: mpsc::Receiver<Window>,
         engine_settings: Arc<Mutex<engine_settings::EngineSettings>>,
     ) -> Result<(render::renderer::Renderer, Box<GpuFuture>), String>{
         println!("Starting Vulkan Renderer!", );
@@ -234,6 +237,17 @@ impl RenderBuilder {
 
         println!("Created Instance", );
 
+        //While doing other stuff the input system will now build the a window based on this
+        //instance and send it back later
+        match instance_sender.send(instance.clone()){
+            Ok(_) =>  {},
+            Err(_) => {
+                println!("Failed to send instance to input system!", );
+                return Err("failed to send instance!".to_string());
+            }
+        }
+
+
         //now decide for a mesaging service from vulkan, when in release mode, we wont do any
         //if not we read from the builder and construct a callback
         {
@@ -334,12 +348,14 @@ impl RenderBuilder {
 
         //and create a window for it
         let mut window = {
-            let events_loop_unlck = events_loop
-            .lock()
-            .expect("Failed to hold lock on events loop");
-            window::Window::new(
-                &instance.clone(), &*events_loop_unlck, engine_settings.clone()
-            )
+            match window_reciver.recv(){
+                Ok(win) => win,
+                Err(er) => {
+                    println!("Could not get window from input system while starting ...", );
+                    println!("Error: {}", er.description());
+                    return Err(String::from("Failed to recive Window from Input System!"));
+                }
+            }
         };
         println!("Opened Window", );
 

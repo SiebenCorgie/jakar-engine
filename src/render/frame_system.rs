@@ -18,9 +18,9 @@ pub enum FrameStage {
     //Creates a image which only holds HDR fragments
     HdrSorting(AutoCommandBufferBuilder),
     ///Blurs Horizontal
-    Blur_H(AutoCommandBufferBuilder),
+    BlurH(AutoCommandBufferBuilder),
     ///Blurs vertical
-    Blur_V(AutoCommandBufferBuilder),
+    BlurV(AutoCommandBufferBuilder),
 
     ///Is used to take the image from the first buffer and preform tone mapping on it
     Postprogress(AutoCommandBufferBuilder),
@@ -42,11 +42,11 @@ impl FrameStage{
                 let id_type = render::SubPassType::Forward;
                 id_type.get_id()
             },
-            &FrameStage::Blur_H(_) =>{
+            &FrameStage::BlurH(_) =>{
                 let id_type = render::SubPassType::Blur;
                 id_type.get_id()
             },
-            &FrameStage::Blur_V(_) =>{
+            &FrameStage::BlurV(_) =>{
                 let id_type = render::SubPassType::Blur;
                 id_type.get_id()
             },
@@ -394,10 +394,10 @@ impl FrameSystem{
                 .end_render_pass().expect("failed to end object pass")
                 .begin_render_pass(blur_h_fb, false, clearings).expect("failed to start blur_h pass");
 
-                FrameStage::Blur_H(next)
+                FrameStage::BlurH(next)
             }
 
-            FrameStage::Blur_H(cb) => {
+            FrameStage::BlurH(cb) => {
                 //Starting the second blur pass
                 let blur_v_fb = self.blur_pass_v_fb.take().expect("there was no blur_v image :(");
                 let clearings = vec![
@@ -408,10 +408,10 @@ impl FrameSystem{
                 .end_render_pass().expect("failed to end blur_h pass")
                 .begin_render_pass(blur_v_fb, false, clearings).expect("failed to start blur_h pass");
 
-                FrameStage::Blur_V(next)
+                FrameStage::BlurV(next)
             }
 
-            FrameStage::Blur_V(cb)=> {
+            FrameStage::BlurV(cb)=> {
                 let assemble_fb = self.assemble_pass_fb.take().expect("there was no assemble image");
                 let clearings = vec![
                     [0.0, 0.0, 0.0, 0.0].into()
@@ -422,6 +422,7 @@ impl FrameSystem{
 
                 FrameStage::Postprogress(next)
             }
+
 
             FrameStage::Postprogress(cb) => {
                 //Finish this frame

@@ -38,10 +38,13 @@ void main()
 
   vec4 resolved_color = resolve_msaa();
 
-  if(resolved_color.x > 1.0 ||resolved_color.y > 1.0 ||resolved_color.z > 1.0 ){
-    HdrColor = resolved_color;
+  //make greyscale and have a look at the brighness
+  float brightness = dot(resolved_color.rgb, vec3(0.2126, 0.7152, 0.0722));
+
+  if(brightness > 1.0 ){
+    HdrColor = vec4(resolved_color.rgb, 1.0);
   }else{
-    HdrColor = vec4(0.0);
+    HdrColor = vec4(vec3(0.0), 1.0);
   }
 
   LdrColor = resolved_color;

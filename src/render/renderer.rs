@@ -34,6 +34,16 @@ pub enum RendererState {
     ENDED
 }
 
+///Used tp build a render instance
+pub trait BuildRender {
+    //Build a renderer based on settings and a window which will recive the iamges
+    fn build(
+        &mut self,
+        engine_settings: Arc<Mutex<engine_settings::EngineSettings>>,
+        window: window::Window,
+    ) -> Result<(Renderer, Box<GpuFuture>), String>;
+}
+
 ///The main renderer. Should be created through a RenderBuilder
 pub struct Renderer  {
     ///Holds the renderers pipeline_manager
