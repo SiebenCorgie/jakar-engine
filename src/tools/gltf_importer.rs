@@ -17,6 +17,7 @@ use cgmath::*;
 
 use gltf;
 use gltf_importer;
+use gltf_utils;
 
 use std::path::Path;
 use std::sync::{Arc, Mutex};
@@ -378,15 +379,18 @@ pub fn load_gltf_mesh(
     //now cycle through all primitives, load the mesh and maybe the material
     for primitive in mesh.primitives(){
         use gltf_utils::PrimitiveIterators; //from the three crate
-        let mut indices: Vec<u32> = Vec::new();
-        //check for indices
-        if let Some(mut iter) = primitive.indices_u32(buffers) {
-            while let (Some(a), Some(b), Some(c)) = (iter.next(), iter.next(), iter.next()) {
-                indices.push(a);
-                indices.push(b);
-                indices.push(c);
+
+        //Check for indices, if there are some, use them
+        let mut indices: Vec<u32> = {
+            let ins = PrimitiveIterators::indices(&primitive, buffers);
+            match ins{
+                Some(indices) => {
+                    indices.into_u32().map(|x| x.into()).collect()
+                },
+                None => Vec::new()
             }
-        }
+        };
+
         //position
         let mut positions: Vec<[f32; 3]> = primitive
             .positions(buffers)
@@ -405,17 +409,25 @@ pub fn load_gltf_mesh(
         } else {
             Vec::new()
         };
-        //tex_coors
-        let mut tex_coords: Vec<[f32; 2]> = if let Some(iter) = primitive.tex_coords_f32(0, buffers) {
-            iter.map(|x| x.into()).collect()
-        } else {
-            Vec::new()
+
+        //TexCoord
+        let mut tex_coords: Vec<[f32; 2]> = {
+            match primitive.tex_coords(0, buffers){
+                Some(coords) => {
+                    coords.into_f32().map(|x| x.into()).collect()
+                },
+                None => Vec::new()
+            }
         };
+
         //verte color
-        let mut vertex_colors: Vec<[f32; 4]> = if let Some(iter) = primitive.colors_rgba_f32(0, 1.0, buffers) {
-            iter.map(|x| x.into()).collect()
-        } else {
-            Vec::new()
+        let mut vertex_colors: Vec<[f32; 4]> = {
+            match primitive.colors(0, buffers){
+                Some(colors) => {
+                    colors.into_rgba_f32().map(|x| x.into()).collect()
+                },
+                None => Vec::new()
+            }
         };
 
         let mesh_name = scene_name.clone() + "_mesh_" + &primitive_index.to_string();

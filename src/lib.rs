@@ -12,7 +12,6 @@ extern crate vulkano;
 extern crate vulkano_shader_derive;
 extern crate vulkano_shaders;
 extern crate vulkano_win;
-extern crate time;
 extern crate image;
 extern crate gltf;
 extern crate gltf_importer;

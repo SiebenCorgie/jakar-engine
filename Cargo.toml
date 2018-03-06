@@ -11,13 +11,12 @@ vulkano-shaders = "0.7.2"
 vulkano-shader-derive = "0.7.2"
 vulkano-win = "0.7.2"
 
-image = "0.17.0"
-cgmath = "0.15.0"
-collision = "0.13.0"
-gltf-importer = "0.9.2"
-gltf-utils = "0.9.2"
-gltf = "0.9.2"
-time = "0.1.37"
+image = "0.18.0"
+cgmath = "0.16.0"
+collision = "0.14.0"
+gltf-importer = "0.10.1"
+gltf-utils = "0.10.1"
+gltf = "0.10.1"
 
 jakar-tree = { path = "jakar-tree" }
 
