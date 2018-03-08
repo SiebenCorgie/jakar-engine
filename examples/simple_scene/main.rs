@@ -27,7 +27,9 @@ fn main() {
     let graphics_settings = core::render_settings::RenderSettings::default()
     .with_msaa_factor(8)
     .with_gamma(1.0)
-    .with_exposure(1.0)
+    .with_exposure(jakar_engine::core::render_settings::ExposureSettings::new(
+        0.2, 4.0, 0.005, 0.003, 0.5, true
+    ))
     .with_anisotropical_filtering(16);
 
     let settings = core::engine_settings::EngineSettings::default()
@@ -35,7 +37,7 @@ fn main() {
     .with_name("Jakar Instance")
     .in_release_mode()
     .with_input_poll_speed(500)
-    .with_fullscreen_mode(false)
+    .with_fullscreen_mode(true)
     //.with_cursor_state(winit::CursorState::Normal)
     .with_cursor_state(winit::CursorState::Grab)
     //.with_cursor_visibility(winit::MouseCursor::Default)
@@ -73,7 +75,7 @@ fn main() {
     //SUN========================================================================
     //add a matrix of lights
 
-    let matrix_size = 5;
+    let matrix_size = 1;
     let spacing = 5.0;
 
     for x in -(matrix_size)..matrix_size{
@@ -81,7 +83,7 @@ fn main() {
             for z in -(matrix_size)..matrix_size{
                 let mut point = light::LightPoint::new("LightPoint");
                 point.set_intensity(
-                    5.0
+                    100.0
                 );
                 point.set_color(
                     Vector3::new(
@@ -113,7 +115,7 @@ fn main() {
             }
         }
     }
-    /*
+/*
     //Now add a sun
     let mut sun = light::LightDirectional::new("Sunny");
     sun.set_intensity(25.0);
@@ -126,7 +128,7 @@ fn main() {
         },
         None => {println!("Could not find sun", );}
     }
-    */
+*/
 
     light_tree.update();
     engine.get_asset_manager().get_active_scene().join_at_root(&light_tree);
@@ -226,64 +228,112 @@ fn main() {
         }
         */
         if engine.get_current_keymap().p{
-            let settings = engine.get_settings();
-            settings.lock().expect("fail up").capture_next_frame();
+            engine.get_engine_settings_unlocked().capture_next_frame();
         }
 
         if engine.get_current_keymap().up{
-            let settings = engine.get_settings();
-            settings.lock().expect("fail up").get_render_settings().add_exposure(0.01);
+            engine.get_engine_settings_unlocked().
+            get_render_settings().get_debug_settings().ldr_debug_view_level += 1;
         }
 
+
         if engine.get_current_keymap().down{
-            let settings = engine.get_settings();
-            settings.lock().expect("fail down").get_render_settings().add_exposure(-0.01);
+            engine.get_engine_settings_unlocked()
+            .get_render_settings().get_debug_settings().ldr_debug_view_level -= 1;
+        }
+
+        if engine.get_current_keymap().f1{
+            engine.get_engine_settings_unlocked()
+            .get_render_settings().get_debug_settings().ldr_debug_view_level = 0;
+        }
+        if engine.get_current_keymap().f2{
+            engine.get_engine_settings_unlocked()
+            .get_render_settings().get_debug_settings().ldr_debug_view_level = 1;
+        }
+        if engine.get_current_keymap().f3{
+            engine.get_engine_settings_unlocked()
+            .get_render_settings().get_debug_settings().ldr_debug_view_level = 2;
+        }
+        if engine.get_current_keymap().f4{
+            engine.get_engine_settings_unlocked()
+            .get_render_settings().get_debug_settings().ldr_debug_view_level = 3;
+        }
+        if engine.get_current_keymap().f5{
+            engine.get_engine_settings_unlocked()
+            .get_render_settings().get_debug_settings().ldr_debug_view_level = 4;
+        }
+        if engine.get_current_keymap().f6{
+            engine.get_engine_settings_unlocked()
+            .get_render_settings().get_debug_settings().ldr_debug_view_level = 5;
+        }
+        if engine.get_current_keymap().f7{
+            engine.get_engine_settings_unlocked()
+            .get_render_settings().get_debug_settings().ldr_debug_view_level = 6;
+        }
+        if engine.get_current_keymap().f8{
+            engine.get_engine_settings_unlocked()
+            .get_render_settings().get_debug_settings().ldr_debug_view_level = 7;
+        }
+        if engine.get_current_keymap().f9{
+            engine.get_engine_settings_unlocked()
+            .get_render_settings().get_debug_settings().ldr_debug_view_level = 8;
+        }
+        if engine.get_current_keymap().f10{
+            engine.get_engine_settings_unlocked()
+            .get_render_settings().get_debug_settings().ldr_debug_view_level = 9;
+        }
+        if engine.get_current_keymap().f11{
+            engine.get_engine_settings_unlocked()
+            .get_render_settings().get_debug_settings().ldr_debug_view_level = 10;
+        }
+        if engine.get_current_keymap().f12{
+            engine.get_engine_settings_unlocked()
+            .get_render_settings().get_debug_settings().ldr_debug_view_level = 11;
         }
         //Set the debug settings
         if engine.get_current_keymap().b{
-            let settings = engine.get_settings();
-            settings.lock().expect("fail debug true").get_render_settings().set_debug_bound(true);
+            engine.get_engine_settings_unlocked().get_render_settings()
+            .get_debug_settings().draw_bounds = true;
         }
         //Set the debug settings
         if engine.get_current_keymap().n{
-            let settings = engine.get_settings();
-            settings.lock().expect("fail debug false").get_render_settings().set_debug_bound(false);
+            engine.get_engine_settings_unlocked().get_render_settings()
+            .get_debug_settings().draw_bounds = false;
         }
 
         if engine.get_current_keymap().t_1{
-            let settings = engine.get_settings();
-            settings.lock().expect("fail debug false").get_render_settings().set_debug_view(jakar_engine::core::render_settings::DebugView::ClusterId);
+            engine.get_engine_settings_unlocked().get_render_settings()
+            .get_debug_settings().debug_view = jakar_engine::core::render_settings::DebugView::MainDepth;
         }
 
         if engine.get_current_keymap().t_2{
-            let settings = engine.get_settings();
-            settings.lock().expect("fail debug false").get_render_settings().set_debug_view(jakar_engine::core::render_settings::DebugView::HeatMap);
+            engine.get_engine_settings_unlocked().get_render_settings()
+            .get_debug_settings().debug_view = jakar_engine::core::render_settings::DebugView::HdrFragments;
         }
 
         if engine.get_current_keymap().t_3{
-            let settings = engine.get_settings();
-            settings.lock().expect("fail debug false").get_render_settings().set_debug_view(jakar_engine::core::render_settings::DebugView::MainDepth);
+            engine.get_engine_settings_unlocked().get_render_settings()
+            .get_debug_settings().debug_view = jakar_engine::core::render_settings::DebugView::ScaledLdr;
         }
 
         if engine.get_current_keymap().t_4{
-            let settings = engine.get_settings();
-            settings.lock().expect("fail debug false").get_render_settings().set_debug_view(jakar_engine::core::render_settings::DebugView::Shaded);
+            engine.get_engine_settings_unlocked().get_render_settings()
+            .get_debug_settings().debug_view = jakar_engine::core::render_settings::DebugView::Shaded;
         }
 
         if engine.get_current_keymap().p{
-            let settings = engine.get_settings();
-            let current_strength = settings.lock().expect("fail debug false").get_render_settings().get_blur().strength;
-            let current_scale = settings.lock().expect("fail debug false").get_render_settings().get_blur().scale;
-            settings.lock().expect("fail debug false").get_render_settings().set_blur(current_scale + 0.05, current_strength + 0.05);
+            let mut settings = engine.get_engine_settings_unlocked();
+            let current_strength = settings.get_render_settings().get_blur().strength;
+            let current_scale = settings.get_render_settings().get_blur().scale;
+            settings.get_render_settings().set_blur(current_scale + 0.05, current_strength + 0.05);
         }
 
         if engine.get_current_keymap().o{
-            let settings = engine.get_settings();
-            let current_strength = settings.lock().expect("fail debug false").get_render_settings().get_blur().strength;
-            let current_scale = settings.lock().expect("fail debug false").get_render_settings().get_blur().scale;
-            settings.lock().expect("fail debug false").get_render_settings().set_blur(current_scale - 0.05, current_strength - 0.05);        }
-
-
+            let mut settings = engine.get_engine_settings_unlocked();
+            let current_strength = settings.get_render_settings().get_blur().strength;
+            let current_scale = settings.get_render_settings().get_blur().scale;
+            settings.get_render_settings().set_blur(current_scale - 0.05, current_strength - 0.05);
+        }
 
 
         //test if a is pressed

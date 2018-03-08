@@ -4,10 +4,10 @@
 layout(input_attachment_index = 0, set = 0, binding = 0) uniform subpassInputMS color_input;
 //The inputs for the hdr -> ldr pass
 layout(set = 1, binding = 0) uniform hdr_settings{
-  float exposure;
   float gamma;
   float near;
   float far;
+  float use_auto_exposure;
   int sampling_rate;
   int show_mode;
 }u_hdr_settings;

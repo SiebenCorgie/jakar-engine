@@ -446,6 +446,7 @@ impl AssetManager {
         });
     }
 
+
     ///Adds a scene from the local scene manager (based on `name`) to the local main scene
     /// at the `_root` node. If you want to add it at a specific node, do it like this:
     /// `get_active_scene().join(tree, node_name);`
@@ -466,17 +467,11 @@ impl AssetManager {
                 match self.active_main_scene.join_at_root(&(*scene_lck).clone()){
                     Ok(_) => {},
                     Err(r) => {
-
-                        println!("failed to add scene at main scene's root !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!", );
                         return Err(r);
                     },
                 }
             },
             None => {
-                rt_error(
-                    "ASSET_MANAGER",
-                    &("Could not find scene with name: ".to_string() + name.clone()).to_string()
-                );
                 return Err(tree::NodeErrors::NoNodeFound("Could not find the parent node".to_string()));
             },
         }

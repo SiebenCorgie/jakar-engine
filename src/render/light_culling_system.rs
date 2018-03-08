@@ -5,9 +5,11 @@ use vulkano::descriptor::descriptor_set::DescriptorSet;
 use vulkano::descriptor::descriptor_set::PersistentDescriptorSet;
 use vulkano::buffer::*;
 use vulkano::pipeline::ComputePipeline;
+use vulkano::pipeline::ComputePipelineAbstract;
 use render::shader::shader_inputs::lights;
 use vulkano::buffer::cpu_pool::CpuBufferPoolSubbuffer;
 use vulkano::buffer::device_local::DeviceLocalBuffer;
+use vulkano::descriptor::descriptor_set::FixedSizeDescriptorSetsPool;
 use vulkano;
 
 use std::sync::{Arc,Mutex};
@@ -21,6 +23,9 @@ pub struct LightClusterSystem {
     //Gets allocated ones and is used to attach the current cluster data to other shaders
     cluster_buffer: Arc<DeviceLocalBuffer<light_cull_shader::ty::ClusterBuffer>>,
 
+    //Descriptor pool to build the descriptorset faster
+    descriptor_pool: FixedSizeDescriptorSetsPool<Arc<ComputePipelineAbstract + Send + Sync>>,
+
     //is the buffer of currently used point, directional and spotlights used
     current_point_light_list: Arc<CpuAccessibleBuffer<[lights::ty::PointLight]>>,
     current_dir_light_list: Arc<CpuAccessibleBuffer<[lights::ty::DirectionalLight]>>,
@@ -28,6 +33,7 @@ pub struct LightClusterSystem {
     current_light_count: CpuBufferPoolSubbuffer<lights::ty::LightCount, Arc<vulkano::memory::pool::StdMemoryPool>>,
 
     compute_shader: Arc<light_cull_shader::Shader>,
+    compute_pipeline: Arc<vulkano::pipeline::ComputePipelineAbstract + Send + Sync>,
 }
 
 impl LightClusterSystem{
@@ -58,12 +64,21 @@ impl LightClusterSystem{
             device.clone(), BufferUsage::all(), vec![queue.family()].into_iter()
         ).expect("failed to create cluster buffer!");
 
+        //Store for fast usage
+        let compute_pipeline: Arc<ComputePipelineAbstract + Send + Sync> = Arc::new(
+            ComputePipeline::new(device.clone(), &shader.main_entry_point(), &()
+        )
+        .expect("failed to create compute pipeline"));
+
+        let descriptor_pool = FixedSizeDescriptorSetsPool::new(compute_pipeline.clone(), 0);
+
 
         LightClusterSystem{
             uniform_manager: uniform_manager,
             device: device,
 
             cluster_buffer: persistent_cluster_buffer,
+            descriptor_pool: descriptor_pool,
 
             current_point_light_list: c_point_light,
             current_dir_light_list: c_dir_light,
@@ -71,6 +86,7 @@ impl LightClusterSystem{
             current_light_count: c_light_count,
 
             compute_shader: shader,
+            compute_pipeline: compute_pipeline,
         }
     }
 
@@ -95,15 +111,8 @@ impl LightClusterSystem{
         match command_buffer{
             frame_system::FrameStage::LightCompute(cb) => {
 
-                let shader = self.compute_shader.clone();
-
-                let compute_pipeline = Arc::new(
-                    ComputePipeline::new(self.device.clone(), &shader.main_entry_point(), &()
-                )
-                .expect("failed to create compute pipeline"));
-
                 //adds the light buffers (all lights and indice buffer)
-                let set_01 = Arc::new(PersistentDescriptorSet::start(compute_pipeline.clone(), 0)
+                let set_01 = self.descriptor_pool.next()
                     .add_buffer(self.cluster_buffer.clone())
                     .expect("failed to add index buffer")
                     //lights and counter
@@ -120,11 +129,12 @@ impl LightClusterSystem{
                     .expect("Failed to create descriptor set")
 
                     .build().expect("failed to build compute desc set 1")
-                );
+                ;
 
 
                 //Now add to cb the dispatch
-                let new_cb = cb.dispatch([32, 16, 32], compute_pipeline.clone(), set_01, ()).expect("failed to add compute operation");
+                let new_cb = cb.dispatch([32, 16, 32], self.compute_pipeline.clone(), set_01, ())
+                .expect("failed to add compute operation");
 
 
                 //println!("Dispatched compute buffer", );
@@ -177,7 +187,7 @@ impl LightClusterSystem{
     }
 }
 
-//The compute shader
+///The compute shader used to compute the light matrix in world space.
 pub mod light_cull_shader {
     #[derive(VulkanoShader)]
     #[ty = "compute"]

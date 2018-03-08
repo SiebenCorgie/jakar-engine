@@ -46,6 +46,7 @@ pub enum SubPassType {
     Forward,
     HdrSorting,
     Blur,
+    ComputeAverageLumiosity,
     PostProgress,
     Finished
 }
@@ -61,11 +62,15 @@ impl SubPassType{
             &SubPassType::Forward =>{ //the first pass in the rendering
                 0
             },
-            &SubPassType::HdrSorting => { //the second
+            &SubPassType::HdrSorting => {
                 1
             },
             //Blur pass
-            &SubPassType::Blur => { //the second
+            &SubPassType::Blur => {
+                0
+            },
+            //LumisotyComputePass
+            &SubPassType::ComputeAverageLumiosity => {
                 0
             },
             //AssemblePass

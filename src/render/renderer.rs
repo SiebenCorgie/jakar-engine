@@ -220,11 +220,14 @@ impl Renderer {
         let this_frame: Box<GpuFuture> = Box::new(vulkano::sync::now(self.device.clone()));
 
         //First of all we get info if we should debug anything, if so this bool will be true
-        let (should_capture, mut time_step, start_time) = {
-            let cap_bool = self.engine_settings.lock().expect("failed to lock settings").capture_frame;
+        let (should_capture, mut time_step, start_time, sould_draw_bounds) = {
+            let (cap_bool, should_draw_bounds) = {
+                let mut lck_set = self.engine_settings.lock().expect("failed to lock settings");
+                (lck_set.capture_frame, lck_set.get_render_settings().get_debug_settings().draw_bounds)
+            };
             let time_step = Instant::now();
             let start_time = Instant::now();
-            (cap_bool, time_step, start_time)
+            (cap_bool, time_step, start_time, should_draw_bounds)
         };
         let (image_number, acquire_future) = {
             match self.check_pipeline(){
@@ -309,7 +312,7 @@ impl Renderer {
         }
 
         //now draw debug data of the meshes if turned on
-        if (self.engine_settings.lock().expect("failed to lock settings")).get_render_settings().draw_bounds(){
+        if sould_draw_bounds{
             //draw all opaque
             for mesh in opaque_meshes.iter(){
                 command_buffer = render_helper::add_bound_draw(
@@ -346,7 +349,7 @@ impl Renderer {
                 }
 
                 //now draw debug data of the meshes if turned on
-                if (self.engine_settings.lock().expect("failed to lock settings")).get_render_settings().draw_bounds(){
+                if sould_draw_bounds{
                     //draw the transparent bounds
                     for mesh in ord_tr.iter(){
                         command_buffer = render_helper::add_bound_draw(
@@ -438,7 +441,28 @@ impl Renderer {
             &self.frame_system,
         );
 
-        //Change to assemble stage
+        //Change to compute average lumiosity stage
+        command_buffer = self.frame_system.next_pass(command_buffer);
+        //Compute the lumiosity
+        //We only do the compute thing if we really wanna use the compute shader
+        let use_auto_exposure = {
+            self.engine_settings
+            .lock()
+            .expect("failed to lock settings")
+            .get_render_settings()
+            .get_exposure().use_auto_exposure
+        };
+
+
+        if use_auto_exposure{
+            command_buffer = self.post_progress.compute_lumiosity(
+                command_buffer,
+                &self.frame_system,
+            );
+        }
+
+
+        //Change to assamble stage
         command_buffer = self.frame_system.next_pass(command_buffer);
 
         //perform the post progressing
@@ -473,7 +497,6 @@ impl Renderer {
 
         //thanks firewater
         let real_cb = finished_command_buffer.build().expect("failed to build command buffer");
-
 
         let after_prev_and_aq = this_frame.join(acquire_future);
 

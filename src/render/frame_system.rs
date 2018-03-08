@@ -6,6 +6,11 @@ use vulkano::image::traits::ImageAccess;
 use vulkano::image::attachment::AttachmentImage;
 use vulkano::command_buffer::AutoCommandBufferBuilder;
 use vulkano::framebuffer::FramebufferAbstract;
+use vulkano::format::Format;
+use vulkano::image::ImageUsage;
+use vulkano::image::StorageImage;
+use vulkano::image::Dimensions;
+
 use vulkano;
 use std::sync::{Arc, Mutex};
 
@@ -21,7 +26,8 @@ pub enum FrameStage {
     BlurH(AutoCommandBufferBuilder),
     ///Blurs vertical
     BlurV(AutoCommandBufferBuilder),
-
+    ///Computes the current average lumiosity
+    ComputeAverageLumiosity(AutoCommandBufferBuilder),
     ///Is used to take the image from the first buffer and preform tone mapping on it
     Postprogress(AutoCommandBufferBuilder),
     ///Is used when next_frame() is called on the last pass
@@ -54,6 +60,10 @@ impl FrameStage{
                 let id_type = render::SubPassType::HdrSorting;
                 id_type.get_id()
             },
+            &FrameStage::ComputeAverageLumiosity(_) =>{
+                let id_type = render::SubPassType::ComputeAverageLumiosity;
+                id_type.get_id()
+            },
             &FrameStage::Postprogress(_) =>{
                 let id_type = render::SubPassType::PostProgress;
                 id_type.get_id()
@@ -72,11 +82,14 @@ pub struct ObjectPassImages {
     //The buffer to which the multi sampled depth gets written
     pub forward_hdr_depth: Arc<ImageViewAccess + Send + Sync>,
     //Holds the raw multisampled hdr colors
-    pub forward_hdr_image: Arc<ImageViewAccess  + Send + Sync>, //TODO reimplement
+    pub forward_hdr_image: Arc<ImageViewAccess + Send + Sync>, //TODO reimplement
     //Adter sorting the hdr fragments (used for bluring)
-    pub hdr_fragments: Arc<ImageViewAccess  + Send + Sync>,
+    pub hdr_fragments: Arc<ImageViewAccess + Send + Sync>,
     //The ldr fragments
-    pub ldr_fragments: Arc<ImageViewAccess  + Send + Sync>,
+    //pub ldr_fragments: Arc<ImageViewAccess + Send + Sync>,
+    pub ldr_fragments: Arc<AttachmentImage<Format>>,
+
+    pub transfer_usage: ImageUsage,
 }
 
 impl ObjectPassImages{
@@ -91,6 +104,14 @@ impl ObjectPassImages{
             .lock()
             .expect("failed to lock settings for frame creation")
             .get_dimensions()
+        };
+
+        let transfer_usage = ImageUsage{
+            transfer_source: true,
+            sampled: true,
+            color_attachment: true,
+            input_attachment: true,
+            ..ImageUsage::none()
         };
 
         let static_msaa_factor = passes.static_msaa_factor;
@@ -113,31 +134,36 @@ impl ObjectPassImages{
         current_dimensions,
         hdr_msaa_format).expect("failed to create hdr_fragments buffer!");
 
-        let ldr_fragments = AttachmentImage::sampled_input_attachment(device.clone(),
+        //Uses a custom usage parameter becuase it is later blir to a 1pixel texture for adaptive eye corretction
+        let ldr_fragments = AttachmentImage::with_usage(device.clone(),
         current_dimensions,
-        hdr_msaa_format).expect("failed to create ldr_fragments buffer!");
+        hdr_msaa_format, transfer_usage.clone()).expect("failed to create ldr_fragments buffer!");
 
         ObjectPassImages{
             forward_hdr_depth: forward_hdr_depth,
             forward_hdr_image: forward_hdr_color,
             hdr_fragments: hdr_fragments,
             ldr_fragments: ldr_fragments,
+            transfer_usage: transfer_usage,
         }
     }
 }
 
 
-///Collects the two BlurImages
-pub struct BlurImages {
+///Collects the two PostImages
+pub struct PostImages {
     pub after_blur_h: Arc<ImageViewAccess  + Send + Sync>,
     pub after_blur_v: Arc<ImageViewAccess  + Send + Sync>,
+    pub scaled_ldr_images: Vec<Arc<StorageImage<Format>>>,
+    //pub average_lumiosity: Arc<StorageImage<Format>>,
 }
 
-impl BlurImages{
+impl PostImages{
     pub fn new(
         settings: Arc<Mutex<engine_settings::EngineSettings>>,
         passes: &render::render_passes::RenderPasses,
-        device: Arc<vulkano::device::Device>
+        device: Arc<vulkano::device::Device>,
+        queue: Arc<vulkano::device::Queue>,
     ) -> Self{
 
         let current_dimensions = {
@@ -158,9 +184,63 @@ impl BlurImages{
         current_dimensions,
         hdr_msaa_format).expect("failed to create after_blur_v buffer!");
 
-        BlurImages{
+        let transfer_usage = ImageUsage{
+            transfer_destination: true,
+            transfer_source: true,
+            color_attachment: true,
+            sampled: true,
+            ..ImageUsage::none()
+        };
+
+        //For several PostProgress Stuff we might need scaled images of the original image
+        // we do this by storing several layers of scaled images in this vec.
+        //The first one in half size comapred to the original, the last one is a 1x1 texture
+        let mut scaled_ldr_images = Vec::new();
+
+        let mut new_dimension_image = current_dimensions;
+        //Always use the dimension, create image, then scale down
+        'reduction_loop: loop {
+
+            //calculate the half dimension
+            let mut new_dim_x = ((new_dimension_image[0] as f32).floor() / 2.0) as u32;
+            let mut new_dim_y = ((new_dimension_image[1] as f32).floor() / 2.0) as u32;
+            //Check if we reached 1 for only one but not the other, if so, cap at one
+            if new_dim_x < 1 && new_dim_y >= 1{
+                new_dim_x = 1;
+            }
+
+            if new_dim_y < 1 && new_dim_x >= 1{
+                new_dim_y = 1;
+            }
+
+            new_dimension_image = [
+                new_dim_x,
+                new_dim_y
+            ];
+
+            //create the half image
+            let new_image = StorageImage::with_usage(
+                device.clone(), Dimensions::Dim2d{
+                    width: new_dimension_image[0],
+                    height: new_dimension_image[1]
+                },
+                hdr_msaa_format, transfer_usage, vec![queue.family()].into_iter()
+            ).expect("failed to create one pix image");
+            //push it
+            scaled_ldr_images.push(new_image);
+            println!("Aspect_last_frame: [{}, {}]", new_dimension_image[0], new_dimension_image[1]);
+
+            //break if reached the 1x1 pixel
+            if new_dim_x <= 1 && new_dim_y <= 1{
+                break;
+            }
+        }
+
+
+        PostImages{
             after_blur_h: after_blur_h,
             after_blur_v: after_blur_v,
+            scaled_ldr_images: scaled_ldr_images,
         }
     }
 }
@@ -177,7 +257,7 @@ pub struct FrameSystem {
     //The current collection of the object pass images
     pub object_pass_images: ObjectPassImages,
     ///The current collection of blur images
-    pub blur_pass_images: BlurImages,
+    pub post_pass_images: PostImages,
 
     /*TODO:
     * It would be nice to be able to configure the dynamic state. Things like "reversed" depth
@@ -221,7 +301,7 @@ impl FrameSystem{
         };
 
         let object_pass_images = ObjectPassImages::new(settings.clone(), &passes, device.clone());
-        let blur_pass_images = BlurImages::new(settings.clone(), &passes, device.clone());
+        let post_pass_images = PostImages::new(settings.clone(), &passes, device.clone(), target_queue.clone());
 
         println!("Created main_renderpass", );
         //At this point we build the state, now we have to create the configuration for it as well
@@ -249,7 +329,7 @@ impl FrameSystem{
             assemble_pass_fb: None,
 
             object_pass_images: object_pass_images,
-            blur_pass_images: blur_pass_images,
+            post_pass_images: post_pass_images,
 
             device: device,
             queue: target_queue,
@@ -264,10 +344,11 @@ impl FrameSystem{
             self.device.clone()
         );
 
-        self.blur_pass_images = BlurImages::new(
+        self.post_pass_images = PostImages::new(
             self.engine_settings.clone(),
             &self.passes,
-            self.device.clone()
+            self.device.clone(),
+            self.queue.clone()
         );
 
         let new_dimensions = {
@@ -315,7 +396,7 @@ impl FrameSystem{
         self.blur_pass_h_fb = Some(Arc::new(
             vulkano::framebuffer::Framebuffer::start(self.passes.blur_pass.render_pass.clone())
             //Only writes to after h
-            .add(self.blur_pass_images.after_blur_h.clone()).expect("failed to add after_blur_h image")
+            .add(self.post_pass_images.after_blur_h.clone()).expect("failed to add after_blur_h image")
             .build()
             .expect("failed to build main framebuffer!")
         ));
@@ -325,7 +406,7 @@ impl FrameSystem{
         self.blur_pass_v_fb = Some(Arc::new(
             vulkano::framebuffer::Framebuffer::start(self.passes.blur_pass.render_pass.clone())
             //Only writes to after v
-            .add(self.blur_pass_images.after_blur_v.clone()).expect("failed to add after_blur_v image")
+            .add(self.post_pass_images.after_blur_v.clone()).expect("failed to add after_blur_v image")
             .build()
             .expect("failed to build main framebuffer!")
         ));
@@ -365,7 +446,7 @@ impl FrameSystem{
 
                 //For successfull clearing we generate a vector for all images.
                 let clearing_values = vec![
-                    [0.1, 0.1, 0.1, 1.0].into(), //forward color hdr
+                    [0.0, 0.0, 0.0, 1.0].into(), //forward color hdr
                     1f32.into(), //forward depth
                     [0.0, 0.0, 0.0, 1.0].into(),
                     [0.0, 0.0, 0.0, 1.0].into(), //post progress / frame buffer image
@@ -412,17 +493,27 @@ impl FrameSystem{
             }
 
             FrameStage::BlurV(cb)=> {
-                let assemble_fb = self.assemble_pass_fb.take().expect("there was no assemble image");
+
+                let next = cb
+                .end_render_pass().expect("failed to end blur_v pass");
+
+                //Start the compute pass
+                FrameStage::ComputeAverageLumiosity(next)
+            }
+
+            FrameStage::ComputeAverageLumiosity(cb) => {
+                let assemble_fb = self.assemble_pass_fb.take()
+                .expect("there was no assemble image");
+
                 let clearings = vec![
                     [0.0, 0.0, 0.0, 0.0].into()
                 ];
-                let next = cb
-                .end_render_pass().expect("failed to end blur_v pass")
-                .begin_render_pass(assemble_fb, false, clearings).expect("failed to start assemble pass");
+                //Begin the assamble pass
+                let new_cb = cb.begin_render_pass(assemble_fb, false, clearings)
+                .expect("failed to start assemble pass");
 
-                FrameStage::Postprogress(next)
+                FrameStage::Postprogress(new_cb)
             }
-
 
             FrameStage::Postprogress(cb) => {
                 //Finish this frame

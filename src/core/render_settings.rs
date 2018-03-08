@@ -5,21 +5,32 @@
 ///post progress stage
 #[derive(Clone)]
 pub enum DebugView {
-    ClusterId,
-    HeatMap,
     MainDepth,
+    HdrFragments,
+    ScaledLdr,
     Shaded,
 }
 
 impl DebugView{
     pub fn as_shader_int(&self) -> i32{
         match self{
-            &DebugView::ClusterId => 0,
-            &DebugView::HeatMap => 1,
-            &DebugView::MainDepth => 2,
+            &DebugView::MainDepth => 0,
+            &DebugView::HdrFragments => 1,
+            &DebugView::ScaledLdr => 2,
             &DebugView::Shaded => 3,
         }
     }
+}
+
+///Describes several settings which are used while debugging.
+#[derive(Clone)]
+pub struct DebugSettings {
+    ///Can be used to switch between debug views.
+    pub debug_view: DebugView,
+    ///Describes which level of the scaled ldr image should be shown when in
+    pub ldr_debug_view_level: u32,
+    ///Is true if you want to let the engine draw the bounds of the objects
+    pub draw_bounds: bool,
 }
 
 ///BlurSettings.
@@ -34,6 +45,38 @@ impl BlurSettings{
         BlurSettings{
             strength: strength,
             scale: scale
+        }
+    }
+}
+
+///All settings needed for the auto exposure to work. Howevcer, there is an option to use
+/// no auto exposure. If it is turned on, the engine will use the min_exposure setting always.
+#[derive(Clone)]
+pub struct ExposureSettings {
+    ///The lower cap for exposure. The exposure can't be lower then this.
+    pub min_exposure: f32,
+    ///Same as min, but for the upper cap.
+    pub max_exposure: f32,
+    ///The speed the exposure gets corrected upwards (when the image is too dark). Should be a bit faster then the downb scaling.
+    pub scale_up_speed: f32,
+    ///Same as up, but for correcting down.
+    pub scale_down_speed: f32,
+    ///Tells the system which target lumiosity a frame shoudl have
+    pub target_lumiosity: f32,
+    ///If false, the implementation will use a static value which it gets from `min_exposure`.
+    pub use_auto_exposure: bool,
+}
+
+
+impl ExposureSettings{
+    pub fn new(min: f32, max: f32, up_speed: f32, down_speed: f32, target_lumiosity: f32, use_auto: bool) -> Self{
+        ExposureSettings{
+            min_exposure: min,
+            max_exposure: max,
+            scale_up_speed: up_speed,
+            scale_down_speed: down_speed,
+            target_lumiosity: target_lumiosity,
+            use_auto_exposure: use_auto,
         }
     }
 }
@@ -57,18 +100,13 @@ pub struct RenderSettings {
     ///Defines the current gamma correction on the output
     gamma: f32,
     ///Defines the exposure used to correct the HDR image down to LDR
-    exposure: f32,
+    exposure: ExposureSettings,
 
     ///Defines the blur settings. Mainly strength and scale.
     blur: BlurSettings,
 
-    ///The engine should render the bounds
-    debug_bounds: bool,
-
-    ///Describes what the post_progress should render
-    debug_view: DebugView,
-
-    //TODO: add things like "max render distance" for objects
+    ///Describes the several debug settings one cna change
+    debug_settings: DebugSettings,
 
 }
 
@@ -94,15 +132,19 @@ impl RenderSettings{
             msaa: 1,
             v_sync: false,
             gamma: 2.2,
-            exposure: 1.0,
+            exposure: ExposureSettings::new(
+                0.2, 4.0, 0.002, 0.003, 1.0, true
+            ),
             blur: BlurSettings{
                 strength: 1.5,
                 scale: 1.0,
             },
 
-            debug_bounds: false,
-            debug_view: DebugView::Shaded,
-
+            debug_settings: DebugSettings{
+                draw_bounds: false,
+                debug_view: DebugView::Shaded,
+                ldr_debug_view_level: 0,
+            }
         }
     }
 
@@ -138,16 +180,16 @@ impl RenderSettings{
         self.anisotropic_filtering
     }
 
-    ///Returns the current view type.
+    ///Returns the current debug settings as mutable.
     #[inline]
-    pub fn get_debug_view(&self) -> &DebugView{
-        &self.debug_view
+    pub fn get_debug_settings(&mut self) -> &mut DebugSettings{
+        &mut self.debug_settings
     }
 
     ///sets the view type to be used for the following frames
     #[inline]
-    pub fn set_debug_view(&mut self, new: DebugView){
-        self.debug_view = new;
+    pub fn set_debug_settings(&mut self, new: DebugSettings){
+        self.debug_settings = new;
     }
 
 
@@ -227,34 +269,20 @@ impl RenderSettings{
     /// areas will be brighter as well.
     /// When above 1.0 the dark areas might seam black but the bright areas are more defined.
     #[inline]
-    pub fn with_exposure(mut self, exposure: f32) -> Self{
+    pub fn with_exposure(mut self, exposure: ExposureSettings) -> Self{
         self.exposure = exposure;
         self
     }
     ///Returns the current exposure.
     #[inline]
-    pub fn get_exposure(&self) -> f32{
-        self.exposure
+    pub fn get_exposure(&self) -> ExposureSettings{
+        self.exposure.clone()
     }
 
     ///Sets the current exposure to `new` and marks the settings as unresolved.
     #[inline]
-    pub fn set_exposure(&mut self, new: f32){
-        self.exposure = new;
-        self.has_changed = true;
-    }
-
-    ///Adds an ammount to exposure. NOTE: the exposure can't be below 0.0 all values beleow will
-    /// be clamped to 0.0
-
-    pub fn add_exposure(&mut self, offset: f32){
-
-        if self.exposure - offset >= 0.0{
-            self.exposure -= offset;
-        }else{
-            self.exposure = 0.0
-        }
-        self.has_changed = true;
+    pub fn get_exposure_mut(&mut self) -> &mut ExposureSettings{
+        &mut self.exposure
     }
 
 
@@ -275,18 +303,6 @@ impl RenderSettings{
     #[inline]
     pub fn get_blur(&self,) -> BlurSettings{
         self.blur.clone()
-    }
-
-
-    ///If `new` is `true`, the bounds of each renderable object are drawn.
-    #[inline]
-    pub fn set_debug_bound(&mut self, new: bool){
-        self.debug_bounds = new;
-    }
-
-    ///Returns true if the bounds should be drawn
-    pub fn draw_bounds(&self) -> bool{
-        self.debug_bounds
     }
 
 }

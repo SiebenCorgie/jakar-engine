@@ -537,7 +537,9 @@ impl RenderBuilder {
             post_progress_pipeline,
             resolve_pipeline,
             blur_pipeline,
-            device.clone()
+            device.clone(),
+            queue.clone(),
+            &passes,
         );
 
         println!("Creating light culling system", );

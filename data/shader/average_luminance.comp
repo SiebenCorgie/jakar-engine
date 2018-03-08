@@ -1,0 +1,52 @@
+#version 450
+
+layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+
+
+layout(set = 0, binding = 0) uniform sampler2D one_pix_texture;
+
+
+///Will hold the average lumiosity of this frame
+layout(set = 0, binding = 1) buffer LumiosityBuffer{
+  float this_average_lumiosity;
+  float last_average_lumiosity;
+  float exposure;
+} u_lum_buf;
+
+layout(set = 0, binding = 2) uniform ExposureSettings{
+  float min_exposure;
+  float max_exposure;
+  float scale_up_speed;
+  float scale_down_speed;
+  float target_lumiosity;
+  float use_auto_exposure;
+}u_exp_settings;
+
+
+void main(){
+
+  //First, push the last current texture to the last point
+  u_lum_buf.last_average_lumiosity = u_lum_buf.this_average_lumiosity;
+
+  //Now get the current lumiosity
+  float current_lumiosity = dot(texture(one_pix_texture, vec2(0.0, 0.0)).rgb, vec3(0.2126, 0.7152, 0.0722));
+  //Promote that to the "this" value
+  u_lum_buf.this_average_lumiosity = current_lumiosity;
+
+  //Now advance or shirnk the gamma
+  if (u_lum_buf.this_average_lumiosity > u_exp_settings.target_lumiosity){
+    u_lum_buf.exposure = u_lum_buf.exposure - u_exp_settings.scale_down_speed;
+
+  }else if(u_lum_buf.this_average_lumiosity < u_exp_settings.target_lumiosity){
+    u_lum_buf.exposure = u_lum_buf.exposure + u_exp_settings.scale_up_speed;
+  }
+
+  if (u_lum_buf.exposure < u_exp_settings.min_exposure){
+    u_lum_buf.exposure = u_exp_settings.min_exposure;
+  }
+  if (u_lum_buf.exposure > u_exp_settings.max_exposure){
+    u_lum_buf.exposure = u_exp_settings.max_exposure;
+  }
+
+
+}

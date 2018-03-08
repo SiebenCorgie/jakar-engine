@@ -678,11 +678,19 @@ impl JakarEngine {
         map
     }
 
+    ///Returns the unlocked settings for easy changing. However the engine won't do anything as long as the
+    //Mutex is unlocked, so use with care.
+    pub fn get_engine_settings_unlocked<'a>(&'a mut self) -> MutexGuard<'a, core::engine_settings::EngineSettings>{
+        self.engine_settings.lock().expect("failed to lock engine settings for user")
+    }
+
     ///Returns a copy of the current settings. Can be used for instance to change the current graphics
-    /// settings like `exposure` or `gamma`.
+    /// settings like `exposure` or `gamma`. **Note**: This are the locked once. It is save to store
+    //this object somewhere in your gameplay code and only unlock it when you need it.
     pub fn get_settings(&self) -> Arc<Mutex<core::engine_settings::EngineSettings>>{
         self.engine_settings.clone()
     }
+
 }
 
 
