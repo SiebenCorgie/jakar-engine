@@ -56,6 +56,55 @@ impl ContentType{
         }
     }
 
+    ///Returns the either a mesh or a None
+    pub fn as_mesh(&mut self) -> Option<Arc<Mutex<mesh::Mesh>>>{
+        match self{
+            &mut ContentType::Mesh(ref mesh) => return Some(mesh.clone()),
+            _ => None
+        }
+    }
+
+    ///Returns the either a point light or a None
+    pub fn as_point_light(&mut self) -> Option<&mut light::LightPoint>{
+        match self{
+            &mut ContentType::PointLight(ref mut light) => return Some(light),
+            _ => None
+        }
+    }
+
+    ///Returns the either a directional light or a None
+    pub fn as_directional_light(&mut self) -> Option<&mut light::LightDirectional>{
+        match self{
+            &mut ContentType::DirectionalLight(ref mut light) => return Some(light),
+            _ => None
+        }
+    }
+
+    ///Returns the either a spot light or a None
+    pub fn as_spot_light(&mut self) -> Option<&mut light::LightSpot>{
+        match self{
+            &mut ContentType::SpotLight(ref mut light) => return Some(light),
+            _ => None
+        }
+    }
+
+    ///Returns the either a empty or a None
+    pub fn as_empty(&mut self) -> Option<&mut empty::Empty>{
+        match self{
+            &mut ContentType::Empty(ref mut empty) => return Some(empty),
+            _ => None
+        }
+    }
+
+    ///Returns the either a camera or a None
+    pub fn as_camera(&mut self) -> Option<&mut camera::DefaultCamera>{
+        match self{
+            &mut ContentType::Camera(ref mut cam) => return Some(cam),
+            _ => None
+        }
+    }
+
+
 }
 
 impl jakar_tree::node::NodeContent for ContentType{

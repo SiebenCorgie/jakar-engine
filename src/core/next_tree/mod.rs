@@ -32,9 +32,6 @@ pub struct SceneComparer{
         pub frustum: Option<Frustum<f32>>,
         ///Some if the value bound of the node should be in this bound
         pub value_bound: Option<Aabb3<f32>>,
-        ///Some if the size should be comapred. However, be aware that a same size doesn't necessarly mean
-        /// that you got the same bound extends.
-        pub size: Option<f32>,
         ///Some if the cast_shadow component should be compared
         pub cast_shadow: Option<bool>,
         ///Some if the is_transparent component should be compared
@@ -54,7 +51,6 @@ impl SceneComparer{
             bound: None,
             frustum: None,
             value_bound: None,
-            size: None,
             cast_shadow: None,
             is_transparent: None,
             hide_in_game: None,
@@ -82,12 +78,6 @@ impl SceneComparer{
     ///Adds a Some(value bound)
     pub fn with_value_bound(mut self, bound: Aabb3<f32>) -> Self{
         self.value_bound = Some(bound);
-        self
-    }
-
-    ///Adds a Some(size)
-    pub fn with_size(mut self, size: f32) -> Self{
-        self.size = Some(size);
         self
     }
 
@@ -138,7 +128,6 @@ impl SceneComparer{
         self.is_emessive = Some(false);
         self
     }
-
 }
 
 
@@ -191,6 +180,7 @@ J: Clone, A: jakar_tree::node::Attribute<J> + Clone
 
     ///Rebuilds the bounds for the whole tree
     fn rebuild_bounds(&mut self);
+
 }
 
 impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>
@@ -214,9 +204,6 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
             },
             &None =>  {}, //all is nice, add the mesh
         }
-
-
-
         //check self
         match self.value{
             content::ContentType::Mesh(_) => {
@@ -224,7 +211,6 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
             },
             _ => {}, //self is no mesh only going doing nothing
         }
-
         return_vec
     }
 
@@ -248,9 +234,6 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
             },
             &None =>  {}, //all is nice, add the mesh
         }
-
-
-
         //check self
         match self.value{
             content::ContentType::Mesh(ref mesh) => {
@@ -260,12 +243,12 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
                     children: BTreeMap::new(),
                     jobs: Vec::new(),
                     attributes: self.attributes.clone(),
+                    tick_closure: self.tick_closure.clone(),
                 };
                 return_vec.push(node_copy);
             },
             _ => {}, //self is no mesh only going doing nothing
         }
-
         return_vec
     }
 
@@ -328,11 +311,8 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
         //vec.
         //further we test the node bound as well. If the node bound is in, we test all the children
         //otherwise we early return
-
         let mut return_vec = Vec::new();
-
         let camera_bound = camera.get_frustum_bound();
-
         match camera_bound.contains(&self.attributes.value_bound){
             Relation::Out => {
                 //Don't add
@@ -361,6 +341,7 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
                                 children: BTreeMap::new(),
                                 jobs: Vec::new(),
                                 attributes: self.attributes.clone(),
+                                tick_closure: self.tick_closure.clone(),
                             };
                             return_vec.push(node_copy);
                         }
@@ -370,7 +351,6 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
                 }
             }
         }
-
         //now test if we should go further down
         match camera_bound.contains(&self.attributes.bound){ //the bound should be in world space as well
             Relation::Out => {
@@ -421,7 +401,6 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
         for (_, child) in self.children.iter(){
             return_vec.append(&mut child.copy_all_point_lights(&sorting));
         }
-
         //first of all test if self has the right attributes, if not we can already return the child
         // vector
         match sorting{
@@ -433,7 +412,6 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
             },
             &None =>  {}, //all is nice, add the mesh
         }
-
         //check self
         match self.value{
             content::ContentType::PointLight(ref light) => {
@@ -443,12 +421,12 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
                     children: BTreeMap::new(),
                     jobs: Vec::new(),
                     attributes: self.attributes.clone(),
+                    tick_closure: self.tick_closure.clone(),
                 };
                 return_vec.push(node_copy);
             },
             _ => {}, //self is no mesh only going doing nothing
         }
-
         return_vec
     }
 
@@ -476,7 +454,6 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
             },
             _ => {}, //self is no mesh only going doing nothing
         }
-
         return_vec
     }
 
@@ -488,7 +465,6 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
         for (_, child) in self.children.iter(){
             return_vec.append(&mut child.copy_all_directional_lights(sorting));
         }
-
         //first of all test if self has the right attributes, if not we can already return the child
         // vector
         match sorting{
@@ -500,7 +476,6 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
             },
             &None =>  {}, //all is nice, add the mesh
         }
-
         //check self
         match self.value{
             content::ContentType::DirectionalLight(ref light) => {
@@ -510,6 +485,7 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
                     children: BTreeMap::new(),
                     jobs: Vec::new(),
                     attributes: self.attributes.clone(),
+                    tick_closure: self.tick_closure.clone(),
                 };
                 return_vec.push(node_copy);
             },
@@ -558,7 +534,6 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
         for (_, child) in self.children.iter(){
             return_vec.append(&mut child.copy_all_spot_lights(sorting));
         }
-
         //first of all test if self has the right attributes, if not we can already return the child
         // vector
         match sorting{
@@ -570,7 +545,6 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
             },
             &None =>  {}, //all is nice, add the mesh
         }
-
         //check self
         match self.value{
             content::ContentType::SpotLight(ref light) => {
@@ -580,6 +554,7 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
                     children: BTreeMap::new(),
                     jobs: Vec::new(),
                     attributes: self.attributes.clone(),
+                    tick_closure: self.tick_closure.clone(),
                 };
                 return_vec.push(node_copy);
             },
@@ -596,7 +571,6 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
         for (_, child) in self.children.iter(){
             return_vec.append(&mut child.all_empty_names(sorting));
         }
-
         //first of all test if self has the right attributes, if not we can already return the child
         // vector
         match sorting{
@@ -608,7 +582,6 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
             },
             &None =>  {}, //all is nice, add the mesh
         }
-
         //check self
         match self.value{
             content::ContentType::Empty(_) => {
@@ -616,7 +589,6 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
             },
             _ => {}, //self is no mesh only going doing nothing
         }
-
         return_vec
     }
 
@@ -628,7 +600,6 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
         for (_, child) in self.children.iter(){
             return_vec.append(&mut child.copy_all_emptys(sorting));
         }
-
         //first of all test if self has the right attributes, if not we can already return the child
         // vector
         match sorting{
@@ -640,7 +611,6 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
             },
             &None =>  {}, //all is nice, add the mesh
         }
-
         //check self
         match self.value{
             content::ContentType::Empty(ref empty) => {
@@ -650,12 +620,12 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
                     children: BTreeMap::new(),
                     jobs: Vec::new(),
                     attributes: self.attributes.clone(),
+                    tick_closure: self.tick_closure.clone(),
                 };
                 return_vec.push(node_copy);
             },
             _ => {}, //self is no mesh only going doing nothing
         }
-
         return_vec
     }
 
@@ -674,7 +644,6 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
              },
              &None =>  {}, //all is nice, add the mesh
          }
-
          //check self
          match self.value{
              content::ContentType::Camera(_) => {
@@ -682,7 +651,6 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
              },
              _ => {}, //self is no mesh only going doing nothing
          }
-
          return_vec
     }
 
@@ -694,7 +662,6 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
         for (_, child) in self.children.iter(){
             return_vec.append(&mut child.copy_all_cameras(sorting));
         }
-
         //first of all test if self has the right attributes, if not we can already return the child
         // vector
         match sorting{
@@ -706,7 +673,6 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
             },
             &None =>  {}, //all is nice, add the mesh
         }
-
         //check self
         match self.value{
             content::ContentType::Camera(ref camera) => {
@@ -716,12 +682,12 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
                     children: BTreeMap::new(),
                     jobs: Vec::new(),
                     attributes: self.attributes.clone(),
+                    tick_closure: self.tick_closure.clone(),
                 };
                 return_vec.push(node_copy);
             },
             _ => {}, //self is no mesh only going doing nothing
         }
-
         return_vec
     }
 
@@ -733,7 +699,6 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
         for (_, child) in self.children.iter_mut(){
             child.rebuild_bounds();
         }
-
         //Calculate new mins and maxs value from the object bounds
         let object_bound = self.value.get_bound();
         let points = object_bound.to_corners();
@@ -783,8 +748,9 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
 
         //finished the checks, update self
         self.attributes.bound = Aabb3::new(mins, maxs);
-
     }
+
+
 }
 
 

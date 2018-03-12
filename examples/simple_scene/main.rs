@@ -7,11 +7,12 @@ extern crate jakar_tree;
 use cgmath::*;
 
 use jakar_engine::*;
+use jakar_engine::core::next_tree::*;
 use jakar_engine::core::resources::*;
 use jakar_engine::core::resources::camera::Camera;
 use jakar_engine::core::resources::light;
 use jakar_engine::core::next_tree::*;
-use jakar_tree::node::Attribute;
+use jakar_tree::node::*;
 
 use std::thread;
 use std::sync::{Arc, Mutex};
@@ -37,7 +38,7 @@ fn main() {
     .with_name("Jakar Instance")
     .in_release_mode()
     .with_input_poll_speed(500)
-    .with_fullscreen_mode(true)
+    .with_fullscreen_mode(false)
     //.with_cursor_state(winit::CursorState::Normal)
     .with_cursor_state(winit::CursorState::Grab)
     //.with_cursor_visibility(winit::MouseCursor::Default)
@@ -62,8 +63,9 @@ fn main() {
     };
 
 
-    engine.get_asset_manager().import_gltf("TestScene", "examples/simple_scene/TestScenes/Cube_Plane.gltf");
+    //engine.get_asset_manager().import_gltf("TestScene", "examples/simple_scene/TestScenes/Cube_Plane.gltf");
     //engine.get_asset_manager().import_gltf("TestScene", "examples/simple_scene/Sponza/Sponza.gltf");
+    engine.get_asset_manager().import_gltf("TestScene", "examples/simple_scene/Helmet/Helmet.gltf");
 
 
     let mut light_tree =jakar_tree::tree::Tree::new(
@@ -75,15 +77,15 @@ fn main() {
     //SUN========================================================================
     //add a matrix of lights
 
-    let matrix_size = 1;
-    let spacing = 5.0;
+    let matrix_size = 0;
+    let spacing = 2.0;
 
     for x in -(matrix_size)..matrix_size{
         for y in -(matrix_size)..matrix_size{
             for z in -(matrix_size)..matrix_size{
                 let mut point = light::LightPoint::new("LightPoint");
                 point.set_intensity(
-                    100.0
+                    10.0
                 );
                 point.set_color(
                     Vector3::new(
@@ -92,10 +94,10 @@ fn main() {
                         (z + matrix_size) as f32 / matrix_size as f32
                     )
                 );
-                point.set_radius(5.0);
+                point.set_radius(2.0);
 
                 let node_name = light_tree
-                .add_at_root(content::ContentType::PointLight(point), None);
+                .add_at_root(content::ContentType::PointLight(point), None, None);
 
                 //Set the location
                 match light_tree.get_node(&node_name.unwrap()){
@@ -115,23 +117,54 @@ fn main() {
             }
         }
     }
-/*
+
     //Now add a sun
     let mut sun = light::LightDirectional::new("Sunny");
     sun.set_intensity(25.0);
     sun.set_color(Vector3::new(1.0, 0.85, 0.9));
-    let sun_node = light_tree.add_at_root(content::ContentType::DirectionalLight(sun), None);
+    let sun_node = light_tree.add_at_root(content::ContentType::DirectionalLight(sun), None, None).expect("fail");
     //Now rotate it a bit on x
-    match light_tree.get_node("Sunny"){
+    match light_tree.get_node(&sun_node){
         Some(sun)=> {
             sun.add_job(jobs::SceneJobs::Rotate(Vector3::new(0.0, 0.0, -60.0)));
+
+            let mut scale_up = true;
+            println!("INt: {}", sun.value.as_directional_light().expect("fail").get_intensity());
+
+            sun.set_tick(move |x:f32, arg: &mut Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>|{
+
+                let current_intensity = arg.value.as_directional_light().unwrap().get_intensity().clone();
+
+                if current_intensity > 50.0{
+                    println!("Down: ", );
+                    scale_up = false;
+                }
+                if current_intensity < 1.0{
+                    scale_up = true;
+                    println!("Up: ", );
+
+                }
+
+
+                if scale_up{
+                    let mut val = arg.value.as_directional_light().unwrap().get_intensity();
+                    *val += 10.0 * x;
+                }else{
+                    let mut val = arg.value.as_directional_light().unwrap().get_intensity();
+                    *val -= 10.0 * x;
+                }
+
+
+                println!("Hello from the other node! int: {:?}", arg.value.as_directional_light().expect("fail").get_color());
+            });
         },
         None => {println!("Could not find sun", );}
     }
-*/
+
 
     light_tree.update();
     engine.get_asset_manager().get_active_scene().join_at_root(&light_tree);
+    println!("LightreeJoined!", );
     engine.get_asset_manager().get_active_scene().update();
     //println!("THE SCENE ==================================================", );
     //engine.get_asset_manager().get_active_scene().print_tree();

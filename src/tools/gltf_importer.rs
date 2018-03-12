@@ -692,7 +692,7 @@ pub fn load_gltf_node(
     let mut node_attributes = attributes::NodeAttributes::default();
     node_attributes.transform = node_transform;
     //add the empty to the parent node in tree
-    let _ = tree.add(empty_value, parent_node_name.clone(), Some(node_attributes));
+    let _ = tree.add(empty_value, parent_node_name.clone(), Some(node_attributes), None);
 
     //check for a mesh in the gltf_node
     match gltf_node.mesh(){
@@ -757,7 +757,7 @@ pub fn load_gltf_node(
                 //create a content struct from the mesh
                 let mesh_node_value = content::ContentType::Mesh(prim);
                 //now add this mesh node to the current tree together with its forged attributes :D
-                let _ = tree.add(mesh_node_value, new_name.clone(), Some(prim_attrib));
+                let _ = tree.add(mesh_node_value, new_name.clone(), Some(prim_attrib), None);
             }
         }
         None => {}, //no mesh found for this node
@@ -816,7 +816,7 @@ pub fn import_gltf(
         let empty_scene_object = empty::Empty::new(&scene_name);
         let scene_node = content::ContentType::Empty(empty_scene_object);
         //now add the node to the tree
-        let _ = scene_tree.add_at_root(scene_node, None); //TODO might need to read scene location/rotation/scale
+        let _ = scene_tree.add_at_root(scene_node, None, None); //TODO might need to read scene location/rotation/scale
         //now cycle through its nodes and add the correct meshes, lights whatever to it
         for node in scene.nodes(){
 

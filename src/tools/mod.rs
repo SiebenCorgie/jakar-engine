@@ -12,6 +12,10 @@ use core::resources::mesh;
 //pub mod assimp_importer;
 ///The main importer for this engine
 pub mod gltf_importer;
+///A collection of Callback implementations which can be used for instance to add a delta_tick function
+/// to a node or similar things.
+pub mod callbacks;
+
 
 ///A trait every importer should implement
 pub trait Importer {

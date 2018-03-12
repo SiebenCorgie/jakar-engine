@@ -2,6 +2,9 @@ use cgmath::*;
 use collision::*;
 use jakar_tree::node::Attribute;
 use super::jobs::SceneJobs;
+use std::sync::{Arc, Mutex};
+
+
 
 ///A node can have this attributes
 #[derive(Clone)]
@@ -16,10 +19,6 @@ pub struct NodeAttributes {
     ///The static bounds of this nodes value. In worldspace as well. If you want to get the object
     /// space bound, call `get_bound()` on the `value`.
     pub value_bound: Aabb3<f32>,
-    ///The size of of its value, is used to determain if the node is drawn when far away etc.
-    pub size: f32,
-
-
 
     /// Can be turned off to disable shadow casting, usefull for many small objects
     pub cast_shadow: bool,
@@ -81,7 +80,6 @@ impl Attribute<SceneJobs> for NodeAttributes{
             },
             bound: Aabb3::new(Point3::new(-0.5, -0.5, -0.5), Point3::new(0.5, 0.5, 0.5)),
             value_bound: Aabb3::new(Point3::new(-0.5, -0.5, -0.5), Point3::new(0.5, 0.5, 0.5)),
-            size: 1.0,
             cast_shadow: true,
             is_transparent: false,
             hide_in_game: false,
@@ -237,16 +235,6 @@ impl Attribute<SceneJobs> for NodeAttributes{
         match comp.value_bound{
             Some(bnd) => {
                 if !bnd.intersects(&self.value_bound) && !bnd.contains(&self.value_bound){
-                    return false;
-                }
-            },
-            None => {},
-        }
-
-        //Size
-        match comp.size{
-            Some(bnd) => {
-                if bnd != self.size{
                     return false;
                 }
             },

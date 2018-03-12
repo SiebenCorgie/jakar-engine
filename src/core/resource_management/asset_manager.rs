@@ -24,7 +24,6 @@ use core::resources::material;
 use core::resources::empty;
 use render;
 
-use rt_error;
 
 use render::uniform_manager;
 use render::pipeline_manager;
@@ -53,7 +52,6 @@ pub struct AssetManager {
     scene_manager: Arc<Mutex<scene_manager::SceneManager>>,
 
     ///Holds a reference to the renderer
-    //renderer: Arc<Mutex<renderer::Renderer>>,
     //things needed to create vulkano dependend data like textures and materials
     pipeline_manager: Arc<Mutex<pipeline_manager::PipelineManager>>,
     device: Arc<vulkano::device::Device>,
