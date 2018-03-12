@@ -63,9 +63,9 @@ fn main() {
     };
 
 
-    //engine.get_asset_manager().import_gltf("TestScene", "examples/simple_scene/TestScenes/Cube_Plane.gltf");
+    engine.get_asset_manager().import_gltf("TestScene", "examples/simple_scene/TestScenes/Cube_Plane.gltf");
     //engine.get_asset_manager().import_gltf("TestScene", "examples/simple_scene/Sponza/Sponza.gltf");
-    engine.get_asset_manager().import_gltf("TestScene", "examples/simple_scene/Helmet/Helmet.gltf");
+    //engine.get_asset_manager().import_gltf("TestScene", "examples/simple_scene/Helmet/Helmet.gltf");
 
 
     let mut light_tree =jakar_tree::tree::Tree::new(
@@ -77,15 +77,15 @@ fn main() {
     //SUN========================================================================
     //add a matrix of lights
 
-    let matrix_size = 0;
+    let matrix_size = 5;
     let spacing = 2.0;
 
     for x in -(matrix_size)..matrix_size{
         for y in -(matrix_size)..matrix_size{
             for z in -(matrix_size)..matrix_size{
-                let mut point = light::LightPoint::new("LightPoint");
+                let mut point = light::LightSpot::new("LightSpot");
                 point.set_intensity(
-                    10.0
+                    5.0
                 );
                 point.set_color(
                     Vector3::new(
@@ -95,9 +95,12 @@ fn main() {
                     )
                 );
                 point.set_radius(2.0);
+                point.set_outer_radius(40.0);
+                point.set_inner_radius(20.0);
+
 
                 let node_name = light_tree
-                .add_at_root(content::ContentType::PointLight(point), None, None);
+                .add_at_root(content::ContentType::SpotLight(point), None, None);
 
                 //Set the location
                 match light_tree.get_node(&node_name.unwrap()){
@@ -111,13 +114,23 @@ fn main() {
                                 )
                             )
                         );
+                        //also rotate randomly
+                        scene.add_job(
+                            jobs::SceneJobs::Rotate(
+                                Vector3::new(
+                                    x as f32 * 4.0,
+                                    y as f32 * 10.0,
+                                    z as f32 * 20.0,
+                                )
+                            )
+                        );
                     }
                     None => {println!("Could not find Light", );}, //get on with it
                 }
             }
         }
     }
-
+/*
     //Now add a sun
     let mut sun = light::LightDirectional::new("Sunny");
     sun.set_intensity(25.0);
@@ -129,7 +142,6 @@ fn main() {
             sun.add_job(jobs::SceneJobs::Rotate(Vector3::new(0.0, 0.0, -60.0)));
 
             let mut scale_up = true;
-            println!("INt: {}", sun.value.as_directional_light().expect("fail").get_intensity());
 
             sun.set_tick(move |x:f32, arg: &mut Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>|{
 
@@ -145,7 +157,6 @@ fn main() {
 
                 }
 
-
                 if scale_up{
                     let mut val = arg.value.as_directional_light().unwrap().get_intensity();
                     *val += 10.0 * x;
@@ -154,14 +165,12 @@ fn main() {
                     *val -= 10.0 * x;
                 }
 
-
-                println!("Hello from the other node! int: {:?}", arg.value.as_directional_light().expect("fail").get_color());
             });
         },
         None => {println!("Could not find sun", );}
     }
 
-
+*/
     light_tree.update();
     engine.get_asset_manager().get_active_scene().join_at_root(&light_tree);
     println!("LightreeJoined!", );
@@ -221,7 +230,7 @@ fn main() {
         }
 
 
-        let light_names = engine.get_asset_manager().get_active_scene().all_point_light_names(&None);
+        let light_names = engine.get_asset_manager().get_active_scene().all_spot_light_names(&None);
         for i in light_names.into_iter(){
             //Get the light (unwarp is save)
             let mut engine_lock = engine.get_asset_manager();

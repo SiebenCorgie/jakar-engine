@@ -105,7 +105,9 @@ bool cluster_vs_aabb(AABB cluster, AABB aabb){
 }
 
 
+//The shadred cluster
 shared AABB cluster_aabb;
+
 //keeps track of the next point light indice from the point light buffer which should be processed
 shared uint next_point_index;
 //keeps track of the next indice used in the clusters index buffer
@@ -116,7 +118,6 @@ shared uint next_p_cluster_index;
 //Same for the spot lights
 shared uint next_spot_index;
 shared uint next_s_cluster_index;
-//shared uint cluster_s_count;
 
 void main() {
 
@@ -133,11 +134,27 @@ void main() {
     if (u_light_count.points >= 1){
       tmp_min = u_point_light.p_light[0].location - u_point_light.p_light[0].radius;
       tmp_max = u_point_light.p_light[0].location + u_point_light.p_light[0].radius;
+    }else if (u_light_count.spots >=1 ){
+      //else get min and max from the spots
+      tmp_min = u_spot_light.s_light[0].location - u_spot_light.s_light[0].radius;
+      tmp_max = u_spot_light.s_light[0].location + u_spot_light.s_light[0].radius;
+    }else{
+      //We have no lights, we can return
+      indice_buffer.data[id.x][id.y][id.z].point_count = 0;
+      indice_buffer.data[id.x][id.y][id.z].spot_count = 0;
+      return;
     }
 
     //Check all the mins and max for all the ligths
+    //Points
     for (uint i = 1; i<u_light_count.points; i++){
       PointLight light = u_point_light.p_light[i];
+      tmp_min = min(tmp_min, light.location - light.radius);
+      tmp_max = max(tmp_max, light.location + light.radius);
+    }
+    //Spots
+    for (uint i = 1; i<u_light_count.spots; i++){
+      SpotLight light = u_spot_light.s_light[i];
       tmp_min = min(tmp_min, light.location - light.radius);
       tmp_max = max(tmp_max, light.location + light.radius);
     }
@@ -183,12 +200,12 @@ void main() {
   //Sync
   barrier();
 
-  uint next_index = atomicAdd(next_point_index, 1);
+  uint next_p_index = atomicAdd(next_point_index, 1);
 
   //Now cycle through all the (point) lights and assign them to this cluster
-  while (next_index < u_light_count.points){
+  while (next_p_index < u_light_count.points){
     //Get the light at this index
-    PointLight light = u_point_light.p_light[next_index];
+    PointLight light = u_point_light.p_light[next_p_index];
 
     Sphere light_sphere;
     light_sphere.radius = light.radius;
@@ -202,12 +219,42 @@ void main() {
       if (cluster_indice >= 512){
         break;
       }
-      indice_buffer.data[id.x][id.y][id.z].point_indice[cluster_indice] = next_index;
+      indice_buffer.data[id.x][id.y][id.z].point_indice[cluster_indice] = next_p_index;
       uint old_count = atomicAdd(indice_buffer.data[id.x][id.y][id.z].point_count, 1);
     }
 
     //Get a new light index
-    next_index = atomicAdd(next_point_index, 1);
+    next_p_index = atomicAdd(next_point_index, 1);
+  }
+
+
+  //Sync and do the same for spot lights. Currently also radius based, will be refined later maybe
+  barrier();
+
+  uint next_s_index = atomicAdd(next_spot_index, 1);
+  //Now cycle through all the (spot) lights and assign them to this cluster
+  while (next_s_index < u_light_count.spots){
+    //Get the light at this index
+    SpotLight light = u_spot_light.s_light[next_s_index];
+
+    Sphere light_sphere;
+    light_sphere.radius = light.radius;
+    light_sphere.position = light.location;
+
+    //Test for intersection
+    if (cluster_vs_sphere(cluster_aabb, light_sphere)){
+      //intersercts, get a new cluster indice assign and add one to the count
+      uint cluster_indice = atomicAdd(next_s_cluster_index, 1);
+      //early return if we are outside of the cluster index buffer
+      if (cluster_indice >= 512){
+        break;
+      }
+      indice_buffer.data[id.x][id.y][id.z].spot_indice[cluster_indice] = next_s_index;
+      uint old_count = atomicAdd(indice_buffer.data[id.x][id.y][id.z].spot_count, 1);
+    }
+
+    //Get a new light index
+    next_s_index = atomicAdd(next_spot_index, 1);
   }
 
   //Final sync

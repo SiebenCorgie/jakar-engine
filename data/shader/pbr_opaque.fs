@@ -436,24 +436,30 @@ void main()
     uint in_z = clamp( uint(fragment_z_length / (z_length * (1.0/float(cluster_size.z)))), 0, cluster_size.z-1);
 
     uint p_light_count = indice_buffer.data[cluster_size.x-1 - in_x][cluster_size.y-1 - in_y][cluster_size.z-1 - in_z].point_count;
-
-
     //Point Lights
     for(uint l_i = 0; l_i < p_light_count && l_i < 512; l_i++)
     {
-      uint ted_index = indice_buffer.data[cluster_size.x-1 - in_x][cluster_size.y-1 - in_y][cluster_size.z-1 - in_z].point_indice[l_i];
-      PointLight light = u_point_light.p_light[ted_index];
+      uint index = indice_buffer.data[cluster_size.x-1 - in_x][cluster_size.y-1 - in_y][cluster_size.z-1 - in_z].point_indice[l_i];
+      PointLight light = u_point_light.p_light[index];
       Lo += calcPointLight(light, FragmentPosition, albedo.xyz, metallic, roughness, V, N, F0);
     }
 
-
+    uint s_light_count = indice_buffer.data[cluster_size.x-1 - in_x][cluster_size.y-1 - in_y][cluster_size.z-1 - in_z].spot_count;
+    //Point Lights
+    for(uint l_i_s = 0; l_i_s < s_light_count && l_i_s < 512; l_i_s++)
+    {
+      uint index = indice_buffer.data[cluster_size.x-1 - in_x][cluster_size.y-1 - in_y][cluster_size.z-1 - in_z].spot_indice[l_i_s];
+      SpotLight light = u_spot_light.s_light[index];
+      Lo += calcSpotLight(light, FragmentPosition, albedo.xyz, metallic, roughness, V, N, F0);
+    }
 
   }
-
+/*
   //Spot Lights
   for(int i = 0; i < u_light_count.spots; i++){
     Lo += calcSpotLight(u_spot_light.s_light[i], FragmentPosition, albedo.xyz, metallic, roughness, V, N, F0);
   }
+*/
 
   //Directional Lights
   for(int i = 0; i < u_light_count.directionals; i++){

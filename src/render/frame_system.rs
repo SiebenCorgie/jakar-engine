@@ -10,8 +10,8 @@ use vulkano::format::Format;
 use vulkano::image::ImageUsage;
 use vulkano::image::StorageImage;
 use vulkano::image::Dimensions;
-
 use vulkano;
+
 use std::sync::{Arc, Mutex};
 
 ///Describes the current stage the command buffer is in
@@ -33,6 +33,7 @@ pub enum FrameStage {
     ///Is used when next_frame() is called on the last pass
     Finished(AutoCommandBufferBuilder),
 }
+
 
 impl FrameStage{
     ///Returns the id of this stage
@@ -148,7 +149,6 @@ impl ObjectPassImages{
         }
     }
 }
-
 
 ///Collects the two PostImages
 pub struct PostImages {

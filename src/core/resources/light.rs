@@ -503,12 +503,12 @@ impl ReturnBoundInfo for LightSpot{
         //following https://developer.valvesoftware.com/wiki/Constant-Linear-Quadratic_Falloff
         //we calculate the max radius of the light for 1/256 as min. intensity
 
-
         let radius = self.radius;
-        let y_z_extend = self.outer_radius.sin() * radius;
+        //let y_z_extend = self.outer_radius.sin() * radius;
+        //TODO go from the max "left" to the max outer right...
         self.bound = collision::Aabb3::new(
-            Point3::new(0.0, 0.0, 0.0),
-            Point3::new(radius, y_z_extend, -y_z_extend)//we can make the assumption that the spot light
+            Point3::new(-radius, -radius, -radius),
+            Point3::new(radius, radius, radius)//we can make the assumption that the spot light
             //is always "looking" in x direction because of the way the direction vector is computed in the
             // to_shader_info() //TODO Check for function
         );
