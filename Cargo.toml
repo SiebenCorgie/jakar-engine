@@ -4,12 +4,12 @@ version = "0.1.0"
 authors = ["Siebencorgie <siebencorgie@googlemail.com>"]
 
 [dependencies]
-winit = "0.7.0"
+winit = "0.11"
 
-vulkano = "0.7.2"
-vulkano-shaders = "0.7.2"
-vulkano-shader-derive = "0.7.2"
-vulkano-win = "0.7.2"
+vulkano = "0.9.0"
+vulkano-shaders = "0.9.0"
+vulkano-shader-derive = "0.9.0"
+vulkano-win = "0.9.0"
 
 image = "0.18.0"
 cgmath = "0.16.0"

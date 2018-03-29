@@ -4,6 +4,7 @@ use core::resources::texture;
 //use render::shader_impls::pbr_fragment;
 use render::shader::shader_inputs::pbr_texture_info;
 use render::light_culling_system;
+use render::frame_system::FrameSystem;
 
 use vulkano::descriptor::descriptor_set::PersistentDescriptorSet;
 use vulkano::descriptor::descriptor_set::DescriptorSet;
@@ -729,11 +730,11 @@ impl Material {
     ///Returns the 4th desciptor set responsible for the lighting information based on the current lights in the culling system
     #[inline]
     pub fn get_set_04(
-        &self, compute_sys: &mut light_culling_system::LightClusterSystem
+        &self, compute_sys: &mut light_culling_system::LightClusterSystem, frame_system: &FrameSystem,
     ) -> Arc<DescriptorSet + Send + Sync>{
 
         //This has to be build based on the currently used light lists in the compute system.
-        compute_sys.get_light_descriptorset(3, self.get_vulkano_pipeline()) //for pbr materials this has to be the three
+        compute_sys.get_light_descriptorset(3, self.get_vulkano_pipeline(), frame_system) //for pbr materials this has to be the three
     }
 
     ///Sets a new pipeline

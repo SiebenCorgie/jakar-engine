@@ -8,6 +8,7 @@ pub enum DebugView {
     MainDepth,
     HdrFragments,
     ScaledLdr,
+    DirectionalDepth,
     Shaded,
 }
 
@@ -17,7 +18,8 @@ impl DebugView{
             &DebugView::MainDepth => 0,
             &DebugView::HdrFragments => 1,
             &DebugView::ScaledLdr => 2,
-            &DebugView::Shaded => 3,
+            &DebugView::DirectionalDepth => 3,
+            &DebugView::Shaded => 4,
         }
     }
 }

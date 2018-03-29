@@ -24,8 +24,7 @@ pub mod uniform_manager;
 ///Provides some structs and methodes for the postprogressing of a frame
 pub mod post_progress;
 
-///Handles buffer creation and drawing of the pre depth rendering. It will calculate needed lights
-/// in a Tiled manor later TODO: Implement.
+///Culls all point and spotlights in world space and updates a device local indice buffer with that information.
 pub mod light_culling_system;
 
 ///An module which collects all the shader implementations, these are usually derived from
@@ -40,9 +39,12 @@ pub mod shader_manager;
 pub mod render_passes;
 
 
+
+
 // A Helper enum to specify which supass id something want, manly used in material creation
 pub enum SubPassType {
     LightCompute,
+    Shadow,
     Forward,
     HdrSorting,
     Blur,
@@ -56,6 +58,10 @@ impl SubPassType{
         match self{
             //ComputePass
             &SubPassType::LightCompute => { //is in its own compute queue
+                0
+            },
+            //Shadow pass
+            &SubPassType::Shadow => { //is in its own compute queue
                 0
             },
             //MainPass

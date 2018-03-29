@@ -47,7 +47,7 @@ fn main() {
     .with_asset_update_speed(100)
     .with_max_fps(200)
     .with_camera_settings(core::engine_settings::CameraSettings{
-        far_plane: 100.0,
+        far_plane: 50.0,
         near_plane: 0.1,
     })
     ;
@@ -77,13 +77,13 @@ fn main() {
     //SUN========================================================================
     //add a matrix of lights
 
-    let matrix_size = 5;
-    let spacing = 2.0;
+    let matrix_size = 0;
+    let spacing = 3.0;
 
     for x in -(matrix_size)..matrix_size{
         for y in -(matrix_size)..matrix_size{
             for z in -(matrix_size)..matrix_size{
-                let mut point = light::LightSpot::new("LightSpot");
+                let mut point = light::LightPoint::new("LightPoint");
                 point.set_intensity(
                     5.0
                 );
@@ -95,12 +95,9 @@ fn main() {
                     )
                 );
                 point.set_radius(2.0);
-                point.set_outer_radius(40.0);
-                point.set_inner_radius(20.0);
-
 
                 let node_name = light_tree
-                .add_at_root(content::ContentType::SpotLight(point), None, None);
+                .add_at_root(content::ContentType::PointLight(point), None, None);
 
                 //Set the location
                 match light_tree.get_node(&node_name.unwrap()){
@@ -114,15 +111,39 @@ fn main() {
                                 )
                             )
                         );
+
+                        let mut scale_up = true;
+
                         //also rotate randomly
-                        scene.add_job(
-                            jobs::SceneJobs::Rotate(
-                                Vector3::new(
-                                    x as f32 * 4.0,
-                                    y as f32 * 10.0,
-                                    z as f32 * 20.0,
-                                )
-                            )
+                        scene.set_tick(
+                            move |x:f32, arg: &mut Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>|{
+                                let add_vec = Vector3::new(
+                                    2.0 * x,
+                                    3.0 * x,
+                                    2.0 * x
+                                );
+
+                                arg.add_job(jobs::SceneJobs::RotateAroundPoint(
+                                    add_vec, Vector3::new(0.0,0.0,0.0))
+                                );
+
+                                let current_intensity = arg.value.as_point_light().unwrap().get_intensity().clone();
+
+                                if current_intensity > 10.0{
+                                    scale_up = false;
+                                }
+                                if current_intensity < 1.0{
+                                    scale_up = true;
+                                }
+
+                                if scale_up{
+                                    let mut val = arg.value.as_point_light().unwrap().get_intensity();
+                                    *val += 5.0 * x;
+                                }else{
+                                    let mut val = arg.value.as_point_light().unwrap().get_intensity();
+                                    *val -= 5.0 * x;
+                                }
+                            }
                         );
                     }
                     None => {println!("Could not find Light", );}, //get on with it
@@ -130,47 +151,37 @@ fn main() {
             }
         }
     }
-/*
+
     //Now add a sun
     let mut sun = light::LightDirectional::new("Sunny");
-    sun.set_intensity(25.0);
+    sun.set_intensity(100.0);
     sun.set_color(Vector3::new(1.0, 0.85, 0.9));
     let sun_node = light_tree.add_at_root(content::ContentType::DirectionalLight(sun), None, None).expect("fail");
     //Now rotate it a bit on x
     match light_tree.get_node(&sun_node){
         Some(sun)=> {
             sun.add_job(jobs::SceneJobs::Rotate(Vector3::new(0.0, 0.0, -60.0)));
+            /*
+            sun.set_tick(
+                move |x:f32, arg: &mut Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>|{
+                    let add_vec = Vector3::new(
+                        0.0,
+                        0.0,
+                        2.0 * x
+                    );
 
-            let mut scale_up = true;
-
-            sun.set_tick(move |x:f32, arg: &mut Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>|{
-
-                let current_intensity = arg.value.as_directional_light().unwrap().get_intensity().clone();
-
-                if current_intensity > 50.0{
-                    println!("Down: ", );
-                    scale_up = false;
+                    arg.add_job(jobs::SceneJobs::RotateAroundPoint(
+                            add_vec, Vector3::new(0.0,0.0,0.0)
+                        )
+                    );
                 }
-                if current_intensity < 1.0{
-                    scale_up = true;
-                    println!("Up: ", );
-
-                }
-
-                if scale_up{
-                    let mut val = arg.value.as_directional_light().unwrap().get_intensity();
-                    *val += 10.0 * x;
-                }else{
-                    let mut val = arg.value.as_directional_light().unwrap().get_intensity();
-                    *val -= 10.0 * x;
-                }
-
-            });
+            );
+            */
         },
         None => {println!("Could not find sun", );}
     }
 
-*/
+
     light_tree.update();
     engine.get_asset_manager().get_active_scene().join_at_root(&light_tree);
     println!("LightreeJoined!", );
@@ -229,46 +240,6 @@ fn main() {
             }
         }
 
-
-        let light_names = engine.get_asset_manager().get_active_scene().all_spot_light_names(&None);
-        for i in light_names.into_iter(){
-            //Get the light (unwarp is save)
-            let mut engine_lock = engine.get_asset_manager();
-            let mut light = engine_lock.get_active_scene().get_node(&i).unwrap();
-
-            let add_vec = Vector3::new(
-                0.1,
-                0.3,
-                0.2
-            );
-
-            light.add_job(jobs::SceneJobs::RotateAroundPoint(
-                add_vec, Vector3::new(0.0,0.0,0.0))
-            );
-/*
-            if light.attributes.transform.disp.x > 10.0{
-                light.attributes.transform.disp.x = -10.0;
-            }
-
-            if light.attributes.transform.disp.y > 5.0{
-                light.attributes.transform.disp.y = -5.0;
-            }
-
-            if light.attributes.transform.disp.z > 10.0{
-                light.attributes.transform.disp.z = -10.0;
-            }
-
-            //light.add_job(jobs::SceneJobs::Move(Vector3::new(10.0, 10.0, 10.0)));
-*/
-        }
-
-
-        /*
-        if engine.get_asset_manager().get_keymap().t{
-            let mut asset_manager = engine.get_asset_manager();
-            asset_manager.get_scene_manager().print_all_scenes();
-        }
-        */
         if engine.get_current_keymap().p{
             engine.get_engine_settings_unlocked().capture_next_frame();
         }
@@ -359,6 +330,11 @@ fn main() {
         }
 
         if engine.get_current_keymap().t_4{
+            engine.get_engine_settings_unlocked().get_render_settings()
+            .get_debug_settings().debug_view = jakar_engine::core::render_settings::DebugView::DirectionalDepth;
+        }
+
+        if engine.get_current_keymap().t_5{
             engine.get_engine_settings_unlocked().get_render_settings()
             .get_debug_settings().debug_view = jakar_engine::core::render_settings::DebugView::Shaded;
         }

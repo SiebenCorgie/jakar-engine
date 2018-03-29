@@ -9,6 +9,8 @@ use std::sync::mpsc;
 use std::error::Error;
 
 use render;
+use render::renderer::Renderer;
+use render::renderer::BuildRender;
 use render::pipeline_manager;
 use render::uniform_manager;
 use render::frame_system;
@@ -60,55 +62,14 @@ pub struct RenderBuilder {
     pub minimal_features: vulkano::instance::Features,
 }
 
-
-impl RenderBuilder {
-    ///Creates a new default renderer. For the default values, see the struct documentation.
-    /// After the creation you are free to change any parameter.
-    pub fn new() -> Self{
-        //Init the default values
-        let instance_extensions_needed = vulkano_win::required_extensions();
-        println!("Starting render builder", );
-        let device_extensions_needed = vulkano::device::DeviceExtensions {
-            khr_swapchain: true,
-            .. vulkano::device::DeviceExtensions::none()
-        };
-
-        let layers = LayerLoading::NoLayer;
-        let vulkan_messages = vulkano::instance::debug::MessageTypes::errors();
-        //Setup the features needed for the engine to run properly
-        let minimal_features = vulkano::instance::Features {
-            sampler_anisotropy: true,
-            sample_rate_shading: true,
-            logic_op: true, //needed for custom blending
-            .. vulkano::instance::Features::none()
-        };
-
-
-
-
-        RenderBuilder{
-            instance_extensions_needed: instance_extensions_needed,
-            device_extensions_needed: device_extensions_needed,
-            layer_loading: layers,
-            vulkan_messages: vulkan_messages,
-            preferred_physical_device: None,
-            minimal_features: minimal_features,
-        }
-    }
-
-    ///Creates a render object from this settings.
-    /// returns an error if:
-    ///
-    /// - required physical extensions are not supported
-    /// - required logical extensions are not supported
-    /// - layers are not supported (if needed)
-    /// - no device found
-    pub fn create(
+impl BuildRender for RenderBuilder{
+    ///Build a renderer based on settings and a window which will recive the iamges
+    fn build(
         mut self,
         instance_sender: mpsc::Sender<Arc<Instance>>,
         window_reciver: mpsc::Receiver<Window>,
         engine_settings: Arc<Mutex<engine_settings::EngineSettings>>,
-    ) -> Result<(render::renderer::Renderer, Box<GpuFuture>), String>{
+    ) -> Result<(Renderer, Box<GpuFuture>), String>{
         println!("Starting Vulkan Renderer!", );
         //Init Vulkan
         //Check for needed extensions
@@ -539,7 +500,7 @@ impl RenderBuilder {
             blur_pipeline,
             device.clone(),
             queue.clone(),
-            &passes,
+            //&passes,
         );
 
         println!("Creating light culling system", );
@@ -551,10 +512,9 @@ impl RenderBuilder {
 
         println!("Finished Render Setup", );
         //Pass everthing to the struct
+
         let renderer = render::renderer::Renderer::create_for_builder(
             pipeline_manager_arc,
-
-            //Vulkano data
             window,
             device,
             queue,
@@ -562,19 +522,52 @@ impl RenderBuilder {
             images,
 
             frame_system,
-            post_progress,
             passes,
             light_culling_system,
+            post_progress,
 
             false,
-
-            engine_settings.clone(),
+            engine_settings,
             uniform_manager,
-
             Arc::new(Mutex::new(render::renderer::RendererState::WAITING)),
         );
-        println!("Finished renderer!", );
         Ok((renderer, previous_frame))
+    }
+}
+
+impl RenderBuilder {
+    ///Creates a new default renderer. For the default values, see the struct documentation.
+    /// After the creation you are free to change any parameter.
+    pub fn new() -> Self{
+        //Init the default values
+        let instance_extensions_needed = vulkano_win::required_extensions();
+        println!("Starting render builder", );
+        let device_extensions_needed = vulkano::device::DeviceExtensions {
+            khr_swapchain: true,
+            .. vulkano::device::DeviceExtensions::none()
+        };
+
+        let layers = LayerLoading::NoLayer;
+        let vulkan_messages = vulkano::instance::debug::MessageTypes::errors();
+        //Setup the features needed for the engine to run properly
+        let minimal_features = vulkano::instance::Features {
+            sampler_anisotropy: true,
+            sample_rate_shading: true,
+            logic_op: true, //needed for custom blending
+            .. vulkano::instance::Features::none()
+        };
+
+
+
+
+        RenderBuilder{
+            instance_extensions_needed: instance_extensions_needed,
+            device_extensions_needed: device_extensions_needed,
+            layer_loading: layers,
+            vulkan_messages: vulkan_messages,
+            preferred_physical_device: None,
+            minimal_features: minimal_features,
+        }
     }
 }
 

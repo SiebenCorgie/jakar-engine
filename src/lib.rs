@@ -249,7 +249,7 @@ impl JakarEngine {
                 //===============================================
                 println!("Building renderer now!", );
                 //now build
-                let render_status = render_builder.create(
+                let render_status = render_builder.build(
                     in_instance_send,
                     in_window_recv,
                     render_settings,

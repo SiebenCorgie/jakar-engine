@@ -49,6 +49,7 @@ impl InputHandler{
                     use winit::WindowEvent::*;
 
                     match event{
+                        HiDPIFactorChanged(factor) => {},
                         Resized(width , height) =>{
 
                             //Copy our selfs a settings instance to change settings which ... changed
@@ -276,6 +277,7 @@ impl InputHandler{
                             }
 
                         },
+                        /*
                         MouseMoved {device_id, position} =>{
 
                         },
@@ -291,7 +293,7 @@ impl InputHandler{
                         MouseInput{device_id, state, button} =>{
 
                         },
-                        /* For winit 0.11.1
+                        */
                         CursorMoved {device_id, position, modifiers} =>{
 
                         },
@@ -307,7 +309,7 @@ impl InputHandler{
                         MouseInput{device_id, state, button, modifiers} =>{
 
                         },
-                        */
+
                         TouchpadPressure{device_id, pressure, stage} =>{
 
                         },
@@ -317,9 +319,11 @@ impl InputHandler{
                         Refresh =>{
 
                         },
+                        /*
                         Suspended(b_state) =>{
 
                         },
+                        */
                         Touch(touch) =>{
 
                         },
@@ -349,6 +353,8 @@ impl InputHandler{
                 },
                 //Awake (not implemented)
                 winit::Event::Awakened => {},
+
+                winit::Event::Suspended(state) => {},
 
             }
         });

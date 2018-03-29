@@ -6,6 +6,43 @@ use vulkano;
 
 use core::engine_settings::EngineSettings;
 
+
+#[derive(Clone)]
+pub struct ShadowPass {
+    pub render_pass: Arc<RenderPassAbstract + Send + Sync>,
+}
+
+impl ShadowPass{
+    pub fn new(device: Arc<Device>, depth_format: Format) -> Self{
+        let render_pass = Arc::new(
+            ordered_passes_renderpass!(device.clone(),
+                attachments: {
+                    //The depth image
+                    out_depth: {
+                        load: Clear,
+                        store: Store,
+                        format: depth_format,
+                        samples: 1,
+                    }
+                },
+                passes:[
+                    //The actual pass
+                    {
+                        color: [],
+                        depth_stencil: {out_depth},
+                        input: []
+                    }
+                ]
+
+            ).expect("failed to create main render_pass")
+        );
+
+        ShadowPass{
+            render_pass: render_pass,
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct ObjectPass {
     pub render_pass: Arc<RenderPassAbstract + Send + Sync>,
@@ -156,6 +193,9 @@ impl AssemblePass{
 ///A collection of the available render pass definitions.
 #[derive(Clone)]
 pub struct RenderPasses {
+    ///Is able to render objects and ouput the depth buffer
+    pub shadow_pass: ShadowPass,
+
     ///Renderst the objects in a forward manor, in a second pass the msaa is resolved and the image
     /// is split in a hdr and ldr part.
     pub object_pass: ObjectPass,
@@ -183,12 +223,13 @@ impl RenderPasses{
             set_lck.get_render_settings().get_msaa_factor()
         };
 
-
+        let shadow_pass = ShadowPass::new(device.clone(), msaa_depth_format);
         let object_pass = ObjectPass::new(device.clone(),  msaa_factor, hdr_msaa_format, msaa_depth_format);
         let blur_pass = BlurPass::new(device.clone(), hdr_msaa_format);
         let assemble = AssemblePass::new(device.clone(), swapchain_format);
 
         RenderPasses{
+            shadow_pass: shadow_pass,
             object_pass: object_pass,
             blur_pass: blur_pass,
             assemble: assemble,
@@ -202,6 +243,7 @@ impl RenderPasses{
 
     pub fn conf_to_pass(&self, conf: RenderPassConf) -> Arc<RenderPassAbstract + Send + Sync>{
         match conf{
+            RenderPassConf::ShadowPass => self.shadow_pass.render_pass.clone(),
             RenderPassConf::ObjectPass => self.object_pass.render_pass.clone(),
             RenderPassConf::BlurPass => self.blur_pass.render_pass.clone(),
             RenderPassConf::AssemblePass => self.assemble.render_pass.clone(),
@@ -214,6 +256,7 @@ impl RenderPasses{
 #[derive(PartialEq, Clone)]
 pub enum RenderPassConf{
     ///Currently renders everything, from the objects to the post progress.
+    ShadowPass,
     ObjectPass,
     BlurPass,
     AssemblePass,

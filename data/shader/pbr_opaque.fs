@@ -90,6 +90,8 @@ layout(set = 3, binding = 1) readonly buffer point_lights{
 //==============================================================================
 struct DirectionalLight
 {
+  vec4 shadow_region;
+  mat4 light_space;
   vec3 color;
   vec3 direction;
   float intensity;
@@ -126,36 +128,23 @@ layout(set = 3, binding = 4) uniform LightCount{
 //==============================================================================
 ///outgoing final color
 layout(location = 0) out vec4 f_color;
-
-
+//==============================================================================
+//GLOBAL VARS
+vec4 albedo;
+float metallic;
+float roughness;
+vec3 V;
+vec3 surf_normal;
+vec3 F0;
+//==============================================================================
+//Consts
 const float PI = 3.14159265359;
 // ----------------------------------------------------------------------------
-// Easy trick to get tangent-normals to world-space to keep PBR code simplified.
-// Don't worry if you don't get what's going on; you generally want to do normal
-// mapping the usual way for performance anways; I do plan make a note of this
-// technique somewhere later in the normal mapping tutorial.
-vec3 getNormalFromMap()
-{
-    vec3 tangentNormal = texture(t_Normal, v_TexCoord).xyz * 2.0 - 1.0;
-
-    vec3 Q1  = dFdx(FragmentPosition);
-    vec3 Q2  = dFdy(FragmentPosition);
-    vec2 st1 = dFdx(v_TexCoord);
-    vec2 st2 = dFdy(v_TexCoord);
-
-    vec3 N   = normalize(v_normal);
-    vec3 T  = normalize(Q1*st2.t - Q2*st1.t);
-    vec3 B  = -normalize(cross(N, T));
-    mat3 TBN = mat3(T, B, N);
-
-    return normalize(TBN * tangentNormal);
-}
-// ----------------------------------------------------------------------------
-float DistributionGGX(vec3 N, vec3 H, float roughness)
+float DistributionGGX(vec3 H)
 {
     float a = roughness*roughness;
     float a2 = a*a;
-    float NdotH = max(dot(N, H), 0.0);
+    float NdotH = max(dot(surf_normal, H), 0.0);
     float NdotH2 = NdotH*NdotH;
 
     float nom   = a2;
@@ -176,10 +165,10 @@ float GeometrySchlickGGX(float NdotV, float roughness)
     return nom / denom;
 }
 // ----------------------------------------------------------------------------
-float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness)
+float GeometrySmith(vec3 surf_normal, vec3 V, vec3 L, float roughness)
 {
-    float NdotV = max(dot(N, V), 0.0);
-    float NdotL = max(dot(N, L), 0.0);
+    float NdotV = max(dot(surf_normal, V), 0.0);
+    float NdotL = max(dot(surf_normal, L), 0.0);
     float ggx2 = GeometrySchlickGGX(NdotV, roughness);
     float ggx1 = GeometrySchlickGGX(NdotL, roughness);
 
@@ -202,24 +191,17 @@ vec3 srgb_to_linear(vec3 c) {
 // https://seblagarde.files.wordpress.com/2015/07/course_notes_moving_frostbite_to_pbr_v32.pdf
 //Source: https://cdn2.unrealengine.com/Resources/files/2013SiggraphPresentationsNotes-26915738.pdf figure (9)
 float calcFalloff(float dist, float radius){
-/*
-  float dtr = dist/radius;
-  float falloff_top = clamp(1 - (dtr*dtr*dtr*dtr), 0.0, 1.0);
-  float falloff = falloff_top / (dist*dist + 1);
-  return falloff;
-*/
   float invSqrAttRadius = 1/(radius * radius);
   float square_dis = dist * dist;
   float  factor = square_dis * invSqrAttRadius;
   float  smoothFactor = clamp(1.0f - factor * factor, 0.0, 1.0);
+
   return  smoothFactor * smoothFactor;
-
-
 }
 
 
 //Calculates a point ligh -----------------------------------------------------
-vec3 calcPointLight(PointLight light, vec3 FragmentPosition, vec3 albedo, float metallic, float roughness, vec3 V, vec3 N, vec3 F0)
+vec3 calcPointLight(PointLight light, vec3 F0)
 {
   // calculate per-light radiance
   vec3 L = normalize(light.location - FragmentPosition);
@@ -231,12 +213,12 @@ vec3 calcPointLight(PointLight light, vec3 FragmentPosition, vec3 albedo, float 
   vec3 radiance = light.color * light.intensity * falloff;
 
   // Cook-Torrance BRDF
-  float NDF = DistributionGGX(N, H, roughness);
-  float G   = GeometrySmith(N, V, L, roughness);
+  float NDF = DistributionGGX(H);
+  float G   = GeometrySmith(surf_normal, V, L, roughness);
   vec3 F    = fresnelSchlick(max(dot(H, V), 0.0), F0);
 
   vec3 nominator    = NDF * G * F;
-  float denominator = 4 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.001; // 0.001 to prevent divide by zero.
+  float denominator = 4 * max(dot(surf_normal, V), 0.0) * max(dot(surf_normal, L), 0.0) + 0.001; // 0.001 to prevent divide by zero.
   vec3 specular = nominator / denominator;
 
   // kS is equal to Fresnel
@@ -251,14 +233,14 @@ vec3 calcPointLight(PointLight light, vec3 FragmentPosition, vec3 albedo, float 
   kD *= 1.0 - metallic;
 
   // scale light by NdotL
-  float NdotL = max(dot(N, L), 0.0);
+  float NdotL = max(dot(surf_normal, L), 0.0);
 
   // add to outgoing radiance Lo
-  return (kD * albedo / PI + specular) * radiance * NdotL;  // note that we already multiplied the BRDF by the Fresnel (kS) so we won't multiply by kS again
+  return (kD * albedo.xyz / PI + specular) * radiance * NdotL;  // note that we already multiplied the BRDF by the Fresnel (kS) so we won't multiply by kS again
 }
 
 //Calculates a directional light and outputs the pixel contribution------------
-vec3 calcDirectionalLight(DirectionalLight light, vec3 FragmentPosition, vec3 albedo, float metallic, float roughness, vec3 V, vec3 N, vec3 F0)
+vec3 calcDirectionalLight(DirectionalLight light, vec3 F0)
 {
   // calculate per-light radiance
   //L is always the same vector (directional light)
@@ -268,12 +250,12 @@ vec3 calcDirectionalLight(DirectionalLight light, vec3 FragmentPosition, vec3 al
   vec3 radiance = light.color * light.intensity;
 
   // Cook-Torrance BRDF
-  float NDF = DistributionGGX(N, H, roughness);
-  float G   = GeometrySmith(N, V, L, roughness);
+  float NDF = DistributionGGX(H);
+  float G   = GeometrySmith(surf_normal, V, L, roughness);
   vec3 F    = fresnelSchlick(max(dot(H, V), 0.0), F0);
 
   vec3 nominator    = NDF * G * F;
-  float denominator = 4 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.001; // 0.001 to prevent divide by zero.
+  float denominator = 4 * max(dot(surf_normal, V), 0.0) * max(dot(surf_normal, L), 0.0) + 0.001; // 0.001 to prevent divide by zero.
   vec3 specular = nominator / denominator;
 
   // kS is equal to Fresnel
@@ -288,14 +270,14 @@ vec3 calcDirectionalLight(DirectionalLight light, vec3 FragmentPosition, vec3 al
   kD *= 1.0 - metallic;
 
   // scale light by NdotL
-  float NdotL = max(dot(N, L), 0.0);
+  float NdotL = max(dot(surf_normal, L), 0.0);
 
   // add to outgoing radiance Lo
-  return (kD * albedo / PI + specular) * radiance * NdotL;  // note that we already multiplied the BRDF by the Fresnel (kS) so we won't multiply by kS again
+  return (kD * albedo.xyz / PI + specular) * radiance * NdotL;  // note that we already multiplied the BRDF by the Fresnel (kS) so we won't multiply by kS again
 }
 
 //Calculates a point ligh -----------------------------------------------------
-vec3 calcSpotLight(SpotLight light, vec3 FragmentPosition, vec3 albedo, float metallic, float roughness, vec3 V, vec3 N, vec3 F0)
+vec3 calcSpotLight(SpotLight light, vec3 F0)
 {
   //because of spot character we first have a look if the light is in the
   //spot and create a custom interpolation value based on it
@@ -315,23 +297,22 @@ vec3 calcSpotLight(SpotLight light, vec3 FragmentPosition, vec3 albedo, float me
   vec3 radiance = light.color * light.intensity * falloff;
 
   // Cook-Torrance BRDF
-  float NDF = DistributionGGX(N, H, roughness);
-  float G   = GeometrySmith(N, V, L, roughness);
+  float NDF = DistributionGGX(H);
+  float G   = GeometrySmith(surf_normal, V, L, roughness);
   vec3 F    = fresnelSchlick(max(dot(H, V), 0.0), F0);
 
   vec3 nominator    = NDF * G * F;
-  float denominator = 4 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.001; // 0.001 to prevent divide by zero.
+  float denominator = 4 * max(dot(surf_normal, V), 0.0) * max(dot(surf_normal, L), 0.0) + 0.001; // 0.001 to prevent divide by zero.
   vec3 specular = nominator / denominator;
 
   vec3 kS = F;
   vec3 kD = vec3(1.0) - kS;
   kD *= 1.0 - metallic;
-  float NdotL = max(dot(N, L), 0.0);
-  return ((kD * albedo / PI + specular) * radiance * NdotL) * spot_intensity;  // note that we already multiplied the BRDF by the Fresnel (kS) so we won't multiply by kS again
+  float NdotL = max(dot(surf_normal, L), 0.0);
+  return ((kD * albedo.xyz / PI + specular) * radiance * NdotL) * spot_intensity;  // note that we already multiplied the BRDF by the Fresnel (kS) so we won't multiply by kS again
 }
 
 bool isInClusters(){
-
   if (
     v_position.x < indice_buffer.min_extend.x ||
     v_position.y < indice_buffer.min_extend.y ||
@@ -345,14 +326,11 @@ bool isInClusters(){
     ){return false;}
 
   return true;
-
 }
 
 // ----------------------------------------------------------------------------
 void main()
 {
-  //Set albedo color
-  vec4 albedo = vec4(0.0);
   if (u_tex_usage_info.b_albedo != 1) {
     albedo = u_tex_fac.albedo_factor;
   }else{
@@ -362,7 +340,6 @@ void main()
   }
 
   //Set metallic color
-  float metallic = 0.0;
   if (u_tex_usage_info.b_metal != 1) {
     metallic = u_tex_fac.metal_factor;
   }else{
@@ -370,7 +347,6 @@ void main()
   }
 
   //Set roughness color
-  float roughness = 0.0;
   if (u_tex_usage_info.b_roughness != 1) {
     roughness = u_tex_fac.roughness_factor;
   }else{
@@ -394,27 +370,23 @@ void main()
   }
 
   //TODO implemetn emmessive
-  vec3 N;
   if (u_tex_usage_info.b_normal != 1){
-    //N = vec3(u_tex_fac.normal_factor);
+    //surf_normal = vec3(u_tex_fac.normal_factor);
     //from three-rs
-    N = v_normal; //use the vertex normal
+    surf_normal = v_normal; //use the vertex normal
   }else {
-    N = texture(t_Normal, v_TexCoord).rgb ;
-    N = normalize(v_TBN * ((N * 2 - 1) * vec3(u_tex_fac.normal_factor, u_tex_fac.normal_factor, 1.0)));
+    surf_normal = texture(t_Normal, v_TexCoord).rgb ;
+    surf_normal = normalize(v_TBN * ((surf_normal * 2 - 1) * vec3(u_tex_fac.normal_factor, u_tex_fac.normal_factor, 1.0)));
   }
-  vec3 V = normalize(u_main.camera_position - v_position);
+  V = normalize(u_main.camera_position - v_position);
 
   // calculate reflectance at normal incidence; if dia-electric (like plastic) use F0
   // of 0.04 and if sit's a metal, use the albedo color as F0 (metallic workflow)
-  vec3 F0 = vec3(0.04);
+  F0 = vec3(0.04);
   F0 = mix(F0, albedo.xyz, metallic);
 
   // reflectance equation
   vec3 Lo = vec3(0.0);
-
-
-  vec3 test_color = vec3(0.0);
 
   //We can early check if we are inside the clusters which where calculated. If not we can skip point
   // and spotlight calculation
@@ -441,7 +413,7 @@ void main()
     {
       uint index = indice_buffer.data[cluster_size.x-1 - in_x][cluster_size.y-1 - in_y][cluster_size.z-1 - in_z].point_indice[l_i];
       PointLight light = u_point_light.p_light[index];
-      Lo += calcPointLight(light, FragmentPosition, albedo.xyz, metallic, roughness, V, N, F0);
+      Lo += calcPointLight(light, F0);
     }
 
     uint s_light_count = indice_buffer.data[cluster_size.x-1 - in_x][cluster_size.y-1 - in_y][cluster_size.z-1 - in_z].spot_count;
@@ -450,20 +422,21 @@ void main()
     {
       uint index = indice_buffer.data[cluster_size.x-1 - in_x][cluster_size.y-1 - in_y][cluster_size.z-1 - in_z].spot_indice[l_i_s];
       SpotLight light = u_spot_light.s_light[index];
-      Lo += calcSpotLight(light, FragmentPosition, albedo.xyz, metallic, roughness, V, N, F0);
+      Lo += calcSpotLight(light, F0);
     }
 
   }
 /*
   //Spot Lights
   for(int i = 0; i < u_light_count.spots; i++){
-    Lo += calcSpotLight(u_spot_light.s_light[i], FragmentPosition, albedo.xyz, metallic, roughness, V, N, F0);
+    Lo += calcSpotLight(u_spot_light.s_light[i], FragmentPosition, albedo.xyz, metallic, roughness, V, surf_normal, F0);
   }
 */
 
   //Directional Lights
   for(int i = 0; i < u_light_count.directionals; i++){
-    Lo += calcDirectionalLight(u_dir_light.d_light[i], FragmentPosition, albedo.xyz, metallic, roughness, V, N, F0);
+    vec4 frag_in_light = u_dir_light.d_light[i].light_space * vec4(v_position, 1.0);
+    Lo += calcDirectionalLight(u_dir_light.d_light[i], F0);
   }
   //TODO
   // ambient lighting (note that the next IBL tutorial will replace

@@ -2,11 +2,13 @@ use render::pipeline_manager;
 use render::uniform_manager;
 use core::resource_management::asset_manager;
 use render::window;
+use render::window::Window;
 use render::render_helper;
 use render::frame_system;
 use render::post_progress;
 use render::light_culling_system;
 use render::render_passes::RenderPasses;
+
 
 use core::next_tree::SceneTree;
 use core::engine_settings;
@@ -14,7 +16,9 @@ use core::engine_settings;
 use core::next_tree;
 use jakar_tree;
 
+use winit;
 use vulkano;
+use vulkano::instance::Instance;
 use vulkano::command_buffer::AutoCommandBufferBuilder;
 use vulkano::swapchain::SwapchainCreationError;
 use vulkano::swapchain::SwapchainAcquireFuture;
@@ -25,6 +29,7 @@ use vulkano::sync::GpuFuture;
 use std::sync::{Arc,Mutex};
 use std::time::{Instant};
 use std::mem;
+use std::sync::mpsc;
 
 ///An enum describing states of the renderer
 #[derive(Eq, PartialEq)]
@@ -36,11 +41,12 @@ pub enum RendererState {
 
 ///Used tp build a render instance
 pub trait BuildRender {
-    //Build a renderer based on settings and a window which will recive the iamges
+    ///Build a renderer based on settings and a window which will recive the iamges
     fn build(
-        &mut self,
+        self,
+        instance_sender: mpsc::Sender<Arc<Instance>>,
+        window_reciver: mpsc::Receiver<Window>,
         engine_settings: Arc<Mutex<engine_settings::EngineSettings>>,
-        window: window::Window,
     ) -> Result<(Renderer, Box<GpuFuture>), String>;
 }
 
@@ -54,8 +60,8 @@ pub struct Renderer  {
     window: window::Window,
     device: Arc<vulkano::device::Device>,
     queue: Arc<vulkano::device::Queue>,
-    swapchain: Arc<vulkano::swapchain::Swapchain>,
-    images: Vec<Arc<vulkano::image::SwapchainImage>>,
+    swapchain: Arc<vulkano::swapchain::Swapchain<winit::Window>>,
+    images: Vec<Arc<vulkano::image::SwapchainImage<winit::Window>>>,
 
     frame_system: frame_system::FrameSystem,
     light_culling_system: light_culling_system::LightClusterSystem,
@@ -64,7 +70,6 @@ pub struct Renderer  {
 
     ///The post progresser
     post_progress: post_progress::PostProgress,
-
 
     //Is true if we need to recreate the swap chain
     recreate_swapchain: bool,
@@ -83,16 +88,16 @@ impl Renderer {
         window: window::Window,
         device: Arc<vulkano::device::Device>,
         queue: Arc<vulkano::device::Queue>,
-        swapchain: Arc<vulkano::swapchain::Swapchain>,
-        images: Vec<Arc<vulkano::image::SwapchainImage>>,
+        swapchain: Arc<vulkano::swapchain::Swapchain<winit::Window>>,
+        images: Vec<Arc<vulkano::image::SwapchainImage<winit::Window>>>,
         //renderpass: Arc<RenderPassAbstract + Send + Sync>,
 
         //the used frame system
         frame_system: frame_system::FrameSystem,
 
-        post_progress: post_progress::PostProgress,
         render_passes: RenderPasses,
         light_culling_system: light_culling_system::LightClusterSystem,
+        post_progress: post_progress::PostProgress,
 
         recreate_swapchain: bool,
         engine_settings: Arc<Mutex<engine_settings::EngineSettings>>,
@@ -168,7 +173,7 @@ impl Renderer {
 
     ///Returns the image if the image state is outdated
     ///Panics if another error occures while pulling a new image
-    pub fn check_image_state(&self) -> Result<(usize, SwapchainAcquireFuture), AcquireError>{
+    pub fn check_image_state(&self) -> Result<(usize, SwapchainAcquireFuture<winit::Window>), AcquireError>{
 
         match vulkano::swapchain::acquire_next_image(self.swapchain.clone(), None) {
             Ok(r) => {
@@ -182,7 +187,7 @@ impl Renderer {
     }
 
     ///checks the pipeline. If not up to date (return is AcquireError), recreates it.
-    fn check_pipeline(&mut self) -> Result<(usize, SwapchainAcquireFuture), AcquireError>{
+    fn check_swapchain(&mut self) -> Result<(usize, SwapchainAcquireFuture<winit::Window>), AcquireError>{
         //If found out in last frame that images are out of sync, generate new ones
         if self.recreate_swapchain{
             if !self.recreate_swapchain(){
@@ -230,7 +235,7 @@ impl Renderer {
             (cap_bool, time_step, start_time, should_draw_bounds)
         };
         let (image_number, acquire_future) = {
-            match self.check_pipeline(){
+            match self.check_swapchain(){
                 Ok(k) => {
                     k
                 },
@@ -299,6 +304,7 @@ impl Renderer {
 
         //Now we can end this stage (Pre compute)
         command_buffer = self.frame_system.next_pass(command_buffer);
+
         //now we are in the main render pass in the forward pass, using this to draw all meshes
 
         //add all opaque meshes to the command buffer
@@ -531,18 +537,17 @@ impl Renderer {
 
     ///adds a `node` to the `command_buffer` if possible to be rendered.
     fn add_forward_node(
-        &mut self, node: &jakar_tree::node::Node<
+        &mut self,
+        node: &jakar_tree::node::Node<
             next_tree::content::ContentType,
             next_tree::jobs::SceneJobs,
-            next_tree::attributes::NodeAttributes>,
-        frame_stage: frame_system::FrameStage)
+            next_tree::attributes::NodeAttributes
+        >,
+        frame_stage: frame_system::FrameStage
+    )
     -> frame_system::FrameStage
     where AutoCommandBufferBuilder: Sized + 'static
     {
-
-        //let mut time_step = Instant::now();
-
-
         match frame_stage{
             frame_system::FrameStage::Forward(cb) => {
                 //get the actual mesh as well as its pipeline an create the descriptor sets
@@ -591,7 +596,7 @@ impl Renderer {
                 //time_step = Instant::now();
 
                 let set_04 = {
-                    material.get_set_04(&mut self.light_culling_system)
+                    material.get_set_04(&mut self.light_culling_system, &self.frame_system)
                 };
 
                 //println!("Needed {}ms set 04", time_step.elapsed().subsec_nanos() as f32 / 1_000_000.0);

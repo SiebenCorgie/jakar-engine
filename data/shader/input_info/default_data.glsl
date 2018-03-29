@@ -15,5 +15,4 @@ layout(set = 0, binding = 0) uniform Data {
   float far;
 } u_main;
 
-
 void main(){}

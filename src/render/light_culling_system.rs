@@ -3,6 +3,7 @@ use render::frame_system;
 
 use vulkano::descriptor::descriptor_set::DescriptorSet;
 use vulkano::descriptor::descriptor_set::PersistentDescriptorSet;
+use vulkano::sampler::*;
 use vulkano::buffer::*;
 use vulkano::pipeline::ComputePipeline;
 use vulkano::pipeline::ComputePipelineAbstract;
@@ -14,8 +15,17 @@ use vulkano;
 
 use std::sync::{Arc,Mutex};
 
-///TODO Description how we (I) do this
-
+///The system is responsible for everything that has to do with actual light (no shadows). Itn will
+/// dispatch a compute shader which builds a 3d matrix in worldspace which holds the following information
+/// at each entry:
+/// - how many point lights
+/// - the indices of these point lights in the point_ligh_list
+/// - how many spot lights
+/// - the indices of these spot lights in the point_ligh_list
+///
+/// This information is used in the forward pass to determin which lights needs to be considered when shading.
+/// because of this optimization it is possible to use around 1000 spot or point lights while still maintaining
+/// over 30fps on a mid range gpu.
 pub struct LightClusterSystem {
     uniform_manager: Arc<Mutex<uniform_manager::UniformManager>>,
     device: Arc<vulkano::device::Device>,
@@ -34,6 +44,8 @@ pub struct LightClusterSystem {
 
     compute_shader: Arc<light_cull_shader::Shader>,
     compute_pipeline: Arc<vulkano::pipeline::ComputePipelineAbstract + Send + Sync>,
+
+    shadow_map_sampler: Arc<Sampler>,
 }
 
 impl LightClusterSystem{
@@ -72,6 +84,19 @@ impl LightClusterSystem{
 
         let descriptor_pool = FixedSizeDescriptorSetsPool::new(compute_pipeline.clone(), 0);
 
+        let shadow_map_sampler = Sampler::new(
+            device.clone(),
+            Filter::Linear,
+            Filter::Linear,
+            MipmapMode::Linear,
+            SamplerAddressMode::ClampToEdge,
+            SamplerAddressMode::ClampToEdge,
+            SamplerAddressMode::ClampToEdge,
+            0.0,
+            1.0,
+            1.0,
+            1.0,
+        ).expect("failed to create shadow sampler");
 
         LightClusterSystem{
             uniform_manager: uniform_manager,
@@ -87,6 +112,8 @@ impl LightClusterSystem{
 
             compute_shader: shader,
             compute_pipeline: compute_pipeline,
+
+            shadow_map_sampler: shadow_map_sampler
         }
     }
 
@@ -162,9 +189,11 @@ impl LightClusterSystem{
     /// - Binding 1 = directional lights
     /// - Binding 2 = spot lights
     /// - Binding 3 = struct which describes how many actual lights where send
+    /// - Binding 4 = The texture with all directional shadows.
     pub fn get_light_descriptorset(
         &mut self, binding_id: u32,
-        pipeline: Arc<vulkano::pipeline::GraphicsPipelineAbstract + Send + Sync>
+        pipeline: Arc<vulkano::pipeline::GraphicsPipelineAbstract + Send + Sync>,
+        frame_system: &frame_system::FrameSystem,
     ) -> Arc<DescriptorSet + Send + Sync>{
         let new_set = Arc::new(PersistentDescriptorSet::start(
                 pipeline.clone(), binding_id as usize

@@ -4,7 +4,6 @@ use render::shader::shaders::blur;
 use render::pipeline;
 use render::frame_system::FrameStage;
 use render::frame_system::FrameSystem;
-use render::render_passes;
 use core::engine_settings;
 
 use vulkano;
@@ -14,14 +13,11 @@ use vulkano::sampler::Sampler;
 use vulkano::descriptor::descriptor_set::FixedSizeDescriptorSetsPool;
 use vulkano::buffer::DeviceLocalBuffer;
 use vulkano::buffer::BufferUsage;
-use vulkano::image::traits::ImageViewAccess;
 use vulkano::image::traits::ImageAccess;
-use vulkano::image::attachment::AttachmentImage;
 use vulkano::sampler::Filter;
 use vulkano::sampler::MipmapMode;
 use vulkano::sampler::SamplerAddressMode;
-use vulkano::pipeline::depth_stencil::Compare;
-use vulkano::image::ImageUsage;
+
 use vulkano::image::ImageDimensions;
 
 use std::sync::{Arc, Mutex};
@@ -50,7 +46,7 @@ impl_vertex!(PostProgressVertex, position, tex_coord);
 ///Is able to perform the post progressing on a command buffer based on a stored pipeline
 pub struct PostProgress{
     engine_settings: Arc<Mutex<engine_settings::EngineSettings>>,
-    device: Arc<vulkano::device::Device>,
+    //device: Arc<vulkano::device::Device>,
 
     pipeline: Arc<pipeline::Pipeline>,
     resolve_pipe: Arc<pipeline::Pipeline>,
@@ -80,7 +76,7 @@ impl PostProgress{
         blur_pipe: Arc<pipeline::Pipeline>,
         device: Arc<vulkano::device::Device>,
         queue: Arc<vulkano::device::Queue>,
-        passes: &render_passes::RenderPasses,
+        //passes: &render_passes::RenderPasses,
     ) -> Self{
         //generate a vertex buffer
         let mut vertices: Vec<PostProgressVertex> = Vec::new();
@@ -141,7 +137,7 @@ impl PostProgress{
 
         PostProgress{
             engine_settings: engine_settings,
-            device: device,
+            //device: device,
 
             pipeline: post_progress_pipeline,
             resolve_pipe: resolve_pipe,
@@ -467,10 +463,7 @@ impl PostProgress{
                         .get_render_settings().get_debug_settings().ldr_debug_view_level
                     };
                     let level = {
-                        //if too high of too low return last/first image else use the level
-                        if debug_level < 0{
-                            0
-                        }else if debug_level > (frame_system.post_pass_images.scaled_ldr_images.len() - 1) as u32{
+                        if debug_level > (frame_system.post_pass_images.scaled_ldr_images.len() - 1) as u32{
                             (frame_system.post_pass_images.scaled_ldr_images.len() - 1) as u32
                         }else{
                             debug_level

@@ -1,8 +1,10 @@
 
 use cgmath::*;
 use collision;
+use collision::Aabb;
 
-
+use core::resources::camera::DefaultCamera;
+use core::resources::camera::Camera;
 use render::shader::shader_inputs::lights;
 use core::ReturnBoundInfo;
 
@@ -220,20 +222,129 @@ impl LightDirectional{
         new_light
     }
 
-    ///Returns this lught as its shader-useable instance
-    pub fn as_shader_info(&self, rotation: &Quaternion<f32>) -> lights::ty::DirectionalLight{
+    ///Returns this light as its shader-useable instance
+    ///Needs the node rotation and the camera location to calculate the direction and light space
+    pub fn as_shader_info(&self, rotation: &Quaternion<f32>, camera: &DefaultCamera) -> lights::ty::DirectionalLight{
         let tmp_color: [f32;3] = self.color.into();
-        //Transfere to the shader type [f32;3]
-        let tmp_direction: [f32;3] = rotation.rotate_vector(Vector3::new(1.0, 0.0, 0.0)).into();
+
+        //Now we create the light space matrix from the direction of this light;
+        let light_space: [[f32;4];4] = self.get_mvp(rotation, camera).into();
+
         //Return a native vulkano struct
         lights::ty::DirectionalLight{
+            shadow_region: [0.0, 0.0, 1.0, 1.0], //currently everything, will be handeled by the
+            light_space: light_space,
             color: tmp_color,
-            direction: tmp_direction,
+            direction: self.get_direction_vector(rotation).into(),
             intensity: self.intensity,
             _dummy0: [0; 4],
         }
     }
 
+    pub fn get_direction_vector(&self, rotation: &Quaternion<f32>) -> Vector3<f32>{
+        rotation.rotate_vector(Vector3::new(1.0, 0.0, 0.0))
+    }
+
+    pub fn get_mvp(&self, rotation: &Quaternion<f32>, camera: &DefaultCamera) ->Matrix4<f32>{
+        let l_dir = self.get_direction_vector(rotation);
+
+        let dir_z = l_dir.clone().normalize();
+
+        let dir_x = dir_z.cross(Vector3::new(0.0, 1.0,0.0)).normalize();
+        let dir_y = dir_z.cross(dir_x).normalize();
+
+        let mut rot_matrix = Matrix4::look_at(
+            Point3::new(0.0, 0.0, 0.0),
+            Point3::new(
+                l_dir.x,
+                l_dir.y,
+                l_dir.z,
+            ),
+            Vector3::new(0.0, 1.0, 0.0)
+        );
+
+        let frustum_corners: Vec<Vector4<f32>> = {
+            let corner_points = collision::Aabb3::new(
+                Point3::new(-1.0,-1.0,-1.0),
+                Point3::new(1.0,1.0,1.0)).to_corners();
+
+            let mut ret_vec = Vec::new();
+            let proj = camera.get_perspective();
+            let view = camera.get_view_matrix();
+            let inv_mat = (proj * view).invert().expect("failed to get inverse view_proj matrix");
+
+            for point in corner_points.iter(){
+
+                let mut new_point = inv_mat * Vector4::new(
+                    point.x,
+                    point.y,
+                    point.z,
+                    1.0);
+                //Persp div
+                new_point = new_point / new_point.w;
+
+                ret_vec.push(new_point);
+            }
+            ret_vec
+        };
+        let mut rot_points = Vec::new();
+        //rote the points
+        for point in frustum_corners.into_iter(){
+            let mut n_point = rot_matrix * point;
+
+            n_point = n_point / n_point.w;
+            rot_points.push(
+                n_point
+            );
+        }
+
+        //println!("Points: {:?}", rot_points);
+
+        let mut min = rot_points[0].clone();
+        let mut max = rot_points[0].clone();
+        for point in rot_points.iter(){
+            if point.x < min.x {min.x = point.x}
+            if point.y < min.y {min.y = point.y}
+            if point.z < min.z {min.z = point.z}
+
+            if point.x > max.x {max.x = point.x}
+            if point.y > max.y {max.y = point.y}
+            if point.z > max.z {max.z = point.z}
+        }
+
+        let bound_loc = collision::Aabb3::new(
+            Point3::new(min.x, min.y, min.z),
+            Point3::new(max.x, max.y, max.z)
+        ).center();
+
+        let mut extends = Vector3::new(
+            max.x-min.x,
+            max.y-min.y,
+            max.z-min.z,
+        );
+        extends = extends * 0.5;
+
+        let extend_size = 10.0;
+
+        let ortho = ortho(
+            -extends.x, extends.x,
+            -extends.y, extends.y,
+            -extends.z, extends.z);
+
+        let eye = {
+            Point3::new(
+                bound_loc.x - l_dir.x * (-extends.z),
+                bound_loc.y - l_dir.y * (-extends.z),
+                bound_loc.z - l_dir.z * (-extends.z))
+        };
+
+        let view_matrix = Matrix4::look_at(
+            eye,
+            bound_loc,
+            Vector3::new(0.0,1.0,0.0)
+        );
+        ortho * view_matrix
+    }
 
     ///set intensity
     #[inline]

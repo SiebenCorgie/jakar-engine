@@ -244,7 +244,7 @@ impl AssetManager {
                         }
                     }
                 };
-                shader_vec.push(light.as_shader_info(light_rotation));
+                shader_vec.push(light.as_shader_info(light_rotation, &self.camera));
             }
             shader_vec
         };

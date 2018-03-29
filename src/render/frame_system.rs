@@ -44,7 +44,6 @@ impl FrameStage{
                 let id_type = render::SubPassType::LightCompute;
                 id_type.get_id()
             }
-
             &FrameStage::Forward(_) =>{
                 let id_type = render::SubPassType::Forward;
                 id_type.get_id()
@@ -77,6 +76,35 @@ impl FrameStage{
         }
     }
 }
+
+///Collects the final shadow pass images
+pub struct ShadowPassImages {
+    pub directional_shadows: Arc<AttachmentImage<Format>>,
+}
+
+/*TODO implement ray trace shadows after transitioning to an deffered renderer*/
+impl ShadowPassImages{
+    pub fn new(
+        settings: Arc<Mutex<engine_settings::EngineSettings>>,
+        passes: &render::render_passes::RenderPasses,
+        device: Arc<vulkano::device::Device>
+    ) -> Self{
+
+        let dimensions = [1024; 2];
+
+        let depth_format = passes.image_msaa_depth_format;
+
+        let directional_image = AttachmentImage::sampled_input_attachment(device.clone(),
+        dimensions,
+        depth_format).expect("failed to create hdr_fragments buffer!");
+
+
+        ShadowPassImages{
+            directional_shadows: directional_image,
+        }
+    }
+}
+
 
 ///Collects the images from the MainRenderPass
 pub struct ObjectPassImages {
@@ -273,15 +301,10 @@ pub struct FrameSystem {
     blur_pass_v_fb: Option<Arc<FramebufferAbstract + Send + Sync>>,
     assemble_pass_fb: Option<Arc<FramebufferAbstract + Send + Sync>>,
 
-
-
     //a copy of the device
     device: Arc<vulkano::device::Device>,
     //a copy of the queue
     queue: Arc<vulkano::device::Queue>,
-
-
-
 }
 
 impl FrameSystem{
@@ -338,6 +361,9 @@ impl FrameSystem{
 
     ///Recreates all attachments with the right size
     pub fn recreate_attachments(&mut self){
+
+        //Dont have to recreate shadow images since they are not dependnt on the surface.
+
         self.object_pass_images = ObjectPassImages::new(
             self.engine_settings.clone(),
             &self.passes,
@@ -452,10 +478,10 @@ impl FrameSystem{
                     [0.0, 0.0, 0.0, 1.0].into(), //post progress / frame buffer image
                     //1f32.into(), //
                 ];
-                let next = cb.begin_render_pass(main_fb, false, clearing_values)
+                let new_cb = cb.begin_render_pass(main_fb, false, clearing_values)
                     .expect("failed to start main renderpass");
 
-                FrameStage::Forward(next)
+                FrameStage::Forward(new_cb)
             }
 
             FrameStage::Forward(cb) => {

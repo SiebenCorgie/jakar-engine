@@ -70,6 +70,15 @@ void main()
 
     return;
   }
+  //Show depth of directional
+  if (u_hdr_settings.show_mode == 3) {
+
+    float depth = texture(hdr_fragments, inter_coord).r;
+
+    FragColor = vec4(vec3(depth), 1.0);
+
+    return;
+  }
 
 
   //Add the blur to the image
