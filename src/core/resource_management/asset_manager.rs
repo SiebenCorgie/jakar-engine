@@ -174,95 +174,9 @@ impl AssetManager {
             time_stamp = Instant::now()
         }
 
-        let light_comparer = next_tree::SceneComparer::new().with_frustum(self.camera.get_frustum_bound());
-
-
-        //TODO only update lights when scene changes
-        let point_shader_infos = {
-            let all_point_light_nodes = self.active_main_scene.copy_all_point_lights(&None);
-            let mut shader_vec = Vec::new();
-            for p_light in all_point_light_nodes.iter(){
-                let light_location = &p_light.attributes.transform.disp;
-                let light = {
-                    match p_light.value{
-                        next_tree::content::ContentType::PointLight(ref light) => light,
-                        _ => {
-                            continue; //Is no pointlight, test next
-                        }
-                    }
-                };
-                shader_vec.push(light.as_shader_info(light_location));
-            }
-            shader_vec
-        };
-
-        if should_cap{
-            println!(
-                "\t \t AS: needed {}ms to get point lights in frustum",
-                time_stamp.elapsed().subsec_nanos() as f32 / 1_000_000.0
-            );
-            time_stamp = Instant::now()
-        }
-
-        let spot_shader_infos = {
-            let all_spot_light_nodes = self.active_main_scene.copy_all_spot_lights(&Some(light_comparer));
-            let mut shader_vec = Vec::new();
-            for s_light in all_spot_light_nodes.iter(){
-                let light_location = &s_light.attributes.transform.disp;
-                let light_rotation = &s_light.attributes.transform.rot;
-                let light = {
-                    match s_light.value{
-                        next_tree::content::ContentType::SpotLight(ref light) => light,
-                        _ => {
-                            continue; //Is no pointlight, test next
-                        }
-                    }
-                };
-                shader_vec.push(light.as_shader_info(light_rotation, light_location));
-            }
-            shader_vec
-        };
-
-        if should_cap{
-            println!(
-                "\t \t AS: needed {}ms to get spot lights",
-                time_stamp.elapsed().subsec_nanos() as f32 / 1_000_000.0
-            );
-            time_stamp = Instant::now()
-        }
-
-        let dir_shader_infos = {
-            let all_dir_light_nodes = self.active_main_scene.copy_all_directional_lights(&None);
-            let mut shader_vec = Vec::new();
-            for d_light in all_dir_light_nodes.iter(){
-                let light_rotation = &d_light.attributes.transform.rot;
-                let light = {
-                    match d_light.value{
-                        next_tree::content::ContentType::DirectionalLight(ref light) => light,
-                        _ => {
-                            continue; //Is no pointlight, test next
-                        }
-                    }
-                };
-                shader_vec.push(light.as_shader_info(light_rotation, &self.camera));
-            }
-            shader_vec
-        };
-
-        if should_cap{
-            println!(
-                "\t \t AS: needed {}ms to get directional lights",
-                time_stamp.elapsed().subsec_nanos() as f32 / 1_000_000.0
-            );
-            time_stamp = Instant::now()
-        }
-
         //Update the uniform manager with the latest infos about camera and light
         {
             let mut uniform_manager_lck = self.uniform_manager.lock().expect("failed to lock uniform_man.");
-            uniform_manager_lck.set_point_lights(point_shader_infos);
-            uniform_manager_lck.set_directional_lights(dir_shader_infos);
-            uniform_manager_lck.set_spot_lights(spot_shader_infos);
             //Finally upadte the MVP data as well
             uniform_manager_lck.update(uniform_data);
         }

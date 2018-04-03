@@ -3,7 +3,7 @@ use render::pipeline;
 use core::resources::texture;
 //use render::shader_impls::pbr_fragment;
 use render::shader::shader_inputs::pbr_texture_info;
-use render::light_culling_system;
+use render::light_system;
 use render::frame_system::FrameSystem;
 
 use vulkano::descriptor::descriptor_set::PersistentDescriptorSet;
@@ -528,8 +528,6 @@ pub struct Material {
 
     material_factors: pbr_texture_info::ty::TextureFactors,
     material_factor_pool: vulkano::buffer::cpu_pool::CpuBufferPool<pbr_texture_info::ty::TextureFactors>,
-    //light inforamtion is supplied through the compute system in the renderer, however for convinience
-    // there is a helperfunction for materials to make it easier to get the lights per pipeline
 }
 
 
@@ -585,9 +583,6 @@ impl Material {
 
         let pipeline_ref = self.pipeline.get_pipeline_ref();
 
-        //println!("STATUS: MATERIAL: Recreation static sets", );
-        //Create the set 02
-        //println!("STATUS: MATERIAL: ReCreating set 02", );
         let set_02 = Arc::new(
             PersistentDescriptorSet::start(
                 pipeline_ref.clone(), 1
@@ -730,7 +725,7 @@ impl Material {
     ///Returns the 4th desciptor set responsible for the lighting information based on the current lights in the culling system
     #[inline]
     pub fn get_set_04(
-        &self, compute_sys: &mut light_culling_system::LightClusterSystem, frame_system: &FrameSystem,
+        &self, compute_sys: &mut light_system::LightSystem, frame_system: &FrameSystem,
     ) -> Arc<DescriptorSet + Send + Sync>{
 
         //This has to be build based on the currently used light lists in the compute system.

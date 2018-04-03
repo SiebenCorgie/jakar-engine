@@ -30,18 +30,20 @@ pub struct UniformManager {
     ///Describes the universal world properties (see `render:://`)
     pub u_world: default_data::ty::Data,
 
+    /*
     u_point_lights: Vec<lights::ty::PointLight>,
     u_directional_lights: Vec<lights::ty::DirectionalLight>,
     u_spot_lights: Vec<lights::ty::SpotLight>,
 
     u_light_count: lights::ty::LightCount,
+    */
 
     ///First uniform buffer pool block, used for model, view and perspecive matrix nas well as current
     /// camera location
     buffer_pool_01_mvp: vulkano::buffer::cpu_pool::CpuBufferPool<default_data::ty::Data>,
 
-    ///5th for the light count fo each light type
-    buffer_pool_05_count: vulkano::buffer::cpu_pool::CpuBufferPool<lights::ty::LightCount>,
+    //5th for the light count fo each light type
+    //buffer_pool_05_count: vulkano::buffer::cpu_pool::CpuBufferPool<lights::ty::LightCount>,
 }
 
 //Create a buffer and the pool
@@ -83,16 +85,16 @@ impl UniformManager{
 
             u_world: world,
 
-            u_point_lights: Vec::new(),
-            u_directional_lights: Vec::new(),
-            u_spot_lights: Vec::new(),
+            //u_point_lights: Vec::new(),
+            //u_directional_lights: Vec::new(),
+            //u_spot_lights: Vec::new(),
 
-            u_light_count: light_count_tmp,
+            //u_light_count: light_count_tmp,
 
             ///First uniform buffer pool block, used or model, view and perspecive matrix
             buffer_pool_01_mvp: tmp_uniform_buffer_pool_01,
 
-            buffer_pool_05_count: tmp_uniform_buffer_pool_05,
+            //buffer_pool_05_count: tmp_uniform_buffer_pool_05,
 
         }
     }
@@ -114,7 +116,7 @@ impl UniformManager{
             },
         }
     }
-
+/*
     ///Sets the current light objects to be rendered. The resulting array will be used for all
     ///light calculations.
     pub fn set_point_lights(&mut self, new_point_lights: Vec<lights::ty::PointLight>){
@@ -181,7 +183,7 @@ impl UniformManager{
             },
         }
     }
-
+*/
     ///Updates the internal data used for the uniform buffer creation
     pub fn update(
         &mut self, new_u_world: default_data::ty::Data,

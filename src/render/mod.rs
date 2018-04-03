@@ -25,7 +25,7 @@ pub mod uniform_manager;
 pub mod post_progress;
 
 ///Culls all point and spotlights in world space and updates a device local indice buffer with that information.
-pub mod light_culling_system;
+pub mod light_system;
 
 ///An module which collects all the shader implementations, these are usually derived from
 ///vulkano-shader-derive
@@ -37,6 +37,9 @@ pub mod shader_manager;
 
 ///Defines the usable render passes for this engine
 pub mod render_passes;
+
+///Handels the rendering of all shadow maps
+pub mod shadow_system;
 
 
 

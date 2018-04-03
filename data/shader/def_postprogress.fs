@@ -8,6 +8,7 @@ layout(set = 0, binding = 0) uniform sampler2D color_input;
 layout(input_attachment_index = 1, set = 0, binding = 1) uniform subpassInputMS depths_input;
 layout(set = 0, binding = 2) uniform sampler2D hdr_fragments;
 layout(set = 0, binding = 3) uniform sampler2D average_lumiosity;
+layout(set = 0, binding = 4) uniform sampler2D dir_depth;
 
 //Get the uvs
 layout(location = 0) in vec2 inter_coord;
@@ -73,7 +74,7 @@ void main()
   //Show depth of directional
   if (u_hdr_settings.show_mode == 3) {
 
-    float depth = texture(hdr_fragments, inter_coord).r;
+    float depth = texture(dir_depth, inter_coord).r;
 
     FragColor = vec4(vec3(depth), 1.0);
 

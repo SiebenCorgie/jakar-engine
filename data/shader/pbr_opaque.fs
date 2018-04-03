@@ -95,6 +95,7 @@ struct DirectionalLight
   vec3 color;
   vec3 direction;
   float intensity;
+  uint pcf_samples;
 };
 
 layout(set = 3, binding = 2) readonly buffer directional_lights{
@@ -125,6 +126,10 @@ layout(set = 3, binding = 4) uniform LightCount{
   uint directionals;
   uint spots;
 }u_light_count;
+//==============================================================================
+//The shadow maps.
+layout(set = 3, binding = 5) uniform sampler2D t_DirectionalShadows;
+
 //==============================================================================
 ///outgoing final color
 layout(location = 0) out vec4 f_color;
@@ -199,6 +204,46 @@ float calcFalloff(float dist, float radius){
   return  smoothFactor * smoothFactor;
 }
 
+//Claculates how much shadow should be drawn.
+float ShadowCalculation(vec4 fragPosLightSpace, sampler2D shadowmap, vec3 l_dir, uint pcf_fac)
+{
+    vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
+    projCoords = projCoords * 0.5 + 0.5;
+    //Early return if we would have to sample outisde the map TODO: check the region we are in
+    if(projCoords.z > 1.0 || projCoords.z < 0.0 ||
+      projCoords.x > 1.0 || projCoords.x < 0.0 ||
+      projCoords.y > 1.0 || projCoords.y < 0.0){
+      return 0.0;
+    }
+
+    vec2 texelSize = 1.0 / textureSize(shadowmap, 0);
+
+
+    float closestDepth = texture(shadowmap, projCoords.xy).r;
+    float currentDepth = projCoords.z;
+    float bias = max(0.05 * (1.0 - dot(v_normal, l_dir)), 0.005);
+    float shadow = 0.0;
+
+    int range_start = int(pcf_fac);
+    if (pcf_fac > 0){
+      //Sample in each direction and add the value to the shadow value
+      for (int x = -1 * range_start; x <= range_start; ++x){
+        for (int y = -1 * range_start; y <= range_start; ++y){
+          //Sample the new shadow depth and compare then add
+          float pcfDepth = texture(shadowmap, projCoords.xy + vec2(x, y) * texelSize).r;
+          shadow += currentDepth - bias > pcfDepth ? 1.0 : 0.0;
+        }
+      }
+      //Now divide the shadow value
+      float samples_per_dir = ((pcf_fac * 2) + 1);
+      shadow = shadow / (samples_per_dir * samples_per_dir);
+    }else{
+      shadow = currentDepth - bias > closestDepth  ? 1.0 : 0.0;
+    }
+
+
+    return shadow;
+}
 
 //Calculates a point ligh -----------------------------------------------------
 vec3 calcPointLight(PointLight light, vec3 F0)
@@ -248,6 +293,17 @@ vec3 calcDirectionalLight(DirectionalLight light, vec3 F0)
   vec3 H = normalize(V + L);
 
   vec3 radiance = light.color * light.intensity;
+
+  //now darken the light contribution by the shadow value
+  //but only do if we have a actual region to use
+  //The region goes from x/y to z/w
+  if (light.shadow_region.x != light.shadow_region.z && light.shadow_region.y != light.shadow_region.w){
+    vec4 FragPosLightSpace = light.light_space * vec4(FragmentPosition, 1.0);
+    float shadow = ShadowCalculation(
+      FragPosLightSpace, t_DirectionalShadows, light.direction, light.pcf_samples
+    );
+    radiance = (1.0 - shadow) * radiance;
+  }
 
   // Cook-Torrance BRDF
   float NDF = DistributionGGX(H);
@@ -314,15 +370,15 @@ vec3 calcSpotLight(SpotLight light, vec3 F0)
 
 bool isInClusters(){
   if (
-    v_position.x < indice_buffer.min_extend.x ||
-    v_position.y < indice_buffer.min_extend.y ||
-    v_position.z < indice_buffer.min_extend.z
+    FragmentPosition.x < indice_buffer.min_extend.x ||
+    FragmentPosition.y < indice_buffer.min_extend.y ||
+    FragmentPosition.z < indice_buffer.min_extend.z
     ){return false;}
 
   if (
-    v_position.x > indice_buffer.max_extend.x ||
-    v_position.y > indice_buffer.max_extend.y ||
-    v_position.z > indice_buffer.max_extend.z
+    FragmentPosition.x > indice_buffer.max_extend.x ||
+    FragmentPosition.y > indice_buffer.max_extend.y ||
+    FragmentPosition.z > indice_buffer.max_extend.z
     ){return false;}
 
   return true;
@@ -378,7 +434,7 @@ void main()
     surf_normal = texture(t_Normal, v_TexCoord).rgb ;
     surf_normal = normalize(v_TBN * ((surf_normal * 2 - 1) * vec3(u_tex_fac.normal_factor, u_tex_fac.normal_factor, 1.0)));
   }
-  V = normalize(u_main.camera_position - v_position);
+  V = normalize(u_main.camera_position - FragmentPosition);
 
   // calculate reflectance at normal incidence; if dia-electric (like plastic) use F0
   // of 0.04 and if sit's a metal, use the albedo color as F0 (metallic workflow)
@@ -393,17 +449,17 @@ void main()
   if (isInClusters()){
 
     float x_length = indice_buffer.max_extend.x - indice_buffer.min_extend.x;
-    float fragment_x_length = indice_buffer.max_extend.x - v_position.x;
+    float fragment_x_length = indice_buffer.max_extend.x - FragmentPosition.x;
     //No find out at which 1/16th of the x_length we are
     uint in_x = clamp( uint(fragment_x_length / (x_length * (1.0/float(cluster_size.x)))), 0, cluster_size.x-1);
 
     float y_length = indice_buffer.max_extend.y - indice_buffer.min_extend.y;
-    float fragment_y_length = indice_buffer.max_extend.y - v_position.y;
+    float fragment_y_length = indice_buffer.max_extend.y - FragmentPosition.y;
     //No find out at which 1/16th of the x_length we are
     uint in_y = clamp( uint(fragment_y_length / (y_length * (1.0/float(cluster_size.y)))), 0, cluster_size.y-1);
 
     float z_length = indice_buffer.max_extend.z - indice_buffer.min_extend.z;
-    float fragment_z_length = indice_buffer.max_extend.z - v_position.z;
+    float fragment_z_length = indice_buffer.max_extend.z - FragmentPosition.z;
     //No find out at which 1/16th of the x_length we are
     uint in_z = clamp( uint(fragment_z_length / (z_length * (1.0/float(cluster_size.z)))), 0, cluster_size.z-1);
 
@@ -435,7 +491,7 @@ void main()
 
   //Directional Lights
   for(int i = 0; i < u_light_count.directionals; i++){
-    vec4 frag_in_light = u_dir_light.d_light[i].light_space * vec4(v_position, 1.0);
+    vec4 frag_in_light = u_dir_light.d_light[i].light_space * vec4(FragmentPosition, 1.0);
     Lo += calcDirectionalLight(u_dir_light.d_light[i], F0);
   }
   //TODO

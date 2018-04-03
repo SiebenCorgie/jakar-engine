@@ -13,6 +13,7 @@ use jakar_engine::core::resources::camera::Camera;
 use jakar_engine::core::resources::light;
 use jakar_engine::core::next_tree::*;
 use jakar_tree::node::*;
+use jakar_engine::core::render_settings::*;
 
 use std::thread;
 use std::sync::{Arc, Mutex};
@@ -25,13 +26,16 @@ extern crate winit;
 
 fn main() {
 
+    let light_settings = LightSettings::new(DirectionalLightSettings::new(1, 4096));
+
     let graphics_settings = core::render_settings::RenderSettings::default()
     .with_msaa_factor(8)
     .with_gamma(1.0)
     .with_exposure(jakar_engine::core::render_settings::ExposureSettings::new(
         0.2, 4.0, 0.005, 0.003, 0.5, true
     ))
-    .with_anisotropical_filtering(16);
+    .with_anisotropical_filtering(16)
+    .with_light_settings(light_settings);
 
     let settings = core::engine_settings::EngineSettings::default()
     .with_dimensions(1600, 900)
@@ -77,77 +81,77 @@ fn main() {
     //SUN========================================================================
     //add a matrix of lights
 
-    let matrix_size = 0;
-    let spacing = 3.0;
+    let mut matrix_size = 0;
+    matrix_size = matrix_size - (matrix_size / 2);
+    let spacing = 1.5;
 
     for x in -(matrix_size)..matrix_size{
         for y in -(matrix_size)..matrix_size{
-            for z in -(matrix_size)..matrix_size{
-                let mut point = light::LightPoint::new("LightPoint");
-                point.set_intensity(
-                    5.0
-                );
-                point.set_color(
-                    Vector3::new(
-                        (x + matrix_size) as f32 / matrix_size as f32,
-                        (y + matrix_size) as f32 / matrix_size as f32,
-                        (z + matrix_size) as f32 / matrix_size as f32
-                    )
-                );
-                point.set_radius(2.0);
+            let mut point = light::LightPoint::new("LightPoint");
+            point.set_intensity(
+                5.0
+            );
+            point.set_color(
+                Vector3::new(
+                    (x + matrix_size) as f32 / matrix_size as f32,
+                    (y + matrix_size) as f32 / matrix_size as f32,
+                    (1-y + matrix_size) as f32 / matrix_size as f32
+                )
+            );
+            point.set_radius(2.0);
 
-                let node_name = light_tree
-                .add_at_root(content::ContentType::PointLight(point), None, None);
+            let node_name = light_tree
+            .add_at_root(content::ContentType::PointLight(point), None, None);
 
-                //Set the location
-                match light_tree.get_node(&node_name.unwrap()){
-                    Some(scene) => {
-                        scene.add_job(
-                            jobs::SceneJobs::Move(
-                                Vector3::new(
-                                    x as f32 * spacing,
-                                    y as f32 * spacing,
-                                    z as f32 * spacing
-                                )
+            //Set the location
+            match light_tree.get_node(&node_name.unwrap()){
+                Some(scene) => {
+                    scene.add_job(
+                        jobs::SceneJobs::Move(
+                            Vector3::new(
+                                x as f32 * spacing,
+                                (spacing / 2.0),
+                                y as f32 * spacing,
                             )
-                        );
+                        )
+                    );
+                    /*
+                    let mut scale_up = true;
 
-                        let mut scale_up = true;
+                    //also rotate randomly
+                    scene.set_tick(
+                        move |x:f32, arg: &mut Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>|{
+                            let add_vec = Vector3::new(
+                                2.0 * x,
+                                1.0, //3.0 * x,
+                                1.0 //2.0 * x
+                            );
 
-                        //also rotate randomly
-                        scene.set_tick(
-                            move |x:f32, arg: &mut Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>|{
-                                let add_vec = Vector3::new(
-                                    2.0 * x,
-                                    3.0 * x,
-                                    2.0 * x
-                                );
+                            arg.add_job(jobs::SceneJobs::RotateAroundPoint(
+                                add_vec, Vector3::new(0.0,0.0,0.0))
+                            );
 
-                                arg.add_job(jobs::SceneJobs::RotateAroundPoint(
-                                    add_vec, Vector3::new(0.0,0.0,0.0))
-                                );
+                            let current_intensity = arg.value.as_point_light().unwrap().get_intensity().clone();
 
-                                let current_intensity = arg.value.as_point_light().unwrap().get_intensity().clone();
-
-                                if current_intensity > 10.0{
-                                    scale_up = false;
-                                }
-                                if current_intensity < 1.0{
-                                    scale_up = true;
-                                }
-
-                                if scale_up{
-                                    let mut val = arg.value.as_point_light().unwrap().get_intensity();
-                                    *val += 5.0 * x;
-                                }else{
-                                    let mut val = arg.value.as_point_light().unwrap().get_intensity();
-                                    *val -= 5.0 * x;
-                                }
+                            if current_intensity > 10.0{
+                                scale_up = false;
                             }
-                        );
-                    }
-                    None => {println!("Could not find Light", );}, //get on with it
+                            if current_intensity < 1.0{
+                                scale_up = true;
+                            }
+
+                            if scale_up{
+                                let mut val = arg.value.as_point_light().unwrap().get_intensity();
+                                *val += 5.0 * x;
+                            }else{
+                                let mut val = arg.value.as_point_light().unwrap().get_intensity();
+                                *val -= 5.0 * x;
+                            }
+                        }
+                    );
+                    */
                 }
+                None => {println!("Could not find Light", );}, //get on with it
             }
         }
     }
@@ -161,13 +165,13 @@ fn main() {
     match light_tree.get_node(&sun_node){
         Some(sun)=> {
             sun.add_job(jobs::SceneJobs::Rotate(Vector3::new(0.0, 0.0, -60.0)));
-            /*
+
             sun.set_tick(
                 move |x:f32, arg: &mut Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>|{
                     let add_vec = Vector3::new(
                         0.0,
-                        0.0,
-                        2.0 * x
+                        1.0 * x,
+                        0.0
                     );
 
                     arg.add_job(jobs::SceneJobs::RotateAroundPoint(
@@ -176,7 +180,7 @@ fn main() {
                     );
                 }
             );
-            */
+
         },
         None => {println!("Could not find sun", );}
     }

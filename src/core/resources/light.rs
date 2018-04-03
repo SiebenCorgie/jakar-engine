@@ -24,7 +24,6 @@ pub struct LightPoint {
 }
 
 
-
 ///A generic directional light i.e. a sun
 #[derive(Clone)]
 pub struct LightDirectional {
@@ -224,7 +223,7 @@ impl LightDirectional{
 
     ///Returns this light as its shader-useable instance
     ///Needs the node rotation and the camera location to calculate the direction and light space
-    pub fn as_shader_info(&self, rotation: &Quaternion<f32>, camera: &DefaultCamera) -> lights::ty::DirectionalLight{
+    pub fn as_shader_info(&self, rotation: &Quaternion<f32>, camera: &DefaultCamera, pcf_samples: u32, shadow_region: [f32; 4]) -> lights::ty::DirectionalLight{
         let tmp_color: [f32;3] = self.color.into();
 
         //Now we create the light space matrix from the direction of this light;
@@ -232,12 +231,14 @@ impl LightDirectional{
 
         //Return a native vulkano struct
         lights::ty::DirectionalLight{
-            shadow_region: [0.0, 0.0, 1.0, 1.0], //currently everything, will be handeled by the
+            shadow_region: shadow_region, //currently everything, will be handeled by the
             light_space: light_space,
             color: tmp_color,
             direction: self.get_direction_vector(rotation).into(),
             intensity: self.intensity,
+            pcf_samples: pcf_samples,
             _dummy0: [0; 4],
+            _dummy1: [0; 12]
         }
     }
 
@@ -247,7 +248,7 @@ impl LightDirectional{
 
     pub fn get_mvp(&self, rotation: &Quaternion<f32>, camera: &DefaultCamera) ->Matrix4<f32>{
         let l_dir = self.get_direction_vector(rotation);
-
+        /*
         let dir_z = l_dir.clone().normalize();
 
         let dir_x = dir_z.cross(Vector3::new(0.0, 1.0,0.0)).normalize();
@@ -342,6 +343,29 @@ impl LightDirectional{
             eye,
             bound_loc,
             Vector3::new(0.0,1.0,0.0)
+        );
+        ortho * view_matrix
+        */
+
+        let size = 20.0;
+        let ortho = ortho(
+            -size, size,
+            -size, size,
+            -size, size
+        );
+        println!("Dir direction: {:?}", l_dir);
+        let camera_loc = camera.get_position();
+        let point = Point3::new(
+            l_dir.x + camera_loc.x,
+            l_dir.y + camera_loc.y,
+            l_dir.z + camera_loc.z
+        );
+
+
+        let view_matrix = Matrix4::look_at(
+            point,
+            Point3::new(camera_loc.x, camera_loc.y, camera_loc.z),
+            Vector3::new(0.0, -1.0,0.0)
         );
         ortho * view_matrix
     }

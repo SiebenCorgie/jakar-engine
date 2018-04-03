@@ -22,9 +22,8 @@ pub mod hdr_resolve;
 ///Blurs the attached texture based on some settings
 pub mod blur;
 
-///Optimized for the depth map generation for shadows. The Fragment shader does nothing.
-pub mod shadow_fragment;
-
-///Optimized for the depth map generation for shadows. The Vertex shader only transforms the vertexes to the
-/// camera space supplied.
+///A easy framgent shader which only transfors default vertices to a light space
 pub mod shadow_vertex;
+
+///A fragment shader that outputs nothing but the depth calculated in the vertex shader before
+pub mod shadow_fragment;

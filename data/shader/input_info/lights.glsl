@@ -39,6 +39,7 @@ struct DirectionalLight
   vec3 color;
   vec3 direction;
   float intensity;
+  uint pcf_samples;
 };
 
 layout(set = 3, binding = 2) readonly buffer directional_lights{

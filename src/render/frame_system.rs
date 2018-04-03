@@ -18,6 +18,8 @@ use std::sync::{Arc, Mutex};
 pub enum FrameStage {
     ///Is a stage between the first and the second render pass, it does the light culling etc.
     LightCompute(AutoCommandBufferBuilder),
+    ///Renders all the shadow images
+    Shadow(AutoCommandBufferBuilder),
     ///The first stage allows to add objects to an command buffer
     Forward(AutoCommandBufferBuilder),
     //Creates a image which only holds HDR fragments
@@ -44,6 +46,10 @@ impl FrameStage{
                 let id_type = render::SubPassType::LightCompute;
                 id_type.get_id()
             }
+            &FrameStage::Shadow(_) =>{
+                let id_type = render::SubPassType::Shadow;
+                id_type.get_id()
+            },
             &FrameStage::Forward(_) =>{
                 let id_type = render::SubPassType::Forward;
                 id_type.get_id()
@@ -90,7 +96,15 @@ impl ShadowPassImages{
         device: Arc<vulkano::device::Device>
     ) -> Self{
 
-        let dimensions = [1024; 2];
+        let dimensions = {
+            let mut settings_lck = settings.lock().expect("Failed to lock settings for shadow map size");
+            let res = settings_lck
+            .get_render_settings()
+            .get_light_settings()
+            .directional_settings.shadow_map_resolution;
+
+            [res; 2]
+        };
 
         let depth_format = passes.image_msaa_depth_format;
 
@@ -286,6 +300,8 @@ pub struct FrameSystem {
     pub object_pass_images: ObjectPassImages,
     ///The current collection of blur images
     pub post_pass_images: PostImages,
+    ///The shadow map images
+    pub shadow_images: ShadowPassImages,
 
     /*TODO:
     * It would be nice to be able to configure the dynamic state. Things like "reversed" depth
@@ -300,6 +316,7 @@ pub struct FrameSystem {
     blur_pass_h_fb: Option<Arc<FramebufferAbstract + Send + Sync>>,
     blur_pass_v_fb: Option<Arc<FramebufferAbstract + Send + Sync>>,
     assemble_pass_fb: Option<Arc<FramebufferAbstract + Send + Sync>>,
+    shadow_pass_fb: Option<Arc<FramebufferAbstract + Send + Sync>>,
 
     //a copy of the device
     device: Arc<vulkano::device::Device>,
@@ -325,7 +342,7 @@ impl FrameSystem{
 
         let object_pass_images = ObjectPassImages::new(settings.clone(), &passes, device.clone());
         let post_pass_images = PostImages::new(settings.clone(), &passes, device.clone(), target_queue.clone());
-
+        let shadow_images = ShadowPassImages::new(settings.clone(), &passes, device.clone());
         println!("Created main_renderpass", );
         //At this point we build the state, now we have to create the configuration for it as well
         //to be used, dynmaicly while drawing
@@ -350,9 +367,11 @@ impl FrameSystem{
             blur_pass_h_fb: None,
             blur_pass_v_fb: None,
             assemble_pass_fb: None,
+            shadow_pass_fb: None,
 
             object_pass_images: object_pass_images,
             post_pass_images: post_pass_images,
+            shadow_images: shadow_images,
 
             device: device,
             queue: target_queue,
@@ -447,6 +466,14 @@ impl FrameSystem{
             .expect("failed to build assemble framebuffer!")
         ));
 
+        self.shadow_pass_fb = Some(Arc::new(
+            vulkano::framebuffer::Framebuffer::start(self.passes.shadow_pass.render_pass.clone())
+            //Currently only has this single shadow map
+            .add(self.shadow_images.directional_shadows.clone()).expect("failed to add assemble image")
+            .build()
+            .expect("failed to build assemble framebuffer!")
+        ));
+
         //start the commadn buffer for this frame
         let command_buffer: AutoCommandBufferBuilder =
             vulkano::command_buffer::AutoCommandBufferBuilder::new(
@@ -463,6 +490,25 @@ impl FrameSystem{
         match command_buffer{
             FrameStage::LightCompute(cb) => {
                 //first of all try to get the main frame buffer, if not possible, panic
+                let shadow_fb = {
+                    match self.shadow_pass_fb.take(){
+                        Some(fb) => fb,
+                        None => panic!("Could not find shadow frame buffer!"),
+                    }
+                };
+
+                //For successfull clearing we generate a vector for all images.
+                let clearing_values = vec![
+                    1f32.into(), //directional shadows
+                ];
+                let new_cb = cb.begin_render_pass(shadow_fb, false, clearing_values)
+                    .expect("failed to start shadow renderpass");
+
+                FrameStage::Shadow(new_cb)
+            }
+
+            FrameStage::Shadow(cb) => {
+                //first of all try to get the main frame buffer, if not possible, panic
                 let main_fb = {
                     match self.object_pass_fb.take(){
                         Some(fb) => fb,
@@ -478,7 +524,10 @@ impl FrameSystem{
                     [0.0, 0.0, 0.0, 1.0].into(), //post progress / frame buffer image
                     //1f32.into(), //
                 ];
-                let new_cb = cb.begin_render_pass(main_fb, false, clearing_values)
+                //end shadow pass
+                let mut new_cb = cb.end_render_pass().expect("Failed to end shadow pass");
+                //Start forward pass
+                new_cb = new_cb.begin_render_pass(main_fb, false, clearing_values)
                     .expect("failed to start main renderpass");
 
                 FrameStage::Forward(new_cb)

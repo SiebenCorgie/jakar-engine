@@ -15,4 +15,10 @@ layout(set = 0, binding = 0) uniform Data {
   float far;
 } u_main;
 
+//Global uniforms
+layout(set = 0, binding = 1) uniform LightData {
+  mat4 model;
+  mat4 viewproj;
+} u_light_main;
+
 void main(){}

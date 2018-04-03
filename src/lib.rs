@@ -8,6 +8,9 @@ extern crate collision;
 extern crate winit;
 #[macro_use]
 extern crate vulkano;
+use vulkano::sync::GpuFuture;
+use vulkano::sync::FenceSignalFuture;
+
 #[macro_use]
 extern crate vulkano_shader_derive;
 extern crate vulkano_shaders;
@@ -339,7 +342,14 @@ impl JakarEngine {
 
             let mut fps_time_start = Instant::now();
             println!("Started renderer!", );
+            let render_device = {
+                let renderer_lck = render
+                .lock().expect("failed to lock renderer");
+                renderer_lck.get_device()
+            };
 
+            //Fummy fence future which will be used to sync the newest and the before frame
+            //let mut gpu_future: Box<FenceSignalFuture<GpuFuture>> = Box::new(vulkano::sync::now(render_device)).then_signal_fence();
             //now start the rendering loop
             'render_thread: loop{
                 //lock the renderer and render an image
@@ -358,7 +368,7 @@ impl JakarEngine {
                     (*asset_manager_lck).clone()
                 };
                 //gpu_future =
-                (*renderer_lck).render(&mut asset_copy); // gpu_future);
+                renderer_lck.render(&mut asset_copy); // gpu_future);
 
                 //Tet if the engine should still run
                 let engine_is_running = {
@@ -376,7 +386,7 @@ impl JakarEngine {
                     //wait a second for the gpu to finish its last work, then clean up the future
                     thread::sleep(Duration::from_millis(60));
                     //end frame on gpu
-                    gpu_future.cleanup_finished();
+                    //gpu_future.cleanup_finished();
                     break;
                 }
                 //now sleep the rest if needed

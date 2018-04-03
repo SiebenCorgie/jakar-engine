@@ -16,9 +16,10 @@ use render::uniform_manager;
 use render::frame_system;
 use render::pipeline_builder;
 use render::post_progress;
-use render::light_culling_system;
+use render::light_system;
 use render::render_passes::RenderPassConf;
 use render::window::Window;
+use render::shadow_system::ShadowSystem;
 
 use core::engine_settings;
 
@@ -320,7 +321,14 @@ impl BuildRender for RenderBuilder{
         };
         println!("Opened Window", );
 
+        println!("==========", );
         //Create a queue
+        for queue in physical_device.queue_families(){
+
+            print!("Queue {}, graph: {}, comp: {}, count: {}", queue.id(), queue.supports_graphics(), queue.supports_compute(), queue.queues_count());
+        }
+        println!("==========", );
+
         let queue_tmp = physical_device.queue_families().find(
             |&q| q.supports_graphics() &&
             window.surface().is_supported(q).unwrap_or(false)
@@ -490,7 +498,18 @@ impl BuildRender for RenderBuilder{
                 ),
         );
 
-
+        let shadow_pipeline = pipeline_manager_arc.lock()
+        .expect("failed to lock new pipeline manager")
+        .get_pipeline_by_config(
+            pipeline_builder::PipelineConfig::default()
+                .with_subpass_id(super::SubPassType::Shadow.get_id())
+                .with_shader("Shadow".to_string())
+                .with_render_pass(RenderPassConf::ShadowPass)
+                .with_depth_and_stencil_settings(
+                    pipeline_builder::DepthStencilConfig::SimpleDepthNoStencil
+                )
+                .with_cull_mode(pipeline_builder::CullMode::Front) //For better contact shadows
+        );
 
         println!("Starting post progress framework", );
         let post_progress = post_progress::PostProgress::new(
@@ -504,11 +523,13 @@ impl BuildRender for RenderBuilder{
         );
 
         println!("Creating light culling system", );
-        let light_culling_system = light_culling_system::LightClusterSystem::new(
+        let light_system = light_system::LightSystem::new(
             uniform_manager.clone(),
             device.clone(),
             queue.clone()
         );
+
+        let shadow_system = ShadowSystem::new(device.clone(), engine_settings.clone(), shadow_pipeline);
 
         println!("Finished Render Setup", );
         //Pass everthing to the struct
@@ -523,7 +544,8 @@ impl BuildRender for RenderBuilder{
 
             frame_system,
             passes,
-            light_culling_system,
+            shadow_system,
+            light_system,
             post_progress,
 
             false,

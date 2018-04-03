@@ -493,6 +493,10 @@ impl PostProgress{
                         ldr_level_image,
                         self.screen_sampler.clone()
                     ).expect("failed to add average lumiosity texture to assemble stage")
+                    .add_sampled_image(
+                        frame_system.shadow_images.directional_shadows.clone(),
+                        self.screen_sampler.clone()
+                    ).expect("failed to add shadow texture to assemble stage")
                     .build()
                     .expect("failed to build postprogress cb");
 

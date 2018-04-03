@@ -83,6 +83,56 @@ impl ExposureSettings{
     }
 }
 
+///Collects all settings for directional lights
+#[derive(Clone)]
+pub struct DirectionalLightSettings {
+    ///Describes how many samples should be taken in each direction when calculating the shadow
+    pub pcf_samples: u32,
+    ///Describes the resolution of a single cascade in the directonal shadow map
+    pub shadow_map_resolution: u32,
+}
+
+impl DirectionalLightSettings{
+    ///Creates a custom set of settings
+    pub fn new(pcf_samples: u32, resolution: u32) -> Self{
+        DirectionalLightSettings{
+            pcf_samples: pcf_samples,
+            shadow_map_resolution: resolution,
+        }
+    }
+
+    ///Creates the default set of settings:
+    /// - pcf samples: 9
+    /// - shadow map resoltion: 1024 (each cascade)
+    pub fn default() -> Self{
+        DirectionalLightSettings{
+            pcf_samples: 2,
+            shadow_map_resolution: 1024,
+        }
+    }
+}
+///Defines several settings which will be used to determin how lights and their shadows are rendered
+#[derive(Clone)]
+pub struct LightSettings {
+    pub directional_settings: DirectionalLightSettings
+}
+
+impl LightSettings{
+    ///Creates a custom set of light settings
+    pub fn new(directional_light: DirectionalLightSettings) -> Self{
+        LightSettings{
+            directional_settings: directional_light,
+        }
+    }
+
+    ///Creates the default settings, see the impls of the different settings to see them.
+    pub fn default() -> Self{
+        LightSettings{
+            directional_settings: DirectionalLightSettings::default(),
+        }
+    }
+}
+
 ///Descibes settings the renderer can have. Most of the values can't be changed after
 /// starting the engine.
 ///Things to keep in mind:
@@ -103,6 +153,9 @@ pub struct RenderSettings {
     gamma: f32,
     ///Defines the exposure used to correct the HDR image down to LDR
     exposure: ExposureSettings,
+
+    ///Collects all settings related to light and shadows
+    light_settings: LightSettings,
 
     ///Defines the blur settings. Mainly strength and scale.
     blur: BlurSettings,
@@ -137,6 +190,8 @@ impl RenderSettings{
             exposure: ExposureSettings::new(
                 0.2, 4.0, 0.002, 0.003, 1.0, true
             ),
+            light_settings: LightSettings::default(),
+
             blur: BlurSettings{
                 strength: 1.5,
                 scale: 1.0,
@@ -287,6 +342,30 @@ impl RenderSettings{
         &mut self.exposure
     }
 
+    ///Returns the current light settings as a clone.
+    #[inline]
+    pub fn get_light_settings(&self) -> LightSettings{
+        self.light_settings.clone()
+    }
+
+    ///Returns the current light settings as mutable reference.
+    #[inline]
+    pub fn get_light_settings_mut(&mut self) -> &mut LightSettings{
+        &mut self.light_settings
+    }
+
+    ///Sets the current light settings
+    #[inline]
+    pub fn set_light_settings(&mut self, new: LightSettings){
+        self.light_settings = new;
+    }
+
+    ///Sets the current light settings when building the rendering settings
+    #[inline]
+    pub fn with_light_settings(mut self, new: LightSettings) -> Self{
+        self.light_settings = new;
+        self
+    }
 
     ///Sets the current blur settings. Don't overdo it or your rendered image will look like a Michael Bay movie.
     #[inline]

@@ -19,7 +19,7 @@ pub mod set_wireframe;
 ///Blurs the attached texture based on the supplied settings
 pub mod set_blur;
 
-///Optimized shader set to render a depth map. Used for the generation of shadwo depth maps
+///A custom vertex and fragment shader for easy depth map rendering
 pub mod set_shadow;
 
 use vulkano::device::Device;
@@ -52,8 +52,8 @@ impl ShaderLibrary for DefaultShaderSets{
     ///Returns true if the library has a shader set with this name
     fn has_shader_set(&self, name: String) -> bool{
         match name.as_ref(){
-            "Shadow" => true,
             "Pbr" => true,
+            "Shadow" => true,
             "Wireframe" => true,
             "PpBlur" => true,
             "PpExposure" => true,
@@ -64,8 +64,8 @@ impl ShaderLibrary for DefaultShaderSets{
     ///Returns the shader set with this name
     fn get_shader_set(&self, name: String, device: Arc<Device>) -> Option<Arc<ToPipeline + Send + Sync>>{
         match name.as_ref(){
-            "Shadow" => return Some(Arc::new(set_shadow::SetShadow::load(device))),
             "Pbr" => return Some(Arc::new(set_pbr::PbrSet::load(device))),
+            "Shadow" => return Some(Arc::new(set_shadow::SetShadow::load(device))),
             "Wireframe" => return Some(Arc::new(set_wireframe::SetWireframe::load(device))),
             "PpBlur" => return Some(Arc::new(set_blur::BlurSet::load(device))),
             "PpExposure" => return Some(Arc::new(set_post_progress::PostProgressSet::load(device))),

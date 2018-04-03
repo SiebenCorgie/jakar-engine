@@ -47,7 +47,7 @@ void main() {
 
 
   FragmentPosition = vec3(pos);
-  v_position = pos.xyz / pos.w;
+  v_position = position;
   v_TexCoord = tex_coord;
   v_normal = normalize(normal_matrix * normal);
 

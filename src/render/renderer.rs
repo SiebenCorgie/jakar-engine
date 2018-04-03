@@ -6,9 +6,9 @@ use render::window::Window;
 use render::render_helper;
 use render::frame_system;
 use render::post_progress;
-use render::light_culling_system;
+use render::light_system;
 use render::render_passes::RenderPasses;
-
+use render::shadow_system;
 
 use core::next_tree::SceneTree;
 use core::engine_settings;
@@ -24,6 +24,7 @@ use vulkano::swapchain::SwapchainCreationError;
 use vulkano::swapchain::SwapchainAcquireFuture;
 use vulkano::swapchain::AcquireError;
 use vulkano::sync::GpuFuture;
+use vulkano::sync::FenceSignalFuture;
 
 
 use std::sync::{Arc,Mutex};
@@ -64,7 +65,8 @@ pub struct Renderer  {
     images: Vec<Arc<vulkano::image::SwapchainImage<winit::Window>>>,
 
     frame_system: frame_system::FrameSystem,
-    light_culling_system: light_culling_system::LightClusterSystem,
+    shadow_system: shadow_system::ShadowSystem,
+    light_system: light_system::LightSystem,
 
     render_passes: RenderPasses,
 
@@ -78,6 +80,7 @@ pub struct Renderer  {
     uniform_manager: Arc<Mutex<uniform_manager::UniformManager>>,
 
     state: Arc<Mutex<RendererState>>,
+    //last_frame: Arc<FenceSignalFuture<GpuFuture>>,
 }
 
 impl Renderer {
@@ -96,7 +99,8 @@ impl Renderer {
         frame_system: frame_system::FrameSystem,
 
         render_passes: RenderPasses,
-        light_culling_system: light_culling_system::LightClusterSystem,
+        shadow_system: shadow_system::ShadowSystem,
+        light_system: light_system::LightSystem,
         post_progress: post_progress::PostProgress,
 
         recreate_swapchain: bool,
@@ -114,8 +118,9 @@ impl Renderer {
             //Helper systems, the frame system handles... well a frame, the post progress writes the
             //static post_progress pass.AcquireError
             frame_system: frame_system,
+            shadow_system: shadow_system,
             render_passes: render_passes,
-            light_culling_system: light_culling_system,
+            light_system: light_system,
             post_progress: post_progress,
 
             recreate_swapchain: recreate_swapchain,
@@ -218,11 +223,8 @@ impl Renderer {
     pub fn render(
         &mut self,
         asset_manager: &mut asset_manager::AssetManager,
-        //previous_frame: Box<GpuFuture>,
+        //previous_frame: Arc<FenceSignalFuture<GpuFuture>>,
     ){
-
-        //Sync gput
-        let this_frame: Box<GpuFuture> = Box::new(vulkano::sync::now(self.device.clone()));
 
         //First of all we get info if we should debug anything, if so this bool will be true
         let (should_capture, mut time_step, start_time, sould_draw_bounds) = {
@@ -242,7 +244,7 @@ impl Renderer {
                 Err(e) => {
                     println!("Could not get next swapchain image: {}", e);
                     //early return to restart the frame
-                    return; // this_frame;
+                    return; //this_frame;
                 }
             }
         };
@@ -284,7 +286,7 @@ impl Renderer {
 
         //First of all we compute the light clusters
         //Since we currently have no nice system to track
-        self.light_culling_system.update_light_set();
+        self.light_system.update_light_set(&mut self.shadow_system, asset_manager);
 
         if should_capture{
             let time_needed = time_step.elapsed().subsec_nanos();
@@ -293,7 +295,7 @@ impl Renderer {
         }
 
         //now execute the compute shader
-        command_buffer = self.light_culling_system.dispatch_compute_shader(
+        command_buffer = self.light_system.dispatch_compute_shader(
             command_buffer,
         );
         if should_capture{
@@ -305,8 +307,17 @@ impl Renderer {
         //Now we can end this stage (Pre compute)
         command_buffer = self.frame_system.next_pass(command_buffer);
 
-        //now we are in the main render pass in the forward pass, using this to draw all meshes
+        //Its time to render all the shadow maps...
+        command_buffer = self.shadow_system.render_shadows(
+            command_buffer,
+            &self.frame_system,
+            asset_manager
+        );
 
+        //change to the forward pass
+        command_buffer = self.frame_system.next_pass(command_buffer);
+
+        //now we are in the main render pass in the forward pass, using this to draw all meshes
         //add all opaque meshes to the command buffer
         for opaque_mesh in opaque_meshes.iter(){
             command_buffer = self.add_forward_node(opaque_mesh, command_buffer);
@@ -491,7 +502,7 @@ impl Renderer {
                 Ok(cb) => cb,
                 Err(er) =>{
                     println!("{}", er);
-                    return; // previous_frame;
+                    return;// this_frame;
                 }
             }
         };
@@ -500,6 +511,9 @@ impl Renderer {
             println!("\tRE: Ending frame", );
         }
 
+        //now since we did everything we can in this frame, wait for the last frame and start the new one
+        //previous_frame.wait(None).expect_err("Failed to wait for last frame !");
+        let this_frame = Box::new(vulkano::sync::now(self.device.clone()));
 
         //thanks firewater
         let real_cb = finished_command_buffer.build().expect("failed to build command buffer");
@@ -523,13 +537,22 @@ impl Renderer {
         //clean old frame
         after_frame.cleanup_finished();
 
+        //now wait for the graphics card to finish. However, I might implement some better way.
+        // It would be nice if the engine could record the next command buffer while the last frame is executing.
+        after_frame.wait(None).expect("Could not wait for gpu");
 
         //Resetting debug options
         if should_capture{
+            //ait for the gput to mesure frame time
+
+
             let frame_time = start_time.elapsed().subsec_nanos();
             println!("\t RE: FrameTime: {}ms", frame_time as f32/1_000_000.0);
             println!("\t RE: Which is {}fps", 1.0/(frame_time as f32/1_000_000_000.0));
             self.engine_settings.lock().expect("failed to lock settings").stop_capture();
+
+            //Since we waited for the gpu, we can return a now GpuFuture
+            return; // Box::new(vulkano::sync::now(self.device.clone()));
         }
 
         //Box::new(after_frame)
@@ -596,7 +619,7 @@ impl Renderer {
                 //time_step = Instant::now();
 
                 let set_04 = {
-                    material.get_set_04(&mut self.light_culling_system, &self.frame_system)
+                    material.get_set_04(&mut self.light_system, &self.frame_system)
                 };
 
                 //println!("Needed {}ms set 04", time_step.elapsed().subsec_nanos() as f32 / 1_000_000.0);
