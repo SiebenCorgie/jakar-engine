@@ -10,7 +10,7 @@ use render::light_system;
 use render::render_passes::RenderPasses;
 use render::shadow_system;
 
-use core::next_tree::SceneTree;
+use core::next_tree::{SceneTree, ValueTypeBool, SceneComparer};
 use core::engine_settings;
 //use core::simple_scene_system::node_helper;
 use core::next_tree;
@@ -385,7 +385,11 @@ impl Renderer {
                         time_step = Instant::now()
                     }
                     //also draw the light bounds
-                    let all_point_lights = asset_manager.get_active_scene().copy_all_point_lights(&None);
+                    let all_point_lights = asset_manager.get_active_scene().copy_all_nodes(
+                        &Some(SceneComparer::new().with_value_type(
+                            ValueTypeBool::none().with_point_light()
+                        )));
+
                     for light in all_point_lights.iter(){
                         command_buffer = render_helper::add_bound_draw(
                              command_buffer,
@@ -397,7 +401,11 @@ impl Renderer {
                          );
                     }
 
-                    let all_spot_lights = asset_manager.get_active_scene().copy_all_spot_lights(&None);
+                    let all_spot_lights = asset_manager.get_active_scene().copy_all_nodes(
+                        &Some(SceneComparer::new().with_value_type(
+                            ValueTypeBool::none().with_spot_light()
+                        )));
+                        
                     for light in all_spot_lights.iter(){
                         command_buffer = render_helper::add_bound_draw(
                              command_buffer,

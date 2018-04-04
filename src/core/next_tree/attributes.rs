@@ -1,6 +1,8 @@
 use cgmath::*;
 use collision::*;
 use jakar_tree::node::Attribute;
+use super::ValueTypeBool;
+use super::content::ContentType;
 use super::jobs::SceneJobs;
 use std::sync::{Arc, Mutex};
 

@@ -11,9 +11,8 @@ use collision::Frustum;
 
 use core::resources::camera::Camera;
 use core::resources::light;
-use core::next_tree::SceneTree;
+use core::next_tree::{SceneTree, SceneComparer, ValueTypeBool};
 use core::next_tree::SaveUnwrap;
-use core::next_tree::SceneComparer;
 use core::resource_management::asset_manager;
 use core::engine_settings::EngineSettings;
 use render::frame_system::FrameStage;
@@ -180,8 +179,13 @@ impl ShadowSystem{
                 //only use the first directional light
                 println!("Getting firectional light", );
                 let directional_light_name = {
-                    let vec = scene.all_directional_light_names(&None).clone();
+                    let vec = scene.get_all_names(
+                        &Some(SceneComparer::new()
+                        .with_value_type(
+                            ValueTypeBool::none().with_directional_light()
+                        )));
                     if vec.len() == 0{
+                        println!("No shadow here lel", );
                         return FrameStage::Shadow(new_cb);
                     }
                     vec[0].clone()
@@ -196,9 +200,11 @@ impl ShadowSystem{
                 let view_frustum = Frustum::from_matrix4(light_mvp).expect("failed to create ortho frustum");
 
                 let meshes_in_light_frustum = scene
-                .copy_all_meshes(&Some(SceneComparer::new().with_frustum(view_frustum)));
-                //.copy_all_meshes(&None);
-
+                .copy_all_nodes(&Some(
+                    SceneComparer::new()
+                    .with_frustum(view_frustum)
+                    .with_value_type(ValueTypeBool::none().with_mesh()
+                )));
                 //now get the dynamic stuff for the shadows
                 //After all, create the frame dynamic states
                 let img_dim = frame_system.shadow_images.directional_shadows.dimensions();

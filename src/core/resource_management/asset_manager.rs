@@ -7,7 +7,7 @@ use jakar_tree::node::Attribute;
 use core::next_tree::content;
 use core::next_tree::attributes;
 use core::next_tree::jobs;
-use core::next_tree;
+use core::next_tree::*;
 use core::next_tree::SceneTree;
 
 
@@ -295,17 +295,34 @@ impl AssetManager {
     /// `Some(attributes)` or if no sorting is needed by `None`.
     #[inline]
     pub fn copy_all_meshes(
-        &mut self, mesh_parameter: Option<next_tree::SceneComparer>
+        &mut self, mesh_parameter: Option<SceneComparer>
     ) -> Vec<node::Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>>{
-        self.active_main_scene.copy_all_meshes(&mesh_parameter)
+        //add the mesh attributes to the sorter if needed
+        let new_sorter = {
+            match mesh_parameter{
+                Some(para) => para.with_value_type(ValueTypeBool::none().with_mesh()),
+                None => SceneComparer::new().with_value_type(ValueTypeBool::none().with_mesh())
+            }
+        };
+        self.active_main_scene.copy_all_nodes(&Some(new_sorter))
     }
 
     ///Returns all meshes in the view frustum of the currently active camera
     #[inline]
     pub fn get_meshes_in_frustum(
-        &mut self, sort_options: Option<next_tree::SceneComparer>
+        &mut self, sort_options: Option<SceneComparer>
     ) -> Vec<node::Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>>{
-        self.active_main_scene.copy_all_meshes_in_frustum(&self.camera, &sort_options)
+        let new_sorter = {
+            match sort_options{
+                Some(para) => para
+                    .with_value_type(ValueTypeBool::none().with_mesh())
+                    .with_frustum(self.camera.get_frustum_bound()),
+                None => SceneComparer::new()
+                    .with_value_type(ValueTypeBool::none().with_mesh())
+                    .with_frustum(self.camera.get_frustum_bound())
+            }
+        };
+        self.active_main_scene.copy_all_nodes(&Some(new_sorter))
     }
 
     ///Imports a new gltf scene file to a new scene with `name` as name from `path`

@@ -2,7 +2,7 @@ use render::uniform_manager;
 use render::frame_system;
 use render::shadow_system::ShadowSystem;
 use core::resource_management::asset_manager::AssetManager;
-use core::next_tree::{SceneComparer, SaveUnwrap, SceneTree};
+use core::next_tree::{SceneComparer, SaveUnwrap, SceneTree, ValueTypeBool};
 use core::resources::camera::Camera;
 
 use render::shader::shader_inputs::lights::ty::LightCount;
@@ -188,16 +188,25 @@ impl LightSystem{
         let comparer = Some(SceneComparer::new().with_frustum(frustum));
 
         let point_lights = {
-            asset_manager.get_active_scene().copy_all_point_lights(&comparer)
+            asset_manager.get_active_scene().copy_all_nodes(
+                &Some(SceneComparer::new().with_value_type(
+                    ValueTypeBool::none().with_point_light()
+                )))
         };
 
         let spot_lights = {
-            asset_manager.get_active_scene().copy_all_spot_lights(&comparer)
+            asset_manager.get_active_scene().copy_all_nodes(
+                &Some(SceneComparer::new().with_value_type(
+                    ValueTypeBool::none().with_spot_light()
+                )))
         };
 
         //Since directional lights see everything we always use all of them
         let directional_lights = {
-            asset_manager.get_active_scene().copy_all_directional_lights(&None)
+            asset_manager.get_active_scene().copy_all_nodes(
+                &Some(SceneComparer::new().with_value_type(
+                    ValueTypeBool::none().with_directional_light()
+                )))
         };
 
 
