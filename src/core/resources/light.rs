@@ -248,7 +248,7 @@ impl LightDirectional{
 
     pub fn get_mvp(&self, rotation: &Quaternion<f32>, camera: &DefaultCamera) ->Matrix4<f32>{
         let l_dir = self.get_direction_vector(rotation);
-        /*
+        
         let dir_z = l_dir.clone().normalize();
 
         let dir_x = dir_z.cross(Vector3::new(0.0, 1.0,0.0)).normalize();
@@ -345,8 +345,8 @@ impl LightDirectional{
             Vector3::new(0.0,1.0,0.0)
         );
         ortho * view_matrix
-        */
 
+        /*
         let size = 20.0;
         let ortho = ortho(
             -size, size,
@@ -357,7 +357,7 @@ impl LightDirectional{
         let camera_loc = camera.get_position();
         let point = Point3::new(
             l_dir.x + camera_loc.x,
-            l_dir.y + camera_loc.y,
+            l_dir.y - camera_loc.y,
             l_dir.z + camera_loc.z
         );
 
@@ -368,6 +368,7 @@ impl LightDirectional{
             Vector3::new(0.0, -1.0,0.0)
         );
         ortho * view_matrix
+        */
     }
 
     ///set intensity

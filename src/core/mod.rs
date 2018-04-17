@@ -69,14 +69,18 @@ impl AABB3Intersection for Aabb3<f32>{
         Vector3::new(x, y, z)
     }
 }
-/*
-///Temporary AABB intersection check till its mainlined into the collision crate
-impl<S: BaseFloat> Discrete<Aabb3<S>> for Aabb3<S> {
-    fn intersects(&self, other: &Aabb2<S>) -> bool {
-        let (a0, a1) = (self.min(), self.max());
-        let (b0, b1) = (other.min(), other.max());
 
-        a1.x > b0.x && a0.x < b1.x && a1.y > b0.y && a0.y < b1.y
+///A cheating trait to convert points into vectors
+pub trait PointToVector<V> {
+    fn into_vec(&self) -> V;
+}
+
+impl PointToVector<Vector3<f32>> for Point3<f32>{
+    fn into_vec(&self) -> Vector3<f32>{
+        Vector3::new(
+            self.x,
+            self.y,
+            self.z
+        )
     }
 }
-*/

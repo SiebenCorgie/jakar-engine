@@ -60,7 +60,7 @@ void main()
   //BlurImage
   if (u_hdr_settings.show_mode == 1) {
 
-    FragColor = texture(hdr_fragments, inter_coord);
+    FragColor = texture(color_input, inter_coord);
     return;
   }
 

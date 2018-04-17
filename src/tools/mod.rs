@@ -15,7 +15,9 @@ pub mod gltf_importer;
 ///A collection of Callback implementations which can be used for instance to add a delta_tick function
 /// to a node or similar things.
 pub mod callbacks;
-
+///All sorts of usfull function which can be used with nodes. For instance a function which sorts
+///Nodes by their distance to a point in a thread.
+pub mod node_tools;
 
 ///A trait every importer should implement
 pub trait Importer {

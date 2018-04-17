@@ -4,8 +4,13 @@ use render::shadow_system::ShadowSystem;
 use core::resource_management::asset_manager::AssetManager;
 use core::next_tree::{SceneComparer, SaveUnwrap, SceneTree, ValueTypeBool};
 use core::resources::camera::Camera;
+use core::next_tree::content::ContentType;
+use core::next_tree::jobs::SceneJobs;
+use core::next_tree::attributes::NodeAttributes;
 
-use render::shader::shader_inputs::lights::ty::LightCount;
+use jakar_tree::node::Node;
+
+use render::shader::shader_inputs::lights::ty::{LightCount, PointLight, SpotLight, DirectionalLight};
 
 use vulkano::descriptor::descriptor_set::DescriptorSet;
 use vulkano::descriptor::descriptor_set::PersistentDescriptorSet;
@@ -22,6 +27,31 @@ use vulkano::buffer::BufferUsage;
 use vulkano;
 
 use std::sync::{Arc,Mutex};
+
+type NodeAbstractType = Node<
+    ContentType,
+    SceneJobs,
+    NodeAttributes
+>;
+
+/// Stores all lights which are needed in the current frame.
+pub struct LightStore {
+    // since we generated ordered lists of needed lights and their shader_info pendants we store them
+    // here.
+    pub point_lights: Vec<(NodeAbstractType, PointLight)>,
+    pub directional_lights: Vec<(NodeAbstractType, DirectionalLight)>,
+    pub spot_lights: Vec<(NodeAbstractType, SpotLight)>
+}
+
+impl LightStore{
+    pub fn new() -> Self{
+        LightStore{
+            point_lights: Vec::new(),
+            directional_lights: Vec::new(),
+            spot_lights: Vec::new(),
+        }
+    }
+}
 
 ///The system is responsible for everything that has to do with actual light (no shadows). Itn will
 /// dispatch a compute shader which builds a 3d matrix in worldspace which holds the following information
@@ -44,6 +74,8 @@ pub struct LightSystem {
 
     //Descriptor pool to build the descriptorset faster
     descriptor_pool: FixedSizeDescriptorSetsPool<Arc<ComputePipelineAbstract + Send + Sync>>,
+    //Stores the nodes and shader infos we got from the shadow_system
+    light_store: LightStore,
 
     //is the buffer of currently used point, directional and spotlights used
     current_point_light_list: Arc<ImmutableBuffer<[lights::ty::PointLight]>>,
@@ -158,6 +190,8 @@ impl LightSystem{
             cluster_buffer: persistent_cluster_buffer,
             descriptor_pool: descriptor_pool,
 
+            light_store: LightStore::new(),
+
             current_point_light_list: c_point_light,
             current_dir_light_list: c_dir_light,
             current_spot_light_list: c_spot_lights,
@@ -179,54 +213,48 @@ impl LightSystem{
         asset_manager: &mut AssetManager
     ){
 
-        //First compile a list of needed point, spot and directional lights
-
-        //The frustum of the current camera. Since the bound of a light is always its influence
-        // radius as well we can use this info to cull not usable spot and point lights
-        let frustum = asset_manager.get_camera().get_frustum_bound();
-
-        let comparer = Some(SceneComparer::new().with_frustum(frustum));
-
-        let point_lights = {
-            asset_manager.get_active_scene().copy_all_nodes(
-                &Some(SceneComparer::new().with_value_type(
-                    ValueTypeBool::none().with_point_light()
-                )))
-        };
-
-        let spot_lights = {
-            asset_manager.get_active_scene().copy_all_nodes(
-                &Some(SceneComparer::new().with_value_type(
-                    ValueTypeBool::none().with_spot_light()
-                )))
-        };
-
-        //Since directional lights see everything we always use all of them
-        let directional_lights = {
-            asset_manager.get_active_scene().copy_all_nodes(
-                &Some(SceneComparer::new().with_value_type(
-                    ValueTypeBool::none().with_directional_light()
-                )))
-        };
 
 
-        //Send the lights to the shadow system to set the right shadow regions and get the shader_infos
-        //This will set the atlases accordingly and return the correct shader infos which will be
-        // Transformed into buffers for alter supply to the descriptorsets
-        let (points, spots, directionals) = shadow_system.set_shadow_atlases(
+        //Let the shadow system find the lights we need and set their shadow atlases.
+        self.light_store = shadow_system.set_shadow_atlases(
             asset_manager,
-            point_lights,
-            spot_lights,
-            directional_lights
         );
-
+        //Now create a buffer from theese lights
         let light_counts = LightCount{
-            points: points.len() as u32,
-            directionals: directionals.len() as u32,
-            spots: spots.len() as u32,
+            points: self.light_store.point_lights.len() as u32,
+            directionals: self.light_store.directional_lights.len() as u32,
+            spots: self.light_store.spot_lights.len() as u32,
         };
 
         //Now build the buffers from the shader_infos and update them internaly
+        //Todo this we copy the shader infos and push them into the following buffers
+        let (points, directionals, spots) = {
+            let p_lights = {
+                let mut p_vec = Vec::new();
+                for &(_, info) in self.light_store.point_lights.iter(){
+                    p_vec.push(info.clone());
+                }
+                p_vec
+            };
+
+            let d_lights = {
+                let mut d_vec = Vec::new();
+                for &(_, info) in self.light_store.directional_lights.iter(){
+                    d_vec.push(info.clone());
+                }
+                d_vec
+            };
+
+            let s_lights = {
+                let mut s_vec = Vec::new();
+                for &(_, info) in self.light_store.spot_lights.iter(){
+                    s_vec.push(info.clone());
+                }
+                s_vec
+            };
+            (p_lights, d_lights, s_lights)
+        };
+
         self.current_point_light_list = {
             let (buffer, future) = ImmutableBuffer::from_iter(
                 points.into_iter(),
@@ -312,6 +340,12 @@ impl LightSystem{
     ///Returns only the cluster buffer
     pub fn get_cluster_buffer(&self) -> Arc<DeviceLocalBuffer<light_cull_shader::ty::ClusterBuffer>>{
         self.cluster_buffer.clone()
+    }
+
+    ///Returns a reference to the current light store. This stores all currently used lights as well
+    /// as the used shader information
+    pub fn get_light_store(&mut self) -> &mut LightStore{
+        &mut self.light_store
     }
 
     ///Since all the objects drawn in the current frame need to get the same light info, we create

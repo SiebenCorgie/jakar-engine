@@ -110,6 +110,16 @@ impl ValueTypeBool {
     }
 }
 
+///Internal struct used to comapre a node agains the camera and decide if we want to use it in
+/// our sorting or not.
+#[derive(Clone)]
+pub struct SortCamera {
+    pub location: Vector3<f32>,
+    pub fov: f32,
+    pub min_max_distance: [f32; 2],
+    pub max_view_distance: f32,
+}
+
 ///The comparer type used to comapre a SceneTree to attribtues.
 ///You can use this for instance to get every node which is transparent.
 #[derive(Clone)]
@@ -133,6 +143,11 @@ pub struct SceneComparer{
         ///Some if the is_emessive component should be compared. Good to get all objects which
         /// can produce light.
         pub is_emessive: Option<bool>,
+        /// If enabled the sorting algorith will compare the distance from the camera to the
+        /// bjects as well as its size/volume. If it has a bigger screen representation
+        /// them the bias set in the `with_cull_distance()` function it will be used.
+        /// If it is too small it will be discarded.
+        pub distance_cull: Option<(f32, Vector3<f32>)>,
 }
 
 impl SceneComparer{
@@ -148,6 +163,7 @@ impl SceneComparer{
             is_transparent: None,
             hide_in_game: None,
             is_emessive: None,
+            distance_cull: None,
         }
     }
 
@@ -225,6 +241,12 @@ impl SceneComparer{
     ///Sets to "object emmits no light"
     pub fn without_is_emessive(mut self) -> Self{
         self.is_emessive = Some(false);
+        self
+    }
+
+    ///Culls the obejct based on a bias value, see the struct documentation for more information.
+    pub fn with_cull_distance(mut self, bias: f32, pos: Vector3<f32>) -> Self{
+        self.distance_cull = Some((bias, pos));
         self
     }
 }
@@ -380,6 +402,8 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
         //test out new bounds agains the children and create a new node extend which is used for
         //hierachy sorting etc.
         self.attributes.value_bound = Aabb3::new(mins.clone(), maxs.clone());
+        //Finally update the draw distance
+        self.attributes.max_draw_distance = get_max_aabb_len(&self.attributes.value_bound);
 
 
         //now get selfs min and max values in world space build by the object bound transformed by world space
@@ -573,17 +597,13 @@ pub fn get_min_max(points: Vec<Point3<f32>>) -> (Point3<f32>, Point3<f32>){
     }
 
     (mins, maxs)
-
 }
 
-
-//TODO Custom impls on node for:
-/*
-rebuild_bounds
-get_bound_min
-get_bound_max
-get_bound
-copy_all_spot_lights/meshes/cameras
-get_meshes_in_frustum
-get_meshes_in_volume
-*/
+///Computes the max length between one of the three coordinates x,y,z of a bound.
+pub fn get_max_aabb_len(aabb: &Aabb3<f32>) -> f32{
+    //first, get the min and maxes
+    let mut length = aabb.max.x - aabb.min.x;
+    if (aabb.max.y - aabb.min.y) > length { length = aabb.max.y - aabb.min.y; }
+    if (aabb.max.z - aabb.min.z) > length { length = aabb.max.z - aabb.min.z; }
+    length
+}

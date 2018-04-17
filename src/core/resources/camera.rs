@@ -5,6 +5,7 @@ use std::f64::consts;
 use std::sync::{Arc, Mutex};
 
 use core::engine_settings;
+use core::next_tree::SortCamera;
 use input::KeyMap;
 
 use std::time::{Instant};
@@ -47,6 +48,8 @@ pub trait Camera {
     fn get_view_projection_matrix(&self) -> Matrix4<f32>;
     ///Returns the bound of the view frustum
     fn get_frustum_bound(&self) -> collision::Frustum<f32>;
+    ///Creates a `SortCamera` struct used to test the camera agains nodes in a scene tree.
+    fn into_sort_camera(&self) -> SortCamera;
 }
 
 ///An example implementation
@@ -322,6 +325,30 @@ impl Camera for DefaultCamera{
     fn get_frustum_bound(&self) -> collision::Frustum<f32>{
         let matrix = self.get_perspective() * self.get_view_matrix();
         collision::Frustum::from_matrix4(matrix).expect("failed to create frustum")
+    }
+
+    ///Creates a `SortCamera` struct used to test the camera agains nodes in a scene tree.
+    #[inline]
+    fn into_sort_camera(&self) -> SortCamera{
+        //We have to lock the settings to get the far and near plane
+        //TODO remove the lock since we have to do this quiet often.
+        let (near_plane, far_plane) = {
+            let engine_settings_lck = self.settings.lock().expect("Faield to lock settings");
+            (
+                engine_settings_lck.camera.near_plane,
+                engine_settings_lck.camera.far_plane
+            )
+        };
+
+        let mut max_v_dist = far_plane - near_plane;
+        //since we are in a perspective we have to use max_v_dis/sin(fov/2)
+        //max_v_dist = max_v_dist/ to_radians((self.fov / 2.0)).sin(); //our fov is in degree tho
+        SortCamera{
+            location: self.position,
+            fov: self.fov,
+            min_max_distance: [near_plane, far_plane],
+            max_view_distance: max_v_dist,
+        }
     }
 }
 

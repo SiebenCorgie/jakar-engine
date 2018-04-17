@@ -108,9 +108,11 @@ impl ShadowPassImages{
 
         let depth_format = passes.image_msaa_depth_format;
 
-        let directional_image = AttachmentImage::sampled_input_attachment(device.clone(),
-        dimensions,
-        depth_format).expect("failed to create hdr_fragments buffer!");
+        let directional_image = AttachmentImage::sampled_input_attachment(
+            device.clone(),
+            dimensions,
+            depth_format
+        ).expect("failed to create hdr_fragments buffer!");
 
 
         ShadowPassImages{
@@ -474,7 +476,7 @@ impl FrameSystem{
             .expect("failed to build assemble framebuffer!")
         ));
 
-        //start the commadn buffer for this frame
+        //start the command buffer for this frame
         let command_buffer: AutoCommandBufferBuilder =
             vulkano::command_buffer::AutoCommandBufferBuilder::new(
                 self.device.clone(),

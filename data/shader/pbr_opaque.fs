@@ -205,7 +205,10 @@ float calcFalloff(float dist, float radius){
 }
 
 //Claculates how much shadow should be drawn.
-float ShadowCalculation(vec4 fragPosLightSpace, sampler2D shadowmap, vec3 l_dir, uint pcf_fac)
+float ShadowCalculation(
+  vec4 fragPosLightSpace, sampler2D shadowmap, vec3 l_dir, uint pcf_fac,
+  vec4 map_coords
+  )
 {
     vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
     projCoords = projCoords * 0.5 + 0.5;
@@ -216,10 +219,16 @@ float ShadowCalculation(vec4 fragPosLightSpace, sampler2D shadowmap, vec3 l_dir,
       return 0.0;
     }
 
+    //now we change theese to the actual coords on the shadow map
+    vec2 shadow_tile_size = map_coords.zw - map_coords.xy;
+    //now go from the start on the tile.
+    vec2 final_projCoords = map_coords.xy + (shadow_tile_size * projCoords.xy);
+
+
     vec2 texelSize = 1.0 / textureSize(shadowmap, 0);
 
 
-    float closestDepth = texture(shadowmap, projCoords.xy).r;
+    float closestDepth = texture(shadowmap, final_projCoords).r;
     float currentDepth = projCoords.z;
     float bias = max(0.05 * (1.0 - dot(v_normal, l_dir)), 0.005);
     float shadow = 0.0;
@@ -230,7 +239,7 @@ float ShadowCalculation(vec4 fragPosLightSpace, sampler2D shadowmap, vec3 l_dir,
       for (int x = -1 * range_start; x <= range_start; ++x){
         for (int y = -1 * range_start; y <= range_start; ++y){
           //Sample the new shadow depth and compare then add
-          float pcfDepth = texture(shadowmap, projCoords.xy + vec2(x, y) * texelSize).r;
+          float pcfDepth = texture(shadowmap, final_projCoords + vec2(x, y) * texelSize).r;
           shadow += currentDepth - bias > pcfDepth ? 1.0 : 0.0;
         }
       }
@@ -300,7 +309,8 @@ vec3 calcDirectionalLight(DirectionalLight light, vec3 F0)
   if (light.shadow_region.x != light.shadow_region.z && light.shadow_region.y != light.shadow_region.w){
     vec4 FragPosLightSpace = light.light_space * vec4(FragmentPosition, 1.0);
     float shadow = ShadowCalculation(
-      FragPosLightSpace, t_DirectionalShadows, light.direction, light.pcf_samples
+      FragPosLightSpace, t_DirectionalShadows, light.direction, light.pcf_samples,
+      light.shadow_region
     );
     radiance = (1.0 - shadow) * radiance;
   }

@@ -1,6 +1,7 @@
 use render::pipeline_manager;
 use render::uniform_manager;
 use core::resource_management::asset_manager;
+use core::resources::camera::Camera;
 use render::window;
 use render::window::Window;
 use render::render_helper;
@@ -252,16 +253,23 @@ impl Renderer {
         if should_capture{
             time_step = Instant::now();
         }
+        let mesh_comparer = SceneComparer::new()
+        .with_value_type(ValueTypeBool::none().with_mesh())
+        .with_frustum(asset_manager.get_camera().get_frustum_bound())
+        .with_cull_distance(400.0, asset_manager.get_camera().get_position())
+        .without_transparency();
 
+        let mesh_comp_trans = mesh_comparer.clone()
+        .with_transparency();
         //now we can actually start the frame
         //get all opaque meshes
-        let opaque_meshes = asset_manager.get_meshes_in_frustum(
-            Some(next_tree::SceneComparer::new().without_transparency())
-        );
+        let opaque_meshes = asset_manager
+        .get_active_scene()
+        .copy_all_nodes(&Some(mesh_comparer));
         //get all translucent meshes
-        let translucent_meshes = asset_manager.get_meshes_in_frustum(
-            Some(next_tree::SceneComparer::new().with_transparency())
-        );
+        let translucent_meshes = asset_manager
+        .get_active_scene()
+        .copy_all_nodes(&Some(mesh_comp_trans));
         //now send the translucent meshes to another thread for ordering
         let trans_recv = render_helper::order_by_distance(
             translucent_meshes, asset_manager.get_camera()
@@ -311,7 +319,8 @@ impl Renderer {
         command_buffer = self.shadow_system.render_shadows(
             command_buffer,
             &self.frame_system,
-            asset_manager
+            asset_manager,
+            self.light_system.get_light_store()
         );
 
         //change to the forward pass
@@ -405,7 +414,7 @@ impl Renderer {
                         &Some(SceneComparer::new().with_value_type(
                             ValueTypeBool::none().with_spot_light()
                         )));
-                        
+
                     for light in all_spot_lights.iter(){
                         command_buffer = render_helper::add_bound_draw(
                              command_buffer,

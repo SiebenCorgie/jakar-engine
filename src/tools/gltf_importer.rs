@@ -681,7 +681,6 @@ pub fn load_gltf_node(
         new_transform.disp = translation;
         new_transform.rot = rotation;
         new_transform
-
     };
 
     //now create the node as an empty, this empty will be the parent to:
@@ -726,10 +725,11 @@ pub fn load_gltf_node(
                     // After that we can read the bound info of the mesh and use it as the node bound
                     // because of the nature of this node (at least at import time) it is save to assume
                     // that the bound won't change till the next rebuild.
-                    let transparent = {
-                        let mesh_lck = prim.lock().expect("failed to lock the mesh while importing");
+                    let mesh_lck = prim.lock().expect("failed to lock the mesh while importing");
 
-                        let material = (*mesh_lck)
+                    let transparent = {
+
+                        let material = mesh_lck
                         .get_material();
                         let material_lck = material
                         .lock()
@@ -737,7 +737,7 @@ pub fn load_gltf_node(
                         //well we have to get the pipeline now and match the transparency config.
                         // if its alpha belnding, set to transparent
                         // all other types (including masked operation) can drawn unordered
-                        match (*material_lck).get_pipeline().pipeline_config.blending_operation {
+                        match material_lck.get_pipeline().pipeline_config.blending_operation {
                             pipeline_builder::BlendTypes::BlendAlphaBlending => {
                                 true
                             },
@@ -748,8 +748,8 @@ pub fn load_gltf_node(
                     };
 
                     attrib.is_transparent = transparent;
-                    attrib.bound = (*(prim.lock().expect("failed to lock mesh"))).get_bound();
-                    attrib.value_bound = (*(prim.lock().expect("failed to lock mesh"))).get_bound();
+                    attrib.bound = mesh_lck.get_bound();
+                    attrib.value_bound = mesh_lck.get_bound();
                     //return the correct mesh attributes
                     attrib
 

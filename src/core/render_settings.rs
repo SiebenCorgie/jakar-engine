@@ -90,24 +90,29 @@ pub struct DirectionalLightSettings {
     pub pcf_samples: u32,
     ///Describes the resolution of a single cascade in the directonal shadow map
     pub shadow_map_resolution: u32,
+    /// number of cascades the shadow can have
+    pub num_cascades: u32,
 }
 
 impl DirectionalLightSettings{
     ///Creates a custom set of settings
-    pub fn new(pcf_samples: u32, resolution: u32) -> Self{
+    pub fn new(pcf_samples: u32, resolution: u32, num_cascades: u32) -> Self{
         DirectionalLightSettings{
             pcf_samples: pcf_samples,
             shadow_map_resolution: resolution,
+            num_cascades: num_cascades,
         }
     }
 
     ///Creates the default set of settings:
     /// - pcf samples: 9
     /// - shadow map resoltion: 1024 (each cascade)
+    /// - num_cascades: 4
     pub fn default() -> Self{
         DirectionalLightSettings{
             pcf_samples: 2,
             shadow_map_resolution: 1024,
+            num_cascades: 4
         }
     }
 }

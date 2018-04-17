@@ -1,12 +1,13 @@
 use cgmath::*;
 use collision::*;
 use jakar_tree::node::Attribute;
-use super::ValueTypeBool;
 use super::content::ContentType;
 use super::jobs::SceneJobs;
 use std::sync::{Arc, Mutex};
-
-
+use core::PointToVector;
+use super::*;
+use std::f32::consts::*;
+use std::f32;
 
 ///A node can have this attributes
 #[derive(Clone)]
@@ -33,6 +34,9 @@ pub struct NodeAttributes {
     ///Can be used to determin only the "glowing" objects, like lights and objects with emessive
     /// materials.
     pub is_emessive: bool,
+    /// This indicates the max draw distance for this object. However, while sorting the
+    /// actuall value can dynamicly be tweaked by a bias. It is usually set while importing the mesh.
+    pub max_draw_distance: f32,
 }
 
 ///A custom implementation
@@ -73,6 +77,7 @@ impl Attribute<SceneJobs> for NodeAttributes{
     /// - cast_shadow: true
     /// - is_transparent: false
     /// - hide_in_game: false
+    /// - max_draw_distance: 100.0
     fn default() -> Self{
         NodeAttributes{
             transform: Decomposed{
@@ -86,6 +91,7 @@ impl Attribute<SceneJobs> for NodeAttributes{
             is_transparent: false,
             hide_in_game: false,
             is_emessive: false,
+            max_draw_distance: 100.0
         }
     }
 
@@ -278,6 +284,20 @@ impl Attribute<SceneJobs> for NodeAttributes{
             Some(emessive) => {
                 if emessive != self.is_emessive{
                     return false;
+                }
+            },
+            None => {},
+        }
+
+        // Tests the screen volume this object has to the current camera
+        match comp.distance_cull{
+            Some((ref bias, ref cam_pos)) => {
+                //We currently just check the distance from the camera to the middle of our bound.
+                // we then scale the volume linearly by the ammount of
+                let dist_to_obj = (cam_pos - self.value_bound.center().into_vec()).magnitude2();
+                //check if we are within our max draw distance
+                if dist_to_obj > self.max_draw_distance * self.transform.scale * bias{
+                    return false
                 }
             },
             None => {},

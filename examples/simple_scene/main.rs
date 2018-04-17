@@ -26,7 +26,7 @@ extern crate winit;
 
 fn main() {
 
-    let light_settings = LightSettings::new(DirectionalLightSettings::new(1, 4096));
+    let light_settings = LightSettings::new(DirectionalLightSettings::new(3, 1024, 4));
 
     let graphics_settings = core::render_settings::RenderSettings::default()
     .with_msaa_factor(8)

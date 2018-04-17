@@ -65,7 +65,6 @@ pub fn order_by_distance(
 
     //return the reciver for further working on the renderer
     reciver
-
 }
 
 ///Function used to draw a line of bounds
