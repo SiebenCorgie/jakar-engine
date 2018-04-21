@@ -26,7 +26,7 @@ extern crate winit;
 
 fn main() {
 
-    let light_settings = LightSettings::new(DirectionalLightSettings::new(3, 1024, 4));
+    let light_settings = LightSettings::new(DirectionalLightSettings::new(3, 4096, 0.95));
 
     let graphics_settings = core::render_settings::RenderSettings::default()
     .with_msaa_factor(8)
@@ -51,7 +51,7 @@ fn main() {
     .with_asset_update_speed(100)
     .with_max_fps(200)
     .with_camera_settings(core::engine_settings::CameraSettings{
-        far_plane: 50.0,
+        far_plane: 500.0,
         near_plane: 0.1,
     })
     ;
@@ -67,8 +67,8 @@ fn main() {
     };
 
 
-    engine.get_asset_manager().import_gltf("TestScene", "examples/simple_scene/TestScenes/Cube_Plane.gltf");
-    //engine.get_asset_manager().import_gltf("TestScene", "examples/simple_scene/Sponza/Sponza.gltf");
+    //engine.get_asset_manager().import_gltf("TestScene", "examples/simple_scene/TestScenes/Cube_Plane.gltf");
+    engine.get_asset_manager().import_gltf("TestScene", "examples/simple_scene/Sponza/Sponza.gltf");
     //engine.get_asset_manager().import_gltf("TestScene", "examples/simple_scene/Helmet/Helmet.gltf");
 
 
@@ -165,7 +165,7 @@ fn main() {
     match light_tree.get_node(&sun_node){
         Some(sun)=> {
             sun.add_job(jobs::SceneJobs::Rotate(Vector3::new(0.0, 0.0, -60.0)));
-
+            /*
             sun.set_tick(
                 move |x:f32, arg: &mut Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>|{
                     let add_vec = Vector3::new(
@@ -180,7 +180,7 @@ fn main() {
                     );
                 }
             );
-
+            */
         },
         None => {println!("Could not find sun", );}
     }

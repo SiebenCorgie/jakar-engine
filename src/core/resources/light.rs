@@ -7,7 +7,7 @@ use core::resources::camera::DefaultCamera;
 use core::resources::camera::Camera;
 use render::shader::shader_inputs::lights;
 use core::ReturnBoundInfo;
-
+use core::PointToVector;
 //use std::sync::{Arc,Mutex};
 use std::f64::consts;
 
@@ -223,15 +223,29 @@ impl LightDirectional{
 
     ///Returns this light as its shader-useable instance
     ///Needs the node rotation and the camera location to calculate the direction and light space
-    pub fn as_shader_info(&self, rotation: &Quaternion<f32>, camera: &DefaultCamera, pcf_samples: u32, shadow_region: [f32; 4]) -> lights::ty::DirectionalLight{
-        let tmp_color: [f32;3] = self.color.into();
+    pub fn as_shader_info(&self,
+        rotation: &Quaternion<f32>,
+        camera: &DefaultCamera,
+        pcf_samples: u32,
+        shadow_region: [[f32; 4]; 4]
+    ) -> lights::ty::DirectionalLight{
+        let tmp_color: [f32;3] = self.color.normalize().into();
 
         //Now we create the light space matrix from the direction of this light;
-        let light_space: [[f32;4];4] = self.get_mvp(rotation, camera).into();
+        let (light_space, depths_slices) = {
+            let (matrixes, depths) = self.get_mvp(rotation, camera);
+            //the four matrixes
+            let mut ret_mat = [[[0.0; 4]; 4]; 4];
+            for idx in 0..matrixes.len(){
+                ret_mat[idx] = matrixes[idx].into();
+            }
+            (ret_mat, depths)
+        };
 
         //Return a native vulkano struct
         lights::ty::DirectionalLight{
-            shadow_region: shadow_region, //currently everything, will be handeled by the
+            shadow_region: shadow_region,
+            shadow_depths: depths_slices,
             light_space: light_space,
             color: tmp_color,
             direction: self.get_direction_vector(rotation).into(),
@@ -246,129 +260,104 @@ impl LightDirectional{
         rotation.rotate_vector(Vector3::new(1.0, 0.0, 0.0))
     }
 
-    pub fn get_mvp(&self, rotation: &Quaternion<f32>, camera: &DefaultCamera) ->Matrix4<f32>{
-        let l_dir = self.get_direction_vector(rotation);
-        
-        let dir_z = l_dir.clone().normalize();
+    ///Returns the four mvp matrixes for the cascaded shadow mapping as well as the depth slices
+    /// which are used for them.
+    pub fn get_mvp(&self, rotation: &Quaternion<f32>, cam: &DefaultCamera) -> ([Matrix4<f32>;4], [f32;4]){
 
-        let dir_x = dir_z.cross(Vector3::new(0.0, 1.0,0.0)).normalize();
-        let dir_y = dir_z.cross(dir_x).normalize();
+        let mut cascade_splits = [0.0; 4];
 
-        let mut rot_matrix = Matrix4::look_at(
-            Point3::new(0.0, 0.0, 0.0),
-            Point3::new(
-                l_dir.x,
-                l_dir.y,
-                l_dir.z,
-            ),
-            Vector3::new(0.0, 1.0, 0.0)
-        );
+        let mut return_depths: [f32;4] = [0.0;4];
+        let mut proj_matrix: [Matrix4<f32>; 4] = [Matrix4::<f32>::identity(); 4];
 
-        let frustum_corners: Vec<Vector4<f32>> = {
-            let corner_points = collision::Aabb3::new(
-                Point3::new(-1.0,-1.0,-1.0),
-                Point3::new(1.0,1.0,1.0)).to_corners();
+        let near_clip = cam.get_near_far().near_plane;
+		let far_clip = cam.get_near_far().far_plane;
+		let clip_range = far_clip - near_clip;
 
-            let mut ret_vec = Vec::new();
-            let proj = camera.get_perspective();
-            let view = camera.get_view_matrix();
-            let inv_mat = (proj * view).invert().expect("failed to get inverse view_proj matrix");
+		let min_z = near_clip;
+		let max_z = near_clip + clip_range;
 
-            for point in corner_points.iter(){
+		let range = max_z - min_z;
+		let ratio = max_z / min_z;
 
-                let mut new_point = inv_mat * Vector4::new(
-                    point.x,
-                    point.y,
-                    point.z,
-                    1.0);
-                //Persp div
-                new_point = new_point / new_point.w;
+        let lambda = 0.95; //TODO get from settings
 
-                ret_vec.push(new_point);
-            }
-            ret_vec
-        };
-        let mut rot_points = Vec::new();
-        //rote the points
-        for point in frustum_corners.into_iter(){
-            let mut n_point = rot_matrix * point;
+		// Calculate split depths based on view camera furstum
+		// Based on method presentd in https://developer.nvidia.com/gpugems/GPUGems3/gpugems3_ch10.html
+		for i in 0..4 {
+			let p = (i as f32 + 1.0) / 4.0;
+			let log = min_z * ratio.powf(p);
+			let uniform = min_z + range * p;
+			let d = lambda * (log - uniform) + uniform;
+			cascade_splits[i] = (d - near_clip) / clip_range;
+		}
 
-            n_point = n_point / n_point.w;
-            rot_points.push(
-                n_point
+		// Calculate orthographic projection matrix for each cascade
+		let mut last_split_dist = 0.0;
+		for i in 0..4 {
+			let split_dist = cascade_splits[i];
+
+			let mut frustum_corners = [
+				Vector3::new(-1.0,  1.0, -1.0),
+				Vector3::new( 1.0,  1.0, -1.0),
+				Vector3::new( 1.0, -1.0, -1.0),
+				Vector3::new(-1.0, -1.0, -1.0),
+				Vector3::new(-1.0,  1.0,  1.0),
+				Vector3::new( 1.0,  1.0,  1.0),
+				Vector3::new( 1.0, -1.0,  1.0),
+				Vector3::new(-1.0, -1.0,  1.0),
+			];
+
+			// Project frustum corners into world space
+			let inv_cam = cam.get_view_projection_matrix().invert().expect("failed to invers cam");
+			for i in 0..8 {
+				let inv_corner = inv_cam * frustum_corners[i].extend(1.0);
+				frustum_corners[i] = inv_corner.truncate() / inv_corner.w;
+			}
+
+			for i in 0..4 {
+				let dist = frustum_corners[i + 4] - frustum_corners[i];
+				frustum_corners[i + 4] = frustum_corners[i] + (dist * split_dist);
+				frustum_corners[i] = frustum_corners[i] + (dist * last_split_dist);
+			}
+
+			// Get frustum center
+			let mut frustum_center = Vector3::new(0.0,0.0,0.0);
+			for i in 0..8 {
+				frustum_center += frustum_corners[i];
+			}
+			frustum_center /= 8.0;
+
+			let mut radius: f32 = 0.0;
+			for i in 0..8 {
+				let distance: f32 = (frustum_corners[i] - frustum_center).magnitude();
+				radius = radius.max(distance);
+			}
+			radius = (radius * 16.0).ceil() / 16.0;
+
+			let max_extents = Vector3::new(radius,radius,radius);
+			let min_extents = -max_extents;
+
+			let light_dir = self.get_direction_vector(&rotation);
+			let light_view_matrix = Matrix4::look_at(
+                Point3::from_vec(frustum_center - light_dir * -min_extents.z),
+                Point3::from_vec(frustum_center),
+                Vector3::new(0.0, 1.0, 0.0)
             );
-        }
 
-        //println!("Points: {:?}", rot_points);
+			let light_ortho_matrix = ortho(
+                min_extents.x, max_extents.x,
+                min_extents.y, max_extents.y,
+                min_extents.z, max_extents.z - min_extents.z
+            );
 
-        let mut min = rot_points[0].clone();
-        let mut max = rot_points[0].clone();
-        for point in rot_points.iter(){
-            if point.x < min.x {min.x = point.x}
-            if point.y < min.y {min.y = point.y}
-            if point.z < min.z {min.z = point.z}
+			// Store split distance and matrix in cascade
+			return_depths[i] = (near_clip + split_dist * clip_range) * -1.0;
+			proj_matrix[i] = light_ortho_matrix * light_view_matrix;
 
-            if point.x > max.x {max.x = point.x}
-            if point.y > max.y {max.y = point.y}
-            if point.z > max.z {max.z = point.z}
-        }
+			last_split_dist = cascade_splits[i];
+		}
 
-        let bound_loc = collision::Aabb3::new(
-            Point3::new(min.x, min.y, min.z),
-            Point3::new(max.x, max.y, max.z)
-        ).center();
-
-        let mut extends = Vector3::new(
-            max.x-min.x,
-            max.y-min.y,
-            max.z-min.z,
-        );
-        extends = extends * 0.5;
-
-        let extend_size = 10.0;
-
-        let ortho = ortho(
-            -extends.x, extends.x,
-            -extends.y, extends.y,
-            -extends.z, extends.z);
-
-        let eye = {
-            Point3::new(
-                bound_loc.x - l_dir.x * (-extends.z),
-                bound_loc.y - l_dir.y * (-extends.z),
-                bound_loc.z - l_dir.z * (-extends.z))
-        };
-
-        let view_matrix = Matrix4::look_at(
-            eye,
-            bound_loc,
-            Vector3::new(0.0,1.0,0.0)
-        );
-        ortho * view_matrix
-
-        /*
-        let size = 20.0;
-        let ortho = ortho(
-            -size, size,
-            -size, size,
-            -size, size
-        );
-        println!("Dir direction: {:?}", l_dir);
-        let camera_loc = camera.get_position();
-        let point = Point3::new(
-            l_dir.x + camera_loc.x,
-            l_dir.y - camera_loc.y,
-            l_dir.z + camera_loc.z
-        );
-
-
-        let view_matrix = Matrix4::look_at(
-            point,
-            Point3::new(camera_loc.x, camera_loc.y, camera_loc.z),
-            Vector3::new(0.0, -1.0,0.0)
-        );
-        ortho * view_matrix
-        */
+        (proj_matrix, return_depths)
     }
 
     ///set intensity

@@ -93,7 +93,7 @@ impl ShadowSystem{
                 &Some(
                     comparer.clone().with_value_type(
                         ValueTypeBool::none().with_point_light()
-                    ).with_cull_distance(400.0, camera_loc)
+                    ).with_cull_distance(4000.0, camera_loc)
                 )
             )
         };
@@ -105,7 +105,7 @@ impl ShadowSystem{
                 &Some(
                     comparer.clone().with_value_type(
                         ValueTypeBool::none().with_spot_light()
-                    ).with_cull_distance(400.0, camera_loc)
+                    ).with_cull_distance(4000.0, camera_loc)
                 )
             )
         };
@@ -133,7 +133,7 @@ impl ShadowSystem{
         // While we sort the point and spot lights, we calculate the space we can occupy per
         // directional light.
         let d_light_spaces = get_dir_light_areas(
-            directional_lights.len() as u32, dir_settings.num_cascades
+            directional_lights.len() as u32, dir_settings.get_num_cascades()
         );
         //println!("Light spaces: {:?}", d_light_spaces);
         //now we save a copy of each light with it light space and convert them to light shader
@@ -156,11 +156,10 @@ impl ShadowSystem{
                     }
                 };
                 //currently have only one region
-                let region = region[0];
                 let shader_info = light.as_shader_info(
                     &light_rotation,
                     &current_camera,
-                    dir_settings.pcf_samples,
+                    dir_settings.get_pcf_samples(),
                     region
                 ); //shadow region will be set by the shadow system later if needed
 
@@ -265,56 +264,65 @@ impl ShadowSystem{
         let mut new_cb = command_buffer;
         //Now for each light and its cascade, render the light
         for &mut (ref mut light_node, ref light_info) in light_store.directional_lights.iter_mut(){
-            let light = light_node.value.as_directional_light().expect("failed to unwrap directional light node");
-
-            let light_mvp = light.get_mvp(&light_node.attributes.transform.rot, &camera_pos);
-            let view_frustum = Frustum::from_matrix4(light_mvp).expect("failed to create ortho frustum");
-
-            let meshes_in_light_frustum = scene
-            .copy_all_nodes(&Some(
-                SceneComparer::new()
-                .with_frustum(view_frustum)
-                .with_value_type(ValueTypeBool::none().with_mesh()
-            )));
-            //now get the dynamic stuff for the shadows
-            //After all, create the frame dynamic states
+            //Get the mvp matrix of the current light from the used matrixes in the
+            //light buffer
+            //TODO check if thats the right indice
+            let light_mvps = {
+                let mut ret_vec = Vec::new();
+                for idx in 0..4{
+                    ret_vec.push(Matrix4::from(light_info.light_space[idx]));
+                }
+                ret_vec
+            };
+            //image dimensions
             let img_dim = {
                 let tmp_dim = frame_system.shadow_images.directional_shadows.dimensions();
 
                 [tmp_dim[0] as f32, tmp_dim[1] as f32]
             };
-            //TODO later do this per cascade
-            //find the current region in the directional light map to render to
-            let origin = [
-                //upper corner
-                img_dim[0] * light_info.shadow_region[0],
-                img_dim[1] * light_info.shadow_region[1],
-            ];
-            //the pixels from origin to the target location
-            let dim = [
-                img_dim[0] * light_info.shadow_region[2] - origin[0],
-                img_dim[1] * light_info.shadow_region[3] - origin[1],
-            ];
+            //no cycle through the light cascades and render to the correct region on the image
+            for (idx, cascade_mvp) in light_mvps.into_iter().enumerate(){
+                let view_frustum = Frustum::from_matrix4(cascade_mvp).expect("failed to create ortho frustum");
 
-            //TODO configure based on the current shadow map region
-            let dynamic_state = vulkano::command_buffer::DynamicState{
-                line_width: None,
-                viewports: Some(vec![vulkano::pipeline::viewport::Viewport {
-                    origin: origin,
-                    dimensions: dim,
-                    depth_range: 0.0 .. 1.0,
-                }]),
-                scissors: None,
-            };
+                let meshes_in_light_frustum = scene
+                .copy_all_nodes(&Some(
+                    SceneComparer::new()
+                    //.with_frustum(view_frustum)
+                    .with_value_type(ValueTypeBool::none().with_mesh()
+                )));
 
-            //After setting each element, render the different shadow mapps
-            for node in meshes_in_light_frustum.into_iter(){
-                new_cb = self.render_depth_mesh(
-                    new_cb,
-                    &node,
-                    light_mvp.clone(),
-                    dynamic_state.clone()
-                );
+                //find the current region in the directional light map to render to
+                let origin = [
+                    //upper corner
+                    img_dim[0] * light_info.shadow_region[idx][0],
+                    img_dim[1] * light_info.shadow_region[idx][1],
+                ];
+                //the pixels from origin to the target location
+                let dim = [
+                    img_dim[0] * light_info.shadow_region[idx][2] - origin[0],
+                    img_dim[1] * light_info.shadow_region[idx][3] - origin[1],
+                ];
+
+                //TODO configure based on the current shadow map region
+                let dynamic_state = vulkano::command_buffer::DynamicState{
+                    line_width: None,
+                    viewports: Some(vec![vulkano::pipeline::viewport::Viewport {
+                        origin: origin,
+                        dimensions: dim,
+                        depth_range: 0.0 .. 1.0,
+                    }]),
+                    scissors: None,
+                };
+
+                //After setting each element, render the different shadow mapps
+                for node in meshes_in_light_frustum.into_iter(){
+                    new_cb = self.render_depth_mesh(
+                        new_cb,
+                        &node,
+                        cascade_mvp.clone(),
+                        dynamic_state.clone()
+                    );
+                }
             }
         }
         new_cb
@@ -371,7 +379,7 @@ impl ShadowSystem{
 }
 
 /// calculates spaces for a number of directional lights in uv coords (0.0 - 1.0)
-fn get_dir_light_areas(num_lights: u32, num_cascades: u32) -> Vec<Vec<[f32; 4]>>{
+fn get_dir_light_areas(num_lights: u32, num_cascades: u32) -> Vec<[[f32; 4];4]>{
     //Since we always need squares which are unweighted at the moment, we just check how often
     //we have to power 2 to get at least the number of tiles
     let tile_count = num_lights * num_cascades;
@@ -391,7 +399,7 @@ fn get_dir_light_areas(num_lights: u32, num_cascades: u32) -> Vec<Vec<[f32; 4]>>
     //we cycle though the cascades of each light, assigning a set of coordinates each.
     let split_distance = 1.0 / count as f32;
     let mut lights_vec = Vec::new();
-    let mut current_cascades_vec = Vec::new();
+    let mut current_cascades_vec = [[0.0;4];4];
     let mut current_cascade_count = 0;
 
     for u in 0..count{
@@ -403,13 +411,13 @@ fn get_dir_light_areas(num_lights: u32, num_cascades: u32) -> Vec<Vec<[f32; 4]>>
                 (v+1) as f32 * split_distance,
                 ];
             //push to the current vec
-            current_cascades_vec.push(current_coords);
+            current_cascades_vec[current_cascade_count] = current_coords;
             //increment and check if this was the last cascade
             current_cascade_count += 1;
-            if current_cascade_count == num_cascades{
+            if current_cascade_count as u32 == num_cascades{
                 //push the current cascade vec and create a new one, then reset the cascade counter
                 lights_vec.push(current_cascades_vec);
-                current_cascades_vec = Vec::new();
+                current_cascades_vec = [[0.0;4];4];
                 current_cascade_count = 0;
             }
         }

@@ -101,7 +101,7 @@ impl ShadowPassImages{
             let res = settings_lck
             .get_render_settings()
             .get_light_settings()
-            .directional_settings.shadow_map_resolution;
+            .directional_settings.get_shadow_map_resolution();
 
             [res; 2]
         };

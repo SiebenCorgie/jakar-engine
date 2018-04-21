@@ -509,6 +509,7 @@ impl BuildRender for RenderBuilder{
                     pipeline_builder::DepthStencilConfig::SimpleDepthNoStencil
                 )
                 .with_cull_mode(pipeline_builder::CullMode::Front) //For better contact shadows
+                .clamp_depth(true)
         );
 
         println!("Starting post progress framework", );
@@ -576,6 +577,7 @@ impl RenderBuilder {
             sampler_anisotropy: true,
             sample_rate_shading: true,
             logic_op: true, //needed for custom blending
+            depth_clamp: true, //needed for correct shadow mapping
             .. vulkano::instance::Features::none()
         };
 

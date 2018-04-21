@@ -256,7 +256,7 @@ impl Renderer {
         let mesh_comparer = SceneComparer::new()
         .with_value_type(ValueTypeBool::none().with_mesh())
         .with_frustum(asset_manager.get_camera().get_frustum_bound())
-        .with_cull_distance(400.0, asset_manager.get_camera().get_position())
+        .with_cull_distance(4000.0, asset_manager.get_camera().get_position())
         .without_transparency();
 
         let mesh_comp_trans = mesh_comparer.clone()

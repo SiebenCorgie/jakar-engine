@@ -110,16 +110,6 @@ impl ValueTypeBool {
     }
 }
 
-///Internal struct used to comapre a node agains the camera and decide if we want to use it in
-/// our sorting or not.
-#[derive(Clone)]
-pub struct SortCamera {
-    pub location: Vector3<f32>,
-    pub fov: f32,
-    pub min_max_distance: [f32; 2],
-    pub max_view_distance: f32,
-}
-
 ///The comparer type used to comapre a SceneTree to attribtues.
 ///You can use this for instance to get every node which is transparent.
 #[derive(Clone)]
@@ -595,7 +585,6 @@ pub fn get_min_max(points: Vec<Point3<f32>>) -> (Point3<f32>, Point3<f32>){
             maxs.z = point.z;
         }
     }
-
     (mins, maxs)
 }
 
@@ -605,5 +594,6 @@ pub fn get_max_aabb_len(aabb: &Aabb3<f32>) -> f32{
     let mut length = aabb.max.x - aabb.min.x;
     if (aabb.max.y - aabb.min.y) > length { length = aabb.max.y - aabb.min.y; }
     if (aabb.max.z - aabb.min.z) > length { length = aabb.max.z - aabb.min.z; }
+
     length
 }

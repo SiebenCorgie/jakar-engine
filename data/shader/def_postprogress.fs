@@ -44,8 +44,6 @@ float linear_depth(float depth){
 
 void main()
 {
-
-
   //Cluster Id
   if (u_hdr_settings.show_mode == 0) {
 
@@ -73,11 +71,18 @@ void main()
   }
   //Show depth of directional
   if (u_hdr_settings.show_mode == 3) {
+    //only show in the lower half
+    /*
+    if (inter_coord.x >= 0.5 && inter_coord.y >= 0.5){
 
+      float depth = texture(dir_depth, (inter_coord - 0.5) * 2.0).r;
+
+      FragColor = vec4(vec3(depth), 1.0);
+    }
+    */
     float depth = texture(dir_depth, inter_coord).r;
 
     FragColor = vec4(vec3(depth), 1.0);
-
     return;
   }
 

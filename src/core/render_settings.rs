@@ -83,37 +83,71 @@ impl ExposureSettings{
     }
 }
 
-///Collects all settings for directional lights
+///Collects all settings for directional lights, Note that the light currently has set the
+/// number of cascades to four (not changeable)
 #[derive(Clone)]
 pub struct DirectionalLightSettings {
     ///Describes how many samples should be taken in each direction when calculating the shadow
-    pub pcf_samples: u32,
+    pcf_samples: u32,
     ///Describes the resolution of a single cascade in the directonal shadow map
-    pub shadow_map_resolution: u32,
+    shadow_map_resolution: u32,
     /// number of cascades the shadow can have
-    pub num_cascades: u32,
+    num_cascades: u32,
+    /// Controlles the strength of the shadow cascading overlapping
+    cascade_lambda: f32
 }
 
 impl DirectionalLightSettings{
     ///Creates a custom set of settings
-    pub fn new(pcf_samples: u32, resolution: u32, num_cascades: u32) -> Self{
+    pub fn new(pcf_samples: u32, resolution: u32, cascade_lambda: f32) -> Self{
         DirectionalLightSettings{
             pcf_samples: pcf_samples,
             shadow_map_resolution: resolution,
-            num_cascades: num_cascades,
+            num_cascades: 4,
+            cascade_lambda: cascade_lambda,
         }
     }
 
     ///Creates the default set of settings:
     /// - pcf samples: 9
     /// - shadow map resoltion: 1024 (each cascade)
-    /// - num_cascades: 4
+    /// - num_cascades: 4 (can't be changed)
     pub fn default() -> Self{
         DirectionalLightSettings{
             pcf_samples: 2,
             shadow_map_resolution: 1024,
-            num_cascades: 4
+            num_cascades: 4,
+            cascade_lambda: 0.95,
         }
+    }
+
+    pub fn get_num_cascades(&self) -> u32{
+        self.num_cascades
+    }
+
+    pub fn get_shadow_map_resolution(&self) -> u32{
+        self.shadow_map_resolution
+    }
+
+    pub fn get_pcf_samples(&self) -> u32{
+        self.pcf_samples
+    }
+    ///controlls the strength of the cascade overlaping.
+    /// a typical value is 0.95.
+    pub fn get_cascade_lambda(&self) -> f32{
+        self.cascade_lambda
+    }
+
+    pub fn set_shadow_map_resolution(&mut self, new: u32){
+        self.shadow_map_resolution = new;
+    }
+
+    pub fn set_pcf_samples(&mut self, new: u32){
+        self.pcf_samples = new;
+    }
+
+    pub fn set_cascade_lambda(&mut self, new: f32){
+        self.cascade_lambda = new;
     }
 }
 ///Defines several settings which will be used to determin how lights and their shadows are rendered

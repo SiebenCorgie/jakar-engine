@@ -4,8 +4,7 @@ use collision;
 use std::f64::consts;
 use std::sync::{Arc, Mutex};
 
-use core::engine_settings;
-use core::next_tree::SortCamera;
+use core::engine_settings::{EngineSettings,CameraSettings};
 use input::KeyMap;
 
 use std::time::{Instant};
@@ -14,10 +13,10 @@ use std::time::{Instant};
 ///Camera trait, use this to implement any type of camera
 pub trait Camera {
     ///Creates a default camera
-    fn new(settings: Arc<Mutex<engine_settings::EngineSettings>>, key_map: Arc<Mutex<KeyMap>>) -> Self;
+    fn new(settings: Arc<Mutex<EngineSettings>>, key_map: Arc<Mutex<KeyMap>>) -> Self;
     ///Initiates a camera with given opetions
     fn from_properties(
-        settings: Arc<Mutex<engine_settings::EngineSettings>>,
+        settings: Arc<Mutex<EngineSettings>>,
         key_map: Arc<Mutex<KeyMap>>,
         front: Vector3<f32>,
         position: Vector3<f32>,
@@ -48,9 +47,10 @@ pub trait Camera {
     fn get_view_projection_matrix(&self) -> Matrix4<f32>;
     ///Returns the bound of the view frustum
     fn get_frustum_bound(&self) -> collision::Frustum<f32>;
-    ///Creates a `SortCamera` struct used to test the camera agains nodes in a scene tree.
-    fn into_sort_camera(&self) -> SortCamera;
+    ///Returns the current far/near plane settings used
+    fn get_near_far(&self) -> CameraSettings;
 }
+
 
 ///An example implementation
 #[derive(Clone)]
@@ -69,7 +69,9 @@ pub struct DefaultCamera {
     fov: f32,
     speed: f32,
 
-    settings: Arc<Mutex<engine_settings::EngineSettings>>,
+    current_cam_settings: CameraSettings,
+
+    settings: Arc<Mutex<EngineSettings>>,
     key_map: Arc<Mutex<KeyMap>>,
 
     last_time: Instant,
@@ -82,7 +84,7 @@ pub struct DefaultCamera {
 ///in every shader.
 impl Camera for DefaultCamera{
     fn new(
-        settings: Arc<Mutex<engine_settings::EngineSettings>>,
+        settings: Arc<Mutex<EngineSettings>>,
         key_map: Arc<Mutex<KeyMap>>
     ) -> Self {
         //camera General
@@ -96,6 +98,11 @@ impl Camera for DefaultCamera{
 
         let fov = 45.0;
 
+        let current_cam_settings = {
+            let set_lck = settings.lock().expect("failed to load settings");
+            set_lck.camera.clone()
+        };
+
         DefaultCamera {
             position: position,
             front: front,
@@ -107,19 +114,20 @@ impl Camera for DefaultCamera{
             pitch: pitch,
             fov: fov,
 
+            current_cam_settings: current_cam_settings,
+
             speed: 25.0,
 
             settings: settings,
 
             key_map: key_map,
-
             last_time: Instant::now(),
         }
     }
 
     ///Initiates a camera with given opetions
     fn from_properties(
-        settings: Arc<Mutex<engine_settings::EngineSettings>>,
+        settings: Arc<Mutex<EngineSettings>>,
         key_map: Arc<Mutex<KeyMap>>,
         front: Vector3<f32>,
         position: Vector3<f32>,
@@ -131,6 +139,11 @@ impl Camera for DefaultCamera{
 
         let fov = 45.0;
 
+        let current_cam_settings = {
+            let set_lck = settings.lock().expect("failed to load settings");
+            set_lck.camera.clone()
+        };
+
         let mut new_cam = DefaultCamera {
             position: position,
             front: front,
@@ -141,6 +154,9 @@ impl Camera for DefaultCamera{
             yaw: yaw,
             pitch: pitch,
             fov: fov,
+
+            current_cam_settings: current_cam_settings,
+
 
             speed: speed,
 
@@ -157,6 +173,12 @@ impl Camera for DefaultCamera{
 
     ///Updates the camera view information
     fn update_view(&mut self){
+
+        //first check the current extends... TODO don't lock so often
+        self.current_cam_settings = {
+            let engine_settings_lck = self.settings.lock().expect("Faield to lock settings");
+            engine_settings_lck.camera.clone()
+        };
 
         let delta_time: f32 ={
             //Get the time and / 1_000_000_000 for second
@@ -296,7 +318,6 @@ impl Camera for DefaultCamera{
             )
         };
 
-
         //from https://matthewwellings.com/blog/the-new-vulkan-coordinate-system/
         /*
         let bias: Matrix4<f32> = Matrix4::new(
@@ -327,29 +348,10 @@ impl Camera for DefaultCamera{
         collision::Frustum::from_matrix4(matrix).expect("failed to create frustum")
     }
 
-    ///Creates a `SortCamera` struct used to test the camera agains nodes in a scene tree.
-    #[inline]
-    fn into_sort_camera(&self) -> SortCamera{
-        //We have to lock the settings to get the far and near plane
-        //TODO remove the lock since we have to do this quiet often.
-        let (near_plane, far_plane) = {
-            let engine_settings_lck = self.settings.lock().expect("Faield to lock settings");
-            (
-                engine_settings_lck.camera.near_plane,
-                engine_settings_lck.camera.far_plane
-            )
-        };
-
-        let mut max_v_dist = far_plane - near_plane;
-        //since we are in a perspective we have to use max_v_dis/sin(fov/2)
-        //max_v_dist = max_v_dist/ to_radians((self.fov / 2.0)).sin(); //our fov is in degree tho
-        SortCamera{
-            location: self.position,
-            fov: self.fov,
-            min_max_distance: [near_plane, far_plane],
-            max_view_distance: max_v_dist,
-        }
+    fn get_near_far(&self) -> CameraSettings{
+        self.current_cam_settings.clone()
     }
+
 }
 
 //Helper function for calculating the view

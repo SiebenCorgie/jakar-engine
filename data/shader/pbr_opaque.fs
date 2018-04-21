@@ -11,7 +11,7 @@ layout(location = 0) in vec3 v_normal;
 layout(location = 1) in vec3 FragmentPosition;
 layout(location = 2) in vec2 v_TexCoord;
 layout(location = 3) in vec3 v_position;
-layout(location = 4) in vec4 ndc_Pos;
+layout(location = 4) in vec3 in_view_pos;
 layout(location = 5) in mat3 v_TBN;
 
 
@@ -90,8 +90,9 @@ layout(set = 3, binding = 1) readonly buffer point_lights{
 //==============================================================================
 struct DirectionalLight
 {
-  vec4 shadow_region;
-  mat4 light_space;
+  vec4 shadow_region[4];
+  float shadow_depths[4];
+  mat4 light_space[4];
   vec3 color;
   vec3 direction;
   float intensity;
@@ -204,54 +205,66 @@ float calcFalloff(float dist, float radius){
   return  smoothFactor * smoothFactor;
 }
 
-//Claculates how much shadow should be drawn.
-float ShadowCalculation(
-  vec4 fragPosLightSpace, sampler2D shadowmap, vec3 l_dir, uint pcf_fac,
-  vec4 map_coords
-  )
+const mat4 biasMat = mat4(
+	0.5, 0.0, 0.0, 0.0,
+	0.0, 0.5, 0.0, 0.0,
+	0.0, 0.0, 1.0, 0.0,
+	0.5, 0.5, 0.0, 1.0
+);
+
+//samples a shadow at P with and uv offset on a shadowmapp within a region on that sm
+float textureProj(vec4 P, vec2 offset, sampler2D sm, vec4 region)
 {
-    vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
-    projCoords = projCoords * 0.5 + 0.5;
-    //Early return if we would have to sample outisde the map TODO: check the region we are in
-    if(projCoords.z > 1.0 || projCoords.z < 0.0 ||
-      projCoords.x > 1.0 || projCoords.x < 0.0 ||
-      projCoords.y > 1.0 || projCoords.y < 0.0){
-      return 0.0;
+	float shadow = 1.0;
+	float bias = 0.005;
+  //normalize
+	vec4 shadowCoord = P / P.w;
+
+  vec2 region_length;
+  region_length.x = region.z - region.x;
+  region_length.y = region.w - region.y;
+  vec2 smCoord = region.xy + (shadowCoord.xy * region_length);
+
+  //it can happen that we sample outside our region or sm, in that case, return 1.0
+  vec2 shadow_coord_of = smCoord + offset;
+  if (
+    shadow_coord_of.x < region.x || shadow_coord_of.x > 1.0 ||
+    shadow_coord_of.x > region.z || shadow_coord_of.x < 0.0 ||
+    shadow_coord_of.y < region.y || shadow_coord_of.y > 1.0 ||
+    shadow_coord_of.y > region.w || shadow_coord_of.y < 0.0
+    ){
+      return shadow;
     }
 
-    //now we change theese to the actual coords on the shadow map
-    vec2 shadow_tile_size = map_coords.zw - map_coords.xy;
-    //now go from the start on the tile.
-    vec2 final_projCoords = map_coords.xy + (shadow_tile_size * projCoords.xy);
+	if ( shadowCoord.z > -1.0 && shadowCoord.z < 1.0 ) {
+		float dist = texture(sm, shadow_coord_of).r;
+		if (dist < shadowCoord.z - bias) {
+			shadow = 0.0f;
+		}
+	}
+	return shadow;
+}
 
+//Performs the texture lookup several times based on the supplied pcf count
+float pcfShadow(vec4 P, vec2 offset, sampler2D sm, vec4 region, int pcf)
+{
+  ivec2 texDim = textureSize(sm, 0).xy;
+	float dx = 1.0 / float(texDim.x);
+	float dy = 1.0 / float(texDim.y);
+  //now we have the size for one pixel we want to go "pcf"-times in each direction
 
-    vec2 texelSize = 1.0 / textureSize(shadowmap, 0);
+	float shadowFactor = 0.0;
+  int count = 0;
+	int range = pcf;
 
-
-    float closestDepth = texture(shadowmap, final_projCoords).r;
-    float currentDepth = projCoords.z;
-    float bias = max(0.05 * (1.0 - dot(v_normal, l_dir)), 0.005);
-    float shadow = 0.0;
-
-    int range_start = int(pcf_fac);
-    if (pcf_fac > 0){
-      //Sample in each direction and add the value to the shadow value
-      for (int x = -1 * range_start; x <= range_start; ++x){
-        for (int y = -1 * range_start; y <= range_start; ++y){
-          //Sample the new shadow depth and compare then add
-          float pcfDepth = texture(shadowmap, final_projCoords + vec2(x, y) * texelSize).r;
-          shadow += currentDepth - bias > pcfDepth ? 1.0 : 0.0;
-        }
-      }
-      //Now divide the shadow value
-      float samples_per_dir = ((pcf_fac * 2) + 1);
-      shadow = shadow / (samples_per_dir * samples_per_dir);
-    }else{
-      shadow = currentDepth - bias > closestDepth  ? 1.0 : 0.0;
-    }
-
-
-    return shadow;
+	for (int x = -range; x <= range; x++) {
+		for (int y = -range; y <= range; y++) {
+			shadowFactor += textureProj(P, vec2(dx*x, dy*y), sm, region);
+			count++;
+		}
+	}
+  //now decrease
+	return shadowFactor / count;
 }
 
 //Calculates a point ligh -----------------------------------------------------
@@ -304,16 +317,49 @@ vec3 calcDirectionalLight(DirectionalLight light, vec3 F0)
   vec3 radiance = light.color * light.intensity;
 
   //now darken the light contribution by the shadow value
-  //but only do if we have a actual region to use
+  //but only do if we have a actual region to use (not if xz or yw are the same)
   //The region goes from x/y to z/w
-  if (light.shadow_region.x != light.shadow_region.z && light.shadow_region.y != light.shadow_region.w){
-    vec4 FragPosLightSpace = light.light_space * vec4(FragmentPosition, 1.0);
-    float shadow = ShadowCalculation(
-      FragPosLightSpace, t_DirectionalShadows, light.direction, light.pcf_samples,
-      light.shadow_region
-    );
-    radiance = (1.0 - shadow) * radiance;
+  //find cascade
+
+  //now compare the current depth to find the correct cascade, we want to use the nearest one
+  uint cascadeIndex = 0;
+  //TODO fix that
+	for(uint i = 0; i < 3; ++i) {
+		if(in_view_pos.z < light.shadow_depths[i]) {
+			cascadeIndex = i + 1;
+		}
+	}
+
+  /*
+  switch (cascadeIndex){
+      case 0 :
+				return vec3(1.0f, 0.0, 0.0);
+        break;
+			case 1 :
+				return vec3(0.0, 1.0f, 0.0);
+        break;
+			case 2 :
+				return vec3(0.0, 0.0, 1.0f);
+        break;
+			case 3 :
+				return vec3(1.0f, 1.0f, 0.0);
+        break;
   }
+  */
+
+  vec4 shadow_region = light.shadow_region[cascadeIndex];
+  mat4 light_space = light.light_space[cascadeIndex];
+
+  vec4 FragPosLightSpace = biasMat * light_space * vec4(FragmentPosition, 1.0);
+
+  float shadow = pcfShadow(
+    FragPosLightSpace / FragPosLightSpace.w,
+    vec2(0,0),
+    t_DirectionalShadows,
+    shadow_region,
+    int(light.pcf_samples)
+  );
+  radiance = shadow * radiance;
 
   // Cook-Torrance BRDF
   float NDF = DistributionGGX(H);
@@ -397,6 +443,7 @@ bool isInClusters(){
 // ----------------------------------------------------------------------------
 void main()
 {
+
   if (u_tex_usage_info.b_albedo != 1) {
     albedo = u_tex_fac.albedo_factor;
   }else{
@@ -492,16 +539,9 @@ void main()
     }
 
   }
-/*
-  //Spot Lights
-  for(int i = 0; i < u_light_count.spots; i++){
-    Lo += calcSpotLight(u_spot_light.s_light[i], FragmentPosition, albedo.xyz, metallic, roughness, V, surf_normal, F0);
-  }
-*/
 
   //Directional Lights
   for(int i = 0; i < u_light_count.directionals; i++){
-    vec4 frag_in_light = u_dir_light.d_light[i].light_space * vec4(FragmentPosition, 1.0);
     Lo += calcDirectionalLight(u_dir_light.d_light[i], F0);
   }
   //TODO

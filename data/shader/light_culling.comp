@@ -35,9 +35,13 @@ layout(set = 0, binding = 1) readonly buffer point_lights{
 //==============================================================================
 struct DirectionalLight
 {
+  vec4 shadow_region[4];
+  float shadow_depths[4];
+  mat4 light_space[4];
   vec3 color;
   vec3 direction;
   float intensity;
+  uint pcf_samples;
 };
 
 layout(set = 0, binding = 2) readonly buffer directional_lights{
