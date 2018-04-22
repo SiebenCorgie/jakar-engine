@@ -93,18 +93,22 @@ pub struct DirectionalLightSettings {
     shadow_map_resolution: u32,
     /// number of cascades the shadow can have
     num_cascades: u32,
-    /// Controlles the strength of the shadow cascading overlapping
-    cascade_lambda: f32
+    /// Controlles at which point cascades are split in the logarithmic function.
+    cascade_lambda: f32,
+    ///Controles how many percent on the shadowmap a mesh must occupy to be actually rendered.
+    /// for high settings 0.1 is a good value.
+    occupy_bias: f32,
 }
 
 impl DirectionalLightSettings{
     ///Creates a custom set of settings
-    pub fn new(pcf_samples: u32, resolution: u32, cascade_lambda: f32) -> Self{
+    pub fn new(pcf_samples: u32, resolution: u32, cascade_lambda: f32, occupy_bias: f32) -> Self{
         DirectionalLightSettings{
             pcf_samples: pcf_samples,
             shadow_map_resolution: resolution,
             num_cascades: 4,
             cascade_lambda: cascade_lambda,
+            occupy_bias: occupy_bias,
         }
     }
 
@@ -112,43 +116,55 @@ impl DirectionalLightSettings{
     /// - pcf samples: 9
     /// - shadow map resoltion: 1024 (each cascade)
     /// - num_cascades: 4 (can't be changed)
+    /// - cascade_lambda: 0.95
+    /// - occupy_bias: 0.1
     pub fn default() -> Self{
         DirectionalLightSettings{
             pcf_samples: 2,
             shadow_map_resolution: 1024,
             num_cascades: 4,
             cascade_lambda: 0.95,
+            occupy_bias: 0.1,
         }
     }
-
+    /// Always returns 4 four now.
     pub fn get_num_cascades(&self) -> u32{
         self.num_cascades
     }
-
+    /// Controlles the resolution of the shadow map. A single cascaded always has half of that
+    /// resolution, since all 4 cascades are stored on the same shadowmap.
     pub fn get_shadow_map_resolution(&self) -> u32{
         self.shadow_map_resolution
     }
-
+    pub fn set_shadow_map_resolution(&mut self, new: u32){
+        self.shadow_map_resolution = new;
+    }
+    /// Describes how many samples are taken in each direction when rendering the shadows
+    /// More samples means smoother shadows but also impacts the fps heavily.
+    pub fn set_pcf_samples(&mut self, new: u32){
+        self.pcf_samples = new;
+    }
     pub fn get_pcf_samples(&self) -> u32{
         self.pcf_samples
     }
-    ///controlls the strength of the cascade overlaping.
+    /// Controlles at which point cascades are split in the logarithmic function.
+    pub fn set_cascade_lambda(&mut self, new: f32){
+        self.cascade_lambda = new;
+    }
     /// a typical value is 0.95.
     pub fn get_cascade_lambda(&self) -> f32{
         self.cascade_lambda
     }
-
-    pub fn set_shadow_map_resolution(&mut self, new: u32){
-        self.shadow_map_resolution = new;
+    ///Controles how many percent on the shadowmap a mesh must occupy to be actually rendered.
+    /// for high settings 0.1 is a good value.
+    pub fn set_occupy_bias(&mut self, new: f32){
+        self.occupy_bias = new;
     }
 
-    pub fn set_pcf_samples(&mut self, new: u32){
-        self.pcf_samples = new;
+    pub fn get_occupy_bias(&self) -> f32{
+        self.occupy_bias
     }
 
-    pub fn set_cascade_lambda(&mut self, new: f32){
-        self.cascade_lambda = new;
-    }
 }
 ///Defines several settings which will be used to determin how lights and their shadows are rendered
 #[derive(Clone)]
@@ -278,7 +294,13 @@ impl RenderSettings{
 
     ///Returns the current debug settings as mutable.
     #[inline]
-    pub fn get_debug_settings(&mut self) -> &mut DebugSettings{
+    pub fn get_debug_settings(&self) -> &DebugSettings{
+        &self.debug_settings
+    }
+
+    ///Returns the current debug settings as mutable.
+    #[inline]
+    pub fn get_debug_settings_mut(&mut self) -> &mut DebugSettings{
         &mut self.debug_settings
     }
 

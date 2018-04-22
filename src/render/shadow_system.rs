@@ -81,9 +81,9 @@ impl ShadowSystem{
 
         // The frustum of the current camera. Since the bound of a light is always its influence
         // radius as well we can use this info to cull not usable spot and point lights
-        let frustum = asset_manager.get_camera().get_frustum_bound();
         let current_camera = asset_manager.get_camera().clone();
         let camera_loc = asset_manager.get_camera().get_position();
+        let camera_mvp = asset_manager.get_camera().get_view_projection_matrix();
 
         let comparer = SceneComparer::new(); //We want to be able to render 360 deg pics with the same
         //lights... not culling per frustum .with_frustum(frustum);
@@ -93,7 +93,8 @@ impl ShadowSystem{
                 &Some(
                     comparer.clone().with_value_type(
                         ValueTypeBool::none().with_point_light()
-                    ).with_cull_distance(4000.0, camera_loc)
+                    )
+                    .with_cull_distance(0.05, camera_mvp)
                 )
             )
         };
@@ -105,7 +106,8 @@ impl ShadowSystem{
                 &Some(
                     comparer.clone().with_value_type(
                         ValueTypeBool::none().with_spot_light()
-                    ).with_cull_distance(4000.0, camera_loc)
+                    )
+                    .with_cull_distance(0.05, camera_mvp)
                 )
             )
         };
@@ -258,10 +260,14 @@ impl ShadowSystem{
         frame_system: &FrameSystem,
     ) -> AutoCommandBufferBuilder{
         //first of all get all directional lights
-        let camera_pos = asset_manager.get_camera().clone();
         let scene = asset_manager.get_active_scene();
         //declare a new cb object which will be updated per draw call
         let mut new_cb = command_buffer;
+        //Find the current percentage a mesh must cover to be used
+        let cover_bias = {
+            let set_lck = self.engine_settings.lock().expect("failed to lock settings");
+            set_lck.get_render_settings().get_light_settings().directional_settings.get_occupy_bias()
+        };
         //Now for each light and its cascade, render the light
         for &mut (ref mut light_node, ref light_info) in light_store.directional_lights.iter_mut(){
             //Get the mvp matrix of the current light from the used matrixes in the
@@ -287,9 +293,10 @@ impl ShadowSystem{
                 let meshes_in_light_frustum = scene
                 .copy_all_nodes(&Some(
                     SceneComparer::new()
-                    //.with_frustum(view_frustum)
-                    .with_value_type(ValueTypeBool::none().with_mesh()
-                )));
+                    .with_frustum(view_frustum)
+                    .with_value_type(ValueTypeBool::none().with_mesh())
+                    .with_cull_distance(cover_bias, cascade_mvp)
+                ));
 
                 //find the current region in the directional light map to render to
                 let origin = [

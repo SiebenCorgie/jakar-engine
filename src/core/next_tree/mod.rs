@@ -133,11 +133,9 @@ pub struct SceneComparer{
         ///Some if the is_emessive component should be compared. Good to get all objects which
         /// can produce light.
         pub is_emessive: Option<bool>,
-        /// If enabled the sorting algorith will compare the distance from the camera to the
-        /// bjects as well as its size/volume. If it has a bigger screen representation
-        /// them the bias set in the `with_cull_distance()` function it will be used.
-        /// If it is too small it will be discarded.
-        pub distance_cull: Option<(f32, Vector3<f32>)>,
+        /// If enabled it will not add any node where the screen coverage of the AABB is lower than
+        /// the float which is supplied as the first argument
+        pub distance_cull: Option<(f32, Matrix4<f32>)>,
 }
 
 impl SceneComparer{
@@ -235,8 +233,8 @@ impl SceneComparer{
     }
 
     ///Culls the obejct based on a bias value, see the struct documentation for more information.
-    pub fn with_cull_distance(mut self, bias: f32, pos: Vector3<f32>) -> Self{
-        self.distance_cull = Some((bias, pos));
+    pub fn with_cull_distance(mut self, bias: f32, view_projection_matrix: Matrix4<f32>) -> Self{
+        self.distance_cull = Some((bias, view_projection_matrix));
         self
     }
 }
@@ -596,4 +594,43 @@ pub fn get_max_aabb_len(aabb: &Aabb3<f32>) -> f32{
     if (aabb.max.z - aabb.min.z) > length { length = aabb.max.z - aabb.min.z; }
 
     length
+}
+
+///Projects each point in the list into the space of the matrix supplied.
+pub fn project_points(points: &mut Vec<Point3<f32>>, matrix: &Matrix4<f32>){
+    for point in points.iter_mut(){
+        let mut tmp_point = matrix * point.to_vec().extend(1.0);
+        tmp_point = tmp_point / tmp_point.w;
+        *point = Point3::<f32>::from_vec(tmp_point.truncate());
+
+    }
+}
+
+//takes a set of points and computes the maximum x,y distance possible between points. Used to
+// compute the LOD / culling of objects
+pub fn get_max_xy_len(points: &Vec<Point3<f32>>) -> f32{
+    if points.len() == 0{
+        return 0.0;
+    }
+    let mut max = Vector2::new(points[0].x, points[0].y);
+    let mut min = Vector2::new(points[0].x, points[0].y);
+
+    for poi in points.iter(){
+        if poi.x > max.x{
+            max.x = poi.x;
+        }
+        if poi.x < min.x{
+            min.x = poi.x;
+        }
+        if poi.y > max.y{
+            max.y = poi.y;
+        }
+        if poi.y < min.y{
+            min.y = poi.y;
+        }
+    }
+
+    //since we got the max values, gonna find the magnitude between them
+    let dist_vec = max - min;
+    return dist_vec.magnitude();
 }

@@ -141,7 +141,12 @@ impl EngineSettings{
     }
 
     ///Returns the current render settings
-    pub fn get_render_settings(&mut self) -> &mut render_settings::RenderSettings {
+    pub fn get_render_settings(&self) -> &render_settings::RenderSettings {
+        &self.render_settings
+    }
+    
+    ///Returns the current render settings, but mutable
+    pub fn get_render_settings_mut(&mut self) -> &mut render_settings::RenderSettings {
         &mut self.render_settings
     }
 

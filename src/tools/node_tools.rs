@@ -26,7 +26,7 @@ pub fn order_by_distance(
     let _ = thread::spawn(move ||{
 
         //Silly ordering
-        let mut ordered_meshes: BTreeMap<i64, node::Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>> = BTreeMap::new();
+        let mut ordered_meshes = Vec::new();
 
         for mesh in nodes.iter(){
 
@@ -36,24 +36,29 @@ pub fn order_by_distance(
 
             //get distance between camera and position
             let distance = mesh_location - location;
-            //now transform to an int and multiply by 10 to have some comma for better sorting
-            let i_distance = (distance.magnitude2().abs() * 10.0) as i64;
+            //we have to use a little hack since I don't know yet how to sort this more efficiently
+            let i_distance = (distance.magnitude2().abs() * 100_000_000.0) as u64;
 
             //now add the mesh to the map based on it
-            ordered_meshes.insert(i_distance, mesh.clone());
+            ordered_meshes.push((i_distance, mesh.clone()));
 
         }
+        //sort by distance
+        ordered_meshes.sort_unstable_by(|&(ref da, ref a), &(ref db, ref b)| da.cmp(&db));
+
         //Silly ordering end ==================================================================
 
         //now reorder the meshes reversed into a vec and send them to the render thread
         let mut return_vector = Vec::new();
-        for (_, mesh) in ordered_meshes.into_iter(){
-            return_vector.push(mesh);
+        for (_, ord_node) in ordered_meshes.into_iter(){
+            return_vector.push(ord_node);
         }
+
         match sender.send(return_vector){
             Ok(_) => {},
             Err(er) => panic!("failed to send ordered nodes! {:?}", er)
         }
+
 
     });
 

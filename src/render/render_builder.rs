@@ -391,7 +391,7 @@ impl BuildRender for RenderBuilder{
                         //Turn it of and set to fifo
                         use ::rt_error;
                         rt_error("RenderBuilder", "Immediate mode is not supported, using v_sync");
-                        engine_settings_lck.get_render_settings().set_vsync(false);
+                        engine_settings_lck.get_render_settings_mut().set_vsync(false);
                         vulkano::swapchain::PresentMode::Fifo
                     }
                 }

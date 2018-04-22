@@ -159,7 +159,7 @@ impl PostProgress{
     <default_pstprg_fragment::ty::hdr_settings, Arc<vulkano::memory::pool::StdMemoryPool>> {
         //Might add screen extend
         let (gamma, msaa, show_mode_int, far, near, auto_exp_setting) = {
-            let mut es_lck = self.engine_settings
+            let es_lck = self.engine_settings
             .lock()
             .expect("failed to lock settings for frame creation");
 

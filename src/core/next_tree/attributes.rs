@@ -291,13 +291,15 @@ impl Attribute<SceneJobs> for NodeAttributes{
 
         // Tests the screen volume this object has to the current camera
         match comp.distance_cull{
-            Some((ref bias, ref cam_pos)) => {
-                //We currently just check the distance from the camera to the middle of our bound.
-                // we then scale the volume linearly by the ammount of
-                let dist_to_obj = (cam_pos - self.value_bound.center().into_vec()).magnitude2();
-                //check if we are within our max draw distance
-                if dist_to_obj > self.max_draw_distance * self.transform.scale * bias{
-                    return false
+            Some((ref bias, ref vp_matrix)) => {
+                //First we project the points into ndc
+                let mut points = self.value_bound.to_corners().to_vec();
+                super::project_points(&mut points, vp_matrix);
+                //now we try to find the longest
+                let dist = super::get_max_xy_len(&points);
+                //if we are outside the range, return false, else do nothing
+                if dist < *bias{
+                    return false;
                 }
             },
             None => {},

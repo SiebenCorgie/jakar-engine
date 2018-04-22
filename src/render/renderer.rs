@@ -256,7 +256,7 @@ impl Renderer {
         let mesh_comparer = SceneComparer::new()
         .with_value_type(ValueTypeBool::none().with_mesh())
         .with_frustum(asset_manager.get_camera().get_frustum_bound())
-        .with_cull_distance(4000.0, asset_manager.get_camera().get_position())
+        .with_cull_distance(0.1, asset_manager.get_camera().get_view_projection_matrix())
         .without_transparency();
 
         let mesh_comp_trans = mesh_comparer.clone()
@@ -590,6 +590,7 @@ impl Renderer {
     {
         match frame_stage{
             frame_system::FrameStage::Forward(cb) => {
+                //let mut time_step = Instant::now();
                 //get the actual mesh as well as its pipeline an create the descriptor sets
                 let mesh_locked = match node.value{
                     next_tree::content::ContentType::Mesh(ref mesh) => mesh.clone(),
