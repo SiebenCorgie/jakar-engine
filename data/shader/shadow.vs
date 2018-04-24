@@ -6,7 +6,7 @@ layout(location = 2) in vec3 normal;
 layout(location = 3) in vec4 tangent;
 layout(location = 4) in vec4 color;
 
-layout(location = 1) out vec4 test;
+layout(location = 1) out vec2 uv;
 
 
 //Global uniforms
@@ -18,6 +18,6 @@ layout(set = 0, binding = 0) uniform LightData {
 void main(){
   //The proj has been manipulated like here: https://matthewwellings.com/blog/the-new-vulkan-coordinate-system/
   vec4 ndc_Pos = u_light_main.viewproj * u_light_main.model * vec4(position, 1.0);
-  test = vec4(0.0);
+  uv = tex_coord;
   gl_Position = ndc_Pos;
 }

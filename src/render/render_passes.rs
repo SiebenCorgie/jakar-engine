@@ -122,7 +122,7 @@ impl BlurPass {
         let render_pass = Arc::new(
             ordered_passes_renderpass!(device.clone(),
                 attachments: {
-                    //The non hdr framgnets
+                    //The blured fragments
                     out_hdr_fragments: {
                         load: Clear,
                         store: Store,

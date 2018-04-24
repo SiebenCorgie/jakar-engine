@@ -498,20 +498,6 @@ impl BuildRender for RenderBuilder{
                 ),
         );
 
-        let shadow_pipeline = pipeline_manager_arc.lock()
-        .expect("failed to lock new pipeline manager")
-        .get_pipeline_by_config(
-            pipeline_builder::PipelineConfig::default()
-                .with_subpass_id(super::SubPassType::Shadow.get_id())
-                .with_shader("Shadow".to_string())
-                .with_render_pass(RenderPassConf::ShadowPass)
-                .with_depth_and_stencil_settings(
-                    pipeline_builder::DepthStencilConfig::SimpleDepthNoStencil
-                )
-                .with_cull_mode(pipeline_builder::CullMode::Front) //For better contact shadows
-                .clamp_depth(true)
-        );
-
         println!("Starting post progress framework", );
         let post_progress = post_progress::PostProgress::new(
             engine_settings.clone(),
@@ -530,7 +516,9 @@ impl BuildRender for RenderBuilder{
             queue.clone()
         );
 
-        let shadow_system = ShadowSystem::new(device.clone(), engine_settings.clone(), shadow_pipeline);
+        let shadow_system = ShadowSystem::new(
+            device.clone(), engine_settings.clone(), pipeline_manager_arc.clone()
+        );
 
         println!("Finished Render Setup", );
         //Pass everthing to the struct

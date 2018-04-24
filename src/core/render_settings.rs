@@ -6,8 +6,8 @@
 #[derive(Clone)]
 pub enum DebugView {
     MainDepth,
-    HdrFragments,
-    ScaledLdr,
+    DebugGrid,
+    ShadowMaps,
     DirectionalDepth,
     Shaded,
 }
@@ -16,8 +16,8 @@ impl DebugView{
     pub fn as_shader_int(&self) -> i32{
         match self{
             &DebugView::MainDepth => 0,
-            &DebugView::HdrFragments => 1,
-            &DebugView::ScaledLdr => 2,
+            &DebugView::DebugGrid => 1,
+            &DebugView::ShadowMaps => 2,
             &DebugView::DirectionalDepth => 3,
             &DebugView::Shaded => 4,
         }

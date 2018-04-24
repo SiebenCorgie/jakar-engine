@@ -10,6 +10,7 @@ layout(set = 2, binding = 0) uniform TextureUsageInfo {
   uint b_roughness;
   uint b_occlusion;
   uint b_emissive;
+  uint b_is_masked;
 } u_tex_usage_info;
 
 layout(set = 2, binding = 1) uniform TextureFactors {
@@ -20,6 +21,7 @@ layout(set = 2, binding = 1) uniform TextureFactors {
   float metal_factor;
   float roughness_factor;
   float occlusion_factor;
+  float alpha_cutoff;
 } u_tex_fac;
 
 void main(){}

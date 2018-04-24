@@ -23,11 +23,14 @@ pub enum DescriptorSetFamiliy{
     Lights,
     MaterialTextures,
     MaterialData,
+    ShadowMaskInfo,
+    CascadedCameraInfo,
+    SingleShadowInfo,
     //PostProgress general data like exposure etc
     PostProgressData,
     BlurSettings,
     //attachments
     MultisampledColorAndDepth,
     MultisampledColor,
-    HdrFragments,
+    DebugGrid,
 }

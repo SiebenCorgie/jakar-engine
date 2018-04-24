@@ -44,7 +44,7 @@ float linear_depth(float depth){
 
 void main()
 {
-  //Cluster Id
+  //MainDepth
   if (u_hdr_settings.show_mode == 0) {
 
     float depth_out = subpassLoad(depths_input, 1).x;
@@ -55,40 +55,56 @@ void main()
     return;
   }
 
-  //BlurImage
+  //DebugGrid
   if (u_hdr_settings.show_mode == 1) {
+    //shows a grid of all the attachments for debuging
+    //color_input (unmapped)
 
-    FragColor = texture(color_input, inter_coord);
-    return;
-  }
-
-  if (u_hdr_settings.show_mode == 2) {
-
-
-    FragColor = vec4(texture(average_lumiosity, inter_coord).rgb, 1.0);
-
-    return;
-  }
-  //Show depth of directional
-  if (u_hdr_settings.show_mode == 3) {
-    //only show in the lower half
-    /*
-    if (inter_coord.x >= 0.5 && inter_coord.y >= 0.5){
-
-      float depth = texture(dir_depth, (inter_coord - 0.5) * 2.0).r;
-
-      FragColor = vec4(vec3(depth), 1.0);
+    if ((inter_coord.x < 0.5 && inter_coord.x > 0.0) && (inter_coord.y < 0.5 && inter_coord.y > 0.0)){
+      //sample the image
+      vec2 coords = (inter_coord * 2.0);
+      FragColor = texture(color_input, coords);
     }
-    */
-    float depth = texture(dir_depth, inter_coord).r;
 
+    //hdr_fragments only
+    else if ((inter_coord.x < 1.0 && inter_coord.x > 0.5) && (inter_coord.y < 0.5 && inter_coord.y > 0.0)){
+      //sample the image
+      //shrink
+      vec2 coords = inter_coord * 2.0;
+      //offset to the right
+      coords.x = coords.x - 1.0;
+      FragColor = texture(hdr_fragments, coords);
+    }
+    //average lumiosity
+    else if ((inter_coord.x < 0.5 && inter_coord.x > 0.0) && (inter_coord.y < 1.0 && inter_coord.y > 0.5)){
+      //sample the image
+      //shrink
+      vec2 coords = inter_coord * 2.0;
+      //offset down
+      coords.y = coords.y - 1.0;
+      FragColor = texture(average_lumiosity, coords);
+    }else{
+      //If we came here, return nothing
+      FragColor = vec4(vec3(0.0), 1.0);
+    }
+    return;
+  }
+
+  //ShadowMaps
+  if (u_hdr_settings.show_mode == 2) {
+    float depth = texture(dir_depth, inter_coord).r;
+    FragColor = vec4(vec3(depth), 1.0);
+    return;
+  }
+  //DirectionalDepth
+  if (u_hdr_settings.show_mode == 3) {
+    float depth = texture(dir_depth, inter_coord).r;
     FragColor = vec4(vec3(depth), 1.0);
     return;
   }
 
 
   //Add the blur to the image
-
   vec3 hdrColor = texture(color_input, inter_coord).rgb;
   vec3 bloomColor = texture(hdr_fragments, inter_coord).rgb;
   hdrColor += bloomColor; // additive blending

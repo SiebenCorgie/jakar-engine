@@ -41,6 +41,7 @@ layout(set = 2, binding = 0) uniform TextureUsageInfo {
   uint b_roughness;
   uint b_occlusion;
   uint b_emissive;
+  uint b_is_masked;
 } u_tex_usage_info;
 
 //TEXTURE_FACTORS
@@ -53,6 +54,7 @@ layout(set = 2, binding = 1) uniform TextureFactors {
   float metal_factor;
   float roughness_factor;
   float occlusion_factor;
+  float alpha_cutoff;
 } u_tex_fac;
 
 
@@ -443,14 +445,25 @@ bool isInClusters(){
 // ----------------------------------------------------------------------------
 void main()
 {
-
   if (u_tex_usage_info.b_albedo != 1) {
     albedo = u_tex_fac.albedo_factor;
   }else{
     //convert from srgb (lazy)
     albedo = texture(t_Albedo, v_TexCoord);// * u_tex_fac.albedo_factor;
+    //before we do anything expensive, theck if that material is masked, if so,
+    //return if the current albedo alpha value is below the alpha_cutoff
+    if(u_tex_usage_info.b_is_masked != 0){
+      if (u_tex_fac.alpha_cutoff > albedo.a){
+        //noice... early return
+        discard;
+      }
+    }
+
+
     albedo.xyz = srgb_to_linear(albedo.xyz);
   }
+
+
 
   //Set metallic color
   if (u_tex_usage_info.b_metal != 1) {

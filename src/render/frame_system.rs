@@ -127,7 +127,7 @@ pub struct ObjectPassImages {
     //The buffer to which the multi sampled depth gets written
     pub forward_hdr_depth: Arc<ImageViewAccess + Send + Sync>,
     //Holds the raw multisampled hdr colors
-    pub forward_hdr_image: Arc<ImageViewAccess + Send + Sync>, //TODO reimplement
+    pub forward_hdr_image: Arc<ImageViewAccess + Send + Sync>,
     //Adter sorting the hdr fragments (used for bluring)
     pub hdr_fragments: Arc<ImageViewAccess + Send + Sync>,
     //The ldr fragments

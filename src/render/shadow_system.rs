@@ -3,6 +3,7 @@ use vulkano::image::AttachmentImage;
 use vulkano::format::Format;
 use vulkano::buffer::cpu_pool::CpuBufferPool;
 use vulkano::descriptor::descriptor_set::FixedSizeDescriptorSetsPool;
+use vulkano::descriptor::descriptor_set::DescriptorSet;
 use vulkano::pipeline::GraphicsPipelineAbstract;
 use vulkano::command_buffer::AutoCommandBufferBuilder;
 
@@ -23,6 +24,10 @@ use render::frame_system::FrameStage;
 use render::light_system::LightStore;
 use render::frame_system::FrameSystem;
 use render::pipeline::Pipeline;
+use render::pipeline_manager::{PipelineManager, PipelineRequirements};
+use render::pipeline_builder;
+use render::render_passes::RenderPassConf;
+use render::shader::shaders::shadow_fragment::ty::MaskedInfo;
 use render::shader::shader_inputs::default_data::ty::LightData;
 use tools::node_tools;
 
@@ -38,9 +43,14 @@ use render::shader::shader_inputs::lights::ty::{PointLight, SpotLight, Direction
 pub struct ShadowSystem {
     engine_settings: Arc<Mutex<EngineSettings>>,
 
-    shadow_pipeline: Arc<Pipeline>,
+    shadow_pipeline_front_culled: Arc<Pipeline>,
+    shadow_pipeline_none_culled: Arc<Pipeline>,
+
     data_buffer_pool: CpuBufferPool<LightData>,
-    data_deciptor_pool: FixedSizeDescriptorSetsPool<Arc<GraphicsPipelineAbstract + Send + Sync>>
+    mask_buffer_pool: CpuBufferPool<MaskedInfo>,
+
+    data_descriptor_pool_cull: FixedSizeDescriptorSetsPool<Arc<GraphicsPipelineAbstract + Send + Sync>>,
+    data_descriptor_pool_no_cull: FixedSizeDescriptorSetsPool<Arc<GraphicsPipelineAbstract + Send + Sync>>
 }
 
 impl ShadowSystem{
@@ -49,17 +59,51 @@ impl ShadowSystem{
     pub fn new(
         device: Arc<vulkano::device::Device>,
         engine_settings: Arc<Mutex<EngineSettings>>,
-        shadow_pipeline: Arc<Pipeline>,
+        pipeline_manager: Arc<Mutex<PipelineManager>>
     ) -> Self{
 
-        let pool = CpuBufferPool::uniform_buffer(device.clone());
-        let descriptor_pool = FixedSizeDescriptorSetsPool::new(shadow_pipeline.get_pipeline_ref().clone(), 0);
+        //first of all build the two pipelines
+        let (default_pipe, no_cull_pipe) = {
+            let mut manager_lck = pipeline_manager.lock()
+            .expect("failed to lock pipeline manager for shadow pipeline creation");
+
+            let mut config = pipeline_builder::PipelineConfig::default()
+                .with_subpass_id(super::SubPassType::Shadow.get_id())
+                .with_shader("Shadow".to_string())
+                .with_render_pass(RenderPassConf::ShadowPass)
+                .with_depth_and_stencil_settings(
+                    pipeline_builder::DepthStencilConfig::SimpleDepthNoStencil
+                )
+                .with_cull_mode(pipeline_builder::CullMode::Front) //For better contact shadows
+                .clamp_depth(true); //need for no leaking
+
+            let default_pipe = manager_lck.get_pipeline_by_config(config.clone());
+
+            //also one without culling for the masked materials
+            config = config.with_cull_mode(pipeline_builder::CullMode::Disabled);
+
+            let masked_pipe = manager_lck.get_pipeline_by_config(config);
+
+            (default_pipe, masked_pipe)
+        };
+
+
+        let data_pool = CpuBufferPool::uniform_buffer(device.clone());
+        let mask_pool = CpuBufferPool::uniform_buffer(device.clone());
+        let descriptor_pool_cull = FixedSizeDescriptorSetsPool::new(default_pipe.get_pipeline_ref().clone(), 0);
+        let descriptor_pool_none_cull = FixedSizeDescriptorSetsPool::new(no_cull_pipe.get_pipeline_ref().clone(), 0);
 
         ShadowSystem{
             engine_settings: engine_settings,
-            shadow_pipeline: shadow_pipeline,
-            data_buffer_pool: pool,
-            data_deciptor_pool: descriptor_pool,
+
+            shadow_pipeline_front_culled: default_pipe,
+            shadow_pipeline_none_culled: no_cull_pipe,
+
+            data_buffer_pool: data_pool,
+            mask_buffer_pool: mask_pool,
+
+            data_descriptor_pool_cull: descriptor_pool_cull,
+            data_descriptor_pool_no_cull: descriptor_pool_none_cull,
 
         }
     }
@@ -364,15 +408,53 @@ impl ShadowSystem{
             model: mesh_transform.into(),
             viewproj: mvp_mat.into(),
         };
-
+        //get the mask info as well as the texture with the alpha values
+        let(mask_info, tex_with_alpha) ={
+            let material = mesh.get_material();
+            let material_lck = material.lock().expect("failed to lock material");
+            material_lck.get_shadow_mask_info()
+        };
+        //check if we should render doublesided (only for masked materials)
+        let should_be_double = {
+            if mask_info.b_is_masked == 1{
+                true
+            }else{
+                false
+            }
+        };
+        let mask_buffer = self.mask_buffer_pool.next(mask_info).expect("failed to allocate mask buffer for shadow");
         let data_buffer = self.data_buffer_pool.next(data).expect("failed to allocate buffer");
-        let descriptor = self.data_deciptor_pool.next()
-        .add_buffer(data_buffer).expect("failed to add data buffer")
-        .build().expect("failed to build data descriptorset");
+
+        //depending on the masked type we create different descriptorsets
+
+        let descriptor =
+        {
+            //find right descriptor pool and build
+            if should_be_double{
+                &mut self.data_descriptor_pool_no_cull
+            }else{
+                &mut self.data_descriptor_pool_cull
+            }.next()
+            .add_buffer(data_buffer).expect("failed to add data buffer")
+            .add_sampled_image(
+                tex_with_alpha.get_raw_texture(),
+                tex_with_alpha.get_raw_sampler()
+            ).expect("Failed to add the alpha texture for shadow pass")
+            .add_buffer(
+                mask_buffer
+            ).expect("failed to add mask buffer to shadow descriptor")
+            .build().expect("failed to build data descriptorset")
+
+        };
+        //self.data_deciptor_pool
 
         //println!("Drawing shadow mesh");
         let new_cb = command_buffer.draw_indexed(
-            self.shadow_pipeline.get_pipeline_ref(),
+            if should_be_double { //find right pipeline fitting to the descriptor and execute
+                &mut self.shadow_pipeline_none_culled
+            }else{
+                &mut self.shadow_pipeline_front_culled
+            }.get_pipeline_ref(),
             dynamic_state,
             mesh.get_vertex_buffer(),
             mesh.get_index_buffer(),

@@ -204,7 +204,7 @@ impl PostProgress{
                 //create the descriptor set for the current image
                 let attachments_ds = PersistentDescriptorSet::start(self.resolve_pipe.get_pipeline_ref(), 0) //at binding 0
                     .add_image(frame_system.object_pass_images.forward_hdr_image.clone())
-                    .expect("failed to add hdr_image to postprogress descriptor set")
+                    .expect("failed to add hdr_image to sorting pass descriptor set")
                     .build()
                     .expect("failed to build postprogress cb");
 
@@ -483,6 +483,7 @@ impl PostProgress{
                         self.screen_sampler.clone()
                     )
                     .expect("failed to add hdr_image to postprogress descriptor set")
+                    //needs to be a input attachment since we don't want to also downsample the depths
                     .add_image(frame_system.object_pass_images.forward_hdr_depth.clone())
                     .expect("failed to add depth map")
                     .add_sampled_image(

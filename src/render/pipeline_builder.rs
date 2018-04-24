@@ -112,6 +112,7 @@ impl PartialEq for DepthStencilConfig{
 ///
 /// When specifying the shader sets via `shader_type` the engine will decide wether it has to
 /// implement a tesselation and/or gemoetry shader or not.
+#[derive(Clone)]
 pub struct PipelineConfig {
 
     ///Defines the shader type of the loaded pipeline.

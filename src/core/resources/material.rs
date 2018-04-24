@@ -3,6 +3,7 @@ use render::pipeline;
 use core::resources::texture;
 //use render::shader_impls::pbr_fragment;
 use render::shader::shader_inputs::pbr_texture_info;
+use render::shader::shaders::shadow_fragment::ty::MaskedInfo;
 use render::light_system;
 use render::frame_system::FrameSystem;
 
@@ -20,108 +21,123 @@ use std::sync::{Mutex,Arc};
 ///A Struct used for prototyping the usage flags of the textures
 #[derive(Clone)]
 pub struct TextureUsageFlags {
-    pub albedo: i32,
-    pub normal: i32,
-    pub metal: i32,
-    pub roughness: i32,
-    pub occlusion: i32,
-    pub emissive: i32
+    pub albedo: bool,
+    pub normal: bool,
+    pub metal: bool,
+    pub roughness: bool,
+    pub occlusion: bool,
+    pub emissive: bool,
+    pub is_masked: bool,
 }
 
 impl TextureUsageFlags{
     ///Creates a new flag info where all textures are unsed
     pub fn new() -> Self{
         TextureUsageFlags{
-            albedo: 0,
-            normal: 0,
-            metal: 0,
-            roughness: 0,
-            occlusion: 0,
-            emissive: 0,
+            albedo: false,
+            normal: false,
+            metal: false,
+            roughness: false,
+            occlusion: false,
+            emissive: false,
+            is_masked: false,
         }
     }
 
 
     ///Creates with a set albedo status
-    pub fn with_albedo(mut self, albedo: i32) ->Self{
-        self.albedo = albedo;
+    pub fn with_albedo(mut self) ->Self{
+        self.albedo = true;
         self
     }
 
     ///Creates with a set normal status
-    pub fn with_normal(mut self, normal: i32) ->Self{
-        self.normal = normal;
+    pub fn with_normal(mut self) ->Self{
+        self.normal = true;
         self
     }
 
     ///Creates with a set metal status
-    pub fn with_metal(mut self, metal: i32) ->Self{
-        self.metal = metal;
+    pub fn with_metal(mut self) ->Self{
+        self.metal = true;
         self
     }
 
     ///Creates with a set roughness status
-    pub fn with_roughness(mut self, roughness: i32) ->Self{
-        self.roughness = roughness;
+    pub fn with_roughness(mut self,) ->Self{
+        self.roughness = true;
         self
     }
 
     ///Creates with a set occlusion status
-    pub fn with_occlusion(mut self, occlusion: i32) ->Self{
-        self.occlusion = occlusion;
+    pub fn with_occlusion(mut self) ->Self{
+        self.occlusion = true;
         self
     }
 
     ///Creates with a set emissive status
-    pub fn with_emissive(mut self, emissive: i32) ->Self{
-        self.emissive = emissive;
+    pub fn with_emissive(mut self) ->Self{
+        self.emissive = true;
+        self
+    }
+
+    ///Creates with a set emissive status
+    pub fn is_masked(mut self) ->Self{
+        self.is_masked = true;
         self
     }
 
     pub fn to_shader_flags(self) -> pbr_texture_info::ty::TextureUsageInfo{
         pbr_texture_info::ty::TextureUsageInfo{
             b_albedo: {
-                if self.albedo != 0{
+                if self.albedo{
                     1
                 }else{
                     0
                 }
             },
             b_normal: {
-                if self.normal != 0{
+                if self.normal{
                     1
                 }else{
                     0
                 }
             },
             b_metal: {
-                if self.metal != 0{
+                if self.metal{
                     1
                 }else{
                     0
                 }
             },
             b_roughness: {
-                if self.roughness != 0{
+                if self.roughness{
                     1
                 }else{
                     0
                 }
             },
             b_occlusion: {
-                if self.occlusion != 0{
+                if self.occlusion{
                     1
                 }else{
                     0
                 }
             },
             b_emissive: {
-                if self.emissive != 0{
+                if self.emissive{
                     1
                 }else{
                     0
                 }
             },
+            b_is_masked: {
+                if self.is_masked{
+                    1
+                }else{
+                    0
+                }
+            }
         }
     }
 }
@@ -139,6 +155,8 @@ pub struct MaterialFactors{
     metal_factor: f32,
     roughness_factor: f32,
     occlusion_factor: f32,
+    alpha_cutoff: f32,
+
 
 }
 
@@ -154,6 +172,7 @@ impl MaterialFactors{
             metal_factor: 1.0,
             roughness_factor: 1.0,
             occlusion_factor: 1.0,
+            alpha_cutoff: 0.5,
         }
     }
 
@@ -207,6 +226,15 @@ impl MaterialFactors{
         self
     }
 
+    ///controlles until which factor a masked material will be "see through"
+    #[inline]
+    pub fn with_alpha_cutoff(mut self, factor: f32) -> Self{
+        self.alpha_cutoff = factor;
+        self
+    }
+
+
+
     pub fn to_shader_factors(&self) -> pbr_texture_info::ty::TextureFactors{
         pbr_texture_info::ty::TextureFactors{
             albedo_factor: self.albedo_factor,
@@ -216,6 +244,7 @@ impl MaterialFactors{
             metal_factor: self.metal_factor,
             roughness_factor: self.roughness_factor,
             occlusion_factor: self.occlusion_factor,
+            alpha_cutoff: self.alpha_cutoff,
         }
     }
 }
@@ -248,30 +277,30 @@ impl MaterialBuilder{
     ) -> Self {
 
         //Sort out the texture usage flags for this material
-        let mut used_albedo = 0;
-        let mut used_normal = 0;
-        let mut used_emissive = 0;
-        let mut used_physical = 0;
-        let mut used_occlusion = 0;
+        let mut used_albedo = false;
+        let mut used_normal = false;
+        let mut used_emissive = false;
+        let mut used_physical = false;
+        let mut used_occlusion = false;
 
-        match albedo.clone(){
-            Some(_) => used_albedo = 1,
+        match albedo{
+            Some(_) => used_albedo = true,
              _=> {},
         }
-        match normal.clone(){
-            Some(_) => used_normal = 1,
+        match normal{
+            Some(_) => used_normal = true,
              _=> {},
         }
-        match metallic_roughness.clone(){
-            Some(_) => used_physical = 1,
+        match metallic_roughness{
+            Some(_) => used_physical = true,
              _=> {},
         }
-        match occlusion.clone(){
-            Some(_) => used_occlusion = 1,
+        match occlusion{
+            Some(_) => used_occlusion = true,
              _=> {},
         }
-        match emissive.clone(){
-            Some(_) => used_emissive = 1,
+        match emissive{
+            Some(_) => used_emissive = true,
              _=> {},
         }
 
@@ -311,6 +340,17 @@ impl MaterialBuilder{
     pub fn with_factors(mut self, new_factors: MaterialFactors) -> Self{
         self.material_factors = new_factors;
         self
+    }
+
+    ///Can be called if the material is masked. All other UsageFlags should be set at creation time of the
+    /// builder
+    pub fn mat_is_masked(&mut self){
+        self.texture_usage_info.is_masked = true;
+    }
+
+    ///returns true if this material is masked
+    pub fn is_masked(&self) -> bool{
+        self.texture_usage_info.is_masked
     }
 
     ///builds a material from the supplied textures and other info
@@ -730,6 +770,16 @@ impl Material {
 
         //This has to be build based on the currently used light lists in the compute system.
         compute_sys.get_light_descriptorset(3, self.get_vulkano_pipeline(), frame_system) //for pbr materials this has to be the three
+    }
+
+    ///Returns the `MaskedInfo` for the shadows as well as the texture containing the alpha values
+    /// of this material
+    pub fn get_shadow_mask_info(&self) -> (MaskedInfo, Arc<texture::Texture>){
+        let info = MaskedInfo{
+            b_is_masked: self.texture_usage_info.b_is_masked,
+            alpha_cut_off: self.material_factors.alpha_cutoff,
+        };
+        (info, self.t_albedo.clone())
     }
 
     ///Sets a new pipeline

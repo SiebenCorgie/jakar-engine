@@ -26,10 +26,10 @@ extern crate winit;
 
 fn main() {
 
-    let light_settings = LightSettings::new(DirectionalLightSettings::new(4, 4096, 0.95, 0.5));
+    let light_settings = LightSettings::new(DirectionalLightSettings::new(1, 4096, 0.95, 0.05));
 
     let graphics_settings = core::render_settings::RenderSettings::default()
-    .with_msaa_factor(8)
+    .with_msaa_factor(2)
     .with_gamma(1.0)
     .with_exposure(jakar_engine::core::render_settings::ExposureSettings::new(
         0.2, 4.0, 0.005, 0.003, 0.5, true
@@ -42,7 +42,7 @@ fn main() {
     .with_name("Jakar Instance")
     .in_release_mode()
     .with_input_poll_speed(500)
-    .with_fullscreen_mode(true)
+    .with_fullscreen_mode(false)
     //.with_cursor_state(winit::CursorState::Normal)
     .with_cursor_state(winit::CursorState::Grab)
     //.with_cursor_visibility(winit::MouseCursor::Default)
@@ -67,8 +67,8 @@ fn main() {
     };
 
 
-    //engine.get_asset_manager().import_gltf("TestScene", "examples/simple_scene/TestScenes/Cube_Plane.gltf");
-    engine.get_asset_manager().import_gltf("TestScene", "examples/simple_scene/Sponza/Sponza.gltf");
+    engine.get_asset_manager().import_gltf("TestScene", "examples/simple_scene/TestScenes/Cube_Plane.gltf");
+    //engine.get_asset_manager().import_gltf("TestScene", "examples/simple_scene/Sponza/Sponza.gltf");
     //engine.get_asset_manager().import_gltf("TestScene", "examples/simple_scene/Helmet/Helmet.gltf");
 
 
@@ -325,12 +325,12 @@ fn main() {
 
         if engine.get_current_keymap().t_2{
             engine.get_engine_settings_unlocked().get_render_settings_mut()
-            .get_debug_settings_mut().debug_view = jakar_engine::core::render_settings::DebugView::HdrFragments;
+            .get_debug_settings_mut().debug_view = jakar_engine::core::render_settings::DebugView::DebugGrid;
         }
 
         if engine.get_current_keymap().t_3{
             engine.get_engine_settings_unlocked().get_render_settings_mut()
-            .get_debug_settings_mut().debug_view = jakar_engine::core::render_settings::DebugView::ScaledLdr;
+            .get_debug_settings_mut().debug_view = jakar_engine::core::render_settings::DebugView::ShadowMaps;
         }
 
         if engine.get_current_keymap().t_4{

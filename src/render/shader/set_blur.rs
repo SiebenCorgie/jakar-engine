@@ -37,7 +37,7 @@ impl BlurSet{
 
         //Configure the inputs
         let mut descriptors = Vec::new();
-        descriptors.push(DescriptorSetFamiliy::HdrFragments);
+        descriptors.push(DescriptorSetFamiliy::DebugGrid);
         descriptors.push(DescriptorSetFamiliy::BlurSettings);
 
         let vertex_buffer_def = SingleBufferDefinition::<PostProgressVertex>::new();

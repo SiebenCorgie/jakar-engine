@@ -34,7 +34,8 @@ impl SetShadow{
 
         //Configure the inputs
         let mut descriptors = Vec::new();
-        descriptors.push(DescriptorSetFamiliy::CameraData);
+        descriptors.push(DescriptorSetFamiliy::CascadedCameraInfo);
+        descriptors.push(DescriptorSetFamiliy::ShadowMaskInfo);
 
         let vertex_buffer_def = SingleBufferDefinition::<Vertex>::new();
 

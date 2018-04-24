@@ -251,6 +251,7 @@ pub fn load_gltf_material(
         .with_factor_occlusion(mat.occlusion_texture().map_or(1.0, |t| t.strength()))
         .with_factor_emissive(mat.emissive_factor())
         .with_max_emmision(max_factor)
+        .with_alpha_cutoff(mat.alpha_cutoff())
     };
     //get the manager
     let texture_manager = {
@@ -264,7 +265,7 @@ pub fn load_gltf_material(
     };
 
     //Create a material builder from the info
-    let material_builder = material::MaterialBuilder::new(
+    let mut material_builder = material::MaterialBuilder::new(
         albedo,
         normal,
         metallic_roughness,
@@ -287,7 +288,9 @@ pub fn load_gltf_material(
             },
             gltf::material::AlphaMode::Mask =>{
                 //println!("RENDING ALPHA BLENDING! ======================================================", );
-                pipeline_builder::BlendTypes::BlendAlphaBlending //TODO create a Shader for masking, this will come with the uber shading system
+                //but init the masking
+                material_builder.mat_is_masked();
+                pipeline_builder::BlendTypes::BlendPassThrough
             },
             gltf::material::AlphaMode::Blend =>{
                 //println!("RENDING ALPHA BLENDING! ======================================================", );
@@ -300,7 +303,11 @@ pub fn load_gltf_material(
     let cull_mode = {
         if mat.double_sided(){
             //println!("RENDING DOUBLE SIDED! ======================================================", );
-            pipeline_builder::CullMode::Back //Note I have to implement order independent transparency for this to work in complex models
+            if material_builder.is_masked(){
+                pipeline_builder::CullMode::Disabled
+            }else{
+                pipeline_builder::CullMode::Back //TODO I have to implement order independent transparency for this to work in complex models
+            }
         }else{
             //println!("RENDING SINGLE SIDED! ======================================================", );
             pipeline_builder::CullMode::Back
