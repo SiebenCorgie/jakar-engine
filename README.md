@@ -1,3 +1,5 @@
+
+![alt text](https://github.com/SiebenCorgie/jakar-engine/blob/master/media/banner.jpg)
 # Jakar-Engine
 A small engine written in rust + Vulkan.
 
