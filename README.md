@@ -7,7 +7,7 @@ A small engine written in rust + Vulkan.
 ### Overview
 
 The target of this engine is, to have a safe and fast, but still visually
-beautiful engine which works on most modern systems.
+beautiful engine which works on most modern PC systems.
 The speed should be supplied by the parallel nature of the engine.
 It will have at least 4 different loops which will manage different
 aspects of the engine and its systems.
@@ -22,7 +22,8 @@ or mesh importing / streaming.
 
 ### Safety
 
-The engine should be as safe as possible.
+The engine should be as safe as possible. Which mostly means it shouldn't crash.
+The safety is supplied mostly through two design decisions:
  1. it uses Rust which is "safe" by design
  2. it uses Vulkano for interaction with Vulkan, which will be safe as well
     in the future
@@ -33,20 +34,28 @@ My target is to handle most of the non fatal errors and at least end the system 
 
 The graphical target is defined by these key points:
 
-- [ ] PBR shading
+- [x] PBR shading (no IBL yet)
 - [x] normal mapping
 - [ ] parallax occlusion mapping
-- [x] HDR rendering
+- [x] HDR rendering with dynamic eye adaption
 - [x] dynamic lighting (point, spot and directional lights for now)
-- [ ] bloom
+- [x] clustered light culling for spot and point lights (currently in world space)
+- [x] bloom
 - [ ] DOF
 - [x] translucency
-- [ ] masked materials
-- [x] many dynamic lights through clustered light culling
+- [x] masked materials
+- [x] cascaded shadow maps for unlimited dynamic lights
+- [ ] single cascade shadows for point and spot lights
+- [ ] dynamic ambient cube-map for run time IBL and reflections (like GTA V)
 
 This will be accomplished by static Shaders + different material definition for
 now. In later development this system could be changed to a UE4 type
 material system with different Shader components.
+
+### Graphics Showcase
+#### Videos
+[![Kinda latest video](https://img.youtube.com/vi/FhV0eGdSGFY/0.jpg)](https://www.youtube.com/watch?v=FhV0eGdSGFY)
+
 
 ### Asset management
 
@@ -68,7 +77,7 @@ I took inspiration from the Godot-engine for the scene system.
 The meshes usually have a material attached which consists of several textures.
 Those are manged by a `TextureManager`. Each material can request one of the stored textures as a `Arc<Texture>` and then use it in one of the slots.
 This way no texture needs to be loaded twice.
-The `MaterialManager` works similar, it takes the created materials and provides out `Arc<Mutex<Material>>` copies upon request.
+The `MaterialManager` works similar, it takes the created materials and provides `Arc<Mutex<Material>>` copies upon request.
 
 ## Documentation
 There is currently no documentation hosted, but you can do
@@ -80,6 +89,9 @@ to build the documentation yourself. The index.html will be saved to
 target/doc/jakar_engine/index.html
 ```
 
+The documentation is not complete but at least describes most of the functions and
+systems. If you need any clarification, open a pull request.
+
 ## Building
 
 Pull the git repository via
@@ -90,9 +102,14 @@ then do
 ```
 cargo build
 ```
-to compile or
+to compile.
+
+If you want to start the engine with a scene, first download a gltf 2.0 files
+somewhere and provide its path in the main function of the `simple` example (around
+  line 70). Then do:
+
 ```
-cargo run --examples simple
+cargo run --examples simple --release
 ```
 to run an example application.
 

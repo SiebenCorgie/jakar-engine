@@ -67,9 +67,9 @@ fn main() {
     };
 
 
-    engine.get_asset_manager().import_gltf("TestScene", "examples/simple_scene/TestScenes/Cube_Plane.gltf");
+    //engine.get_asset_manager().import_gltf("TestScene", "examples/simple_scene/TestScenes/Cube_Plane.gltf");
     //engine.get_asset_manager().import_gltf("TestScene", "examples/simple_scene/Sponza/Sponza.gltf");
-    //engine.get_asset_manager().import_gltf("TestScene", "examples/simple_scene/Helmet/Helmet.gltf");
+    engine.get_asset_manager().import_gltf("TestScene", "examples/simple_scene/Helmet/Helmet.gltf");
 
 
     let mut light_tree =jakar_tree::tree::Tree::new(
