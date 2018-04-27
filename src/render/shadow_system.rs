@@ -1,9 +1,6 @@
 use vulkano;
-use vulkano::image::AttachmentImage;
-use vulkano::format::Format;
 use vulkano::buffer::cpu_pool::CpuBufferPool;
 use vulkano::descriptor::descriptor_set::FixedSizeDescriptorSetsPool;
-use vulkano::descriptor::descriptor_set::DescriptorSet;
 use vulkano::pipeline::GraphicsPipelineAbstract;
 use vulkano::command_buffer::AutoCommandBufferBuilder;
 
@@ -181,86 +178,68 @@ impl ShadowSystem{
         let d_light_spaces = get_dir_light_areas(
             directional_lights.len() as u32, dir_settings.get_num_cascades()
         );
-        //println!("Light spaces: {:?}", d_light_spaces);
-        //now we save a copy of each light with it light space and convert them to light shader
-        //infos
-        let directional_info = {
-
-            if d_light_spaces.len() != directional_lights.len(){
-                println!("Light Space List Doesnt Match... going to crash", );
-            }
-
-
-            for (region, d_light) in d_light_spaces.into_iter().zip(directional_lights.into_iter()){
-                let light_rotation = d_light.attributes.transform.rot;
-                let light = {
-                    match d_light.value{
-                        ContentType::DirectionalLight(ref light) => light.clone(),
-                        _ => {
-                            continue; //Is no pointlight, test next
-                        }
+        //now, iterate through ech light/ lightspace on ther directional shadowmap and
+        for (region, d_light) in d_light_spaces.into_iter().zip(directional_lights.into_iter()){
+            let light_rotation = d_light.attributes.transform.rot;
+            let light = {
+                match d_light.value{
+                    ContentType::DirectionalLight(ref light) => light.clone(),
+                    _ => {
+                        continue; //Is no dir light, test next
                     }
-                };
-                //currently have only one region
-                let shader_info = light.as_shader_info(
-                    &light_rotation,
-                    &current_camera,
-                    dir_settings.get_pcf_samples(),
-                    region
-                ); //shadow region will be set by the shadow system later if needed
+                }
+            };
+            //currently have only one region
+            let shader_info = light.as_shader_info(
+                &light_rotation,
+                &current_camera,
+                dir_settings.get_pcf_samples(),
+                dir_settings.get_poisson_spread(),
+                region
+            ); //shadow region will be set by the shadow system later if needed
 
-                //now push into the store
-                light_store.directional_lights.push((d_light, shader_info));
-            }
-        };
+            //now push into the store
+            light_store.directional_lights.push((d_light, shader_info));
+        }
 
 
         // Finally we convert all of them to shader infos, count the lights with shadows and calculate
         // an optimal atlas for each.
-
-        //TODO actually implement all the stuff above, currently only converting to infos and returning
-        let current_camera = asset_manager.get_camera();
 
         //Since the directional lights are processed, try to get the point lights
         let new_points = {
             point_recv.recv().expect("Failed to get ordered point lights!")
         };
 
-        let point_info = {
-            for p_light in new_points.into_iter(){
-                let light_location = p_light.attributes.transform.disp;
-                let light = {
-                    match p_light.value{
-                        ContentType::PointLight(ref light) => light.clone(),
-                        _ => continue, //Is no pointlight, test next
-                    }
-                };
-                let shader_info = light.as_shader_info(&light_location);
-                light_store.point_lights.push((p_light, shader_info));
-
-            }
-        };
-
+        for p_light in new_points.into_iter(){
+            let light_location = p_light.attributes.transform.disp;
+            let light = {
+                match p_light.value{
+                    ContentType::PointLight(ref light) => light.clone(),
+                    _ => continue, //Is no pointlight, test next
+                }
+            };
+            let shader_info = light.as_shader_info(&light_location);
+            light_store.point_lights.push((p_light, shader_info));
+        }
         //Same with the spot lights
         let new_spot_lights = {
             spot_recv.recv().expect("Failed to recive spot_lights")
         };
 
-        let spot_info = {
-            for s_light in new_spot_lights.into_iter(){
-                let light_location = s_light.attributes.transform.disp;
-                let light_rotation = s_light.attributes.transform.rot;
-                let light = {
-                    match s_light.value{
-                        ContentType::SpotLight(ref light) => light.clone(),
-                        _ => continue, //Is no pointlight, test next
-                    }
-                };
-                let shader_info = light.as_shader_info(&light_rotation, &light_location);
-                light_store.spot_lights.push((s_light, shader_info));
+        for s_light in new_spot_lights.into_iter(){
+            let light_location = s_light.attributes.transform.disp;
+            let light_rotation = s_light.attributes.transform.rot;
+            let light = {
+                match s_light.value{
+                    ContentType::SpotLight(ref light) => light.clone(),
+                    _ => continue, //Is no pointlight, test next
+                }
+            };
+            let shader_info = light.as_shader_info(&light_rotation, &light_location);
+            light_store.spot_lights.push((s_light, shader_info));
+        }
 
-            }
-        };
         light_store
     }
 
@@ -313,7 +292,7 @@ impl ShadowSystem{
             set_lck.get_render_settings().get_light_settings().directional_settings.get_occupy_bias()
         };
         //Now for each light and its cascade, render the light
-        for &mut (ref mut light_node, ref light_info) in light_store.directional_lights.iter_mut(){
+        for &mut (ref mut _light_node, ref light_info) in light_store.directional_lights.iter_mut(){
             //Get the mvp matrix of the current light from the used matrixes in the
             //light buffer
             //TODO check if thats the right indice

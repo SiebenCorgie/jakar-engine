@@ -26,10 +26,10 @@ extern crate winit;
 
 fn main() {
 
-    let light_settings = LightSettings::new(DirectionalLightSettings::new(1, 4096, 0.95, 0.05));
+    let light_settings = LightSettings::new(DirectionalLightSettings::new(8, 4096, 0.95, 0.05, 1500.0));
 
     let graphics_settings = core::render_settings::RenderSettings::default()
-    .with_msaa_factor(2)
+    .with_msaa_factor(8)
     .with_gamma(1.0)
     .with_exposure(jakar_engine::core::render_settings::ExposureSettings::new(
         0.2, 4.0, 0.005, 0.003, 0.5, true
@@ -68,8 +68,8 @@ fn main() {
 
 
     //engine.get_asset_manager().import_gltf("TestScene", "examples/simple_scene/TestScenes/Cube_Plane.gltf");
-    //engine.get_asset_manager().import_gltf("TestScene", "examples/simple_scene/Sponza/Sponza.gltf");
-    engine.get_asset_manager().import_gltf("TestScene", "examples/simple_scene/Helmet/Helmet.gltf");
+    engine.get_asset_manager().import_gltf("TestScene", "examples/simple_scene/Sponza/Sponza.gltf");
+    //engine.get_asset_manager().import_gltf("TestScene", "examples/simple_scene/Helmet/Helmet.gltf");
 
 
     let mut light_tree =jakar_tree::tree::Tree::new(

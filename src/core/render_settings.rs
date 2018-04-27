@@ -98,17 +98,21 @@ pub struct DirectionalLightSettings {
     ///Controles how many percent on the shadowmap a mesh must occupy to be actually rendered.
     /// for high settings 0.1 is a good value.
     occupy_bias: f32,
+    /// Describes how much the different samples are "spread" over the uv. A high numerb means less
+    /// noise, but also harder shadows and therefor better visible pixels.
+    poisson_spread: f32
 }
 
 impl DirectionalLightSettings{
     ///Creates a custom set of settings
-    pub fn new(pcf_samples: u32, resolution: u32, cascade_lambda: f32, occupy_bias: f32) -> Self{
+    pub fn new(pcf_samples: u32, resolution: u32, cascade_lambda: f32, occupy_bias: f32, poisson_spread: f32) -> Self{
         DirectionalLightSettings{
             pcf_samples: pcf_samples,
             shadow_map_resolution: resolution,
             num_cascades: 4,
             cascade_lambda: cascade_lambda,
             occupy_bias: occupy_bias,
+            poisson_spread: poisson_spread,
         }
     }
 
@@ -125,6 +129,7 @@ impl DirectionalLightSettings{
             num_cascades: 4,
             cascade_lambda: 0.95,
             occupy_bias: 0.1,
+            poisson_spread: 800.0,
         }
     }
     /// Always returns 4 four now.
@@ -165,7 +170,48 @@ impl DirectionalLightSettings{
         self.occupy_bias
     }
 
+    ///Controlles how much the different samples for the shadows a spread over the shadow map.
+    ///A higher value means less noise buit also more visible and harder edges on the shadow.
+    pub fn set_poisson_spread(&mut self, new: f32){
+        self.poisson_spread = new;
+    }
+
+    pub fn get_poisson_spread(&self) -> f32{
+        self.poisson_spread
+    }
+
 }
+
+///Defines variouse settings for point lights
+pub struct PointLightSettings {
+    pcf_samples: i32,
+    shadow_map_resolution: i32,
+    occupy_bias: f32,
+}
+
+impl PointLightSettings{
+    ///Creates a new set of settings from the supplied values
+    pub fn new(pcf_samples: i32, shadow_map_resolution: i32, occupy_bias: f32) -> Self{
+        PointLightSettings{
+            pcf_samples,
+            shadow_map_resolution,
+            occupy_bias
+        }
+    }
+
+    ///Creates a default set as follows:
+    /// - pcf_samples: 2
+    /// - shadow_map_resolution: 1024
+    /// - occupy_bias: 0.1
+    pub fn default() -> Self{
+        PointLightSettings{
+            pcf_samples: 2,
+            shadow_map_resolution: 1024,
+            occupy_bias: 0.1
+        }
+    }
+}
+
 ///Defines several settings which will be used to determin how lights and their shadows are rendered
 #[derive(Clone)]
 pub struct LightSettings {

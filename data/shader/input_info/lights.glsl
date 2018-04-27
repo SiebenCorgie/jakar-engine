@@ -40,6 +40,7 @@ struct DirectionalLight
   vec3 color;
   vec3 direction;
   float intensity;
+  float poisson_spread;
   uint pcf_samples;
 };
 

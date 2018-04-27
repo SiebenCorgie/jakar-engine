@@ -227,6 +227,7 @@ impl LightDirectional{
         rotation: &Quaternion<f32>,
         camera: &DefaultCamera,
         pcf_samples: u32,
+        poisson_spreading: f32,
         shadow_region: [[f32; 4]; 4]
     ) -> lights::ty::DirectionalLight{
         let tmp_color: [f32;3] = self.color.normalize().into();
@@ -250,9 +251,10 @@ impl LightDirectional{
             color: tmp_color,
             direction: self.get_direction_vector(rotation).into(),
             intensity: self.intensity,
+            poisson_spread: poisson_spreading,
             pcf_samples: pcf_samples,
             _dummy0: [0; 4],
-            _dummy1: [0; 12]
+            _dummy1: [0; 8]
         }
     }
 

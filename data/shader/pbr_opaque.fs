@@ -98,6 +98,7 @@ struct DirectionalLight
   vec3 color;
   vec3 direction;
   float intensity;
+  float poisson_spread;
   uint pcf_samples;
 };
 
@@ -207,6 +208,12 @@ float calcFalloff(float dist, float radius){
   return  smoothFactor * smoothFactor;
 }
 
+//Returns a random number between [0,1[
+float randomf(vec4 seed){
+  float dot_product = dot(seed, vec4(12.9898,78.233,45.164,94.673));
+  return fract(sin(dot_product) * 43758.5453);
+}
+
 const mat4 biasMat = mat4(
 	0.5, 0.0, 0.0, 0.0,
 	0.0, 0.5, 0.0, 0.0,
@@ -247,8 +254,27 @@ float textureProj(vec4 P, vec2 offset, sampler2D sm, vec4 region)
 	return shadow;
 }
 
+vec2 poissonDisk[16] = vec2[](
+   vec2( -0.94201624, -0.39906216 ),
+   vec2( 0.94558609, -0.76890725 ),
+   vec2( -0.094184101, -0.92938870 ),
+   vec2( 0.34495938, 0.29387760 ),
+   vec2( -0.91588581, 0.45771432 ),
+   vec2( -0.81544232, -0.87912464 ),
+   vec2( -0.38277543, 0.27676845 ),
+   vec2( 0.97484398, 0.75648379 ),
+   vec2( 0.44323325, -0.97511554 ),
+   vec2( 0.53742981, -0.47373420 ),
+   vec2( -0.26496911, -0.41893023 ),
+   vec2( 0.79197514, 0.19090188 ),
+   vec2( -0.24188840, 0.99706507 ),
+   vec2( -0.81409955, 0.91437590 ),
+   vec2( 0.19984126, 0.78641367 ),
+   vec2( 0.14383161, -0.14100790 )
+);
+
 //Performs the texture lookup several times based on the supplied pcf count
-float pcfShadow(vec4 P, vec2 offset, sampler2D sm, vec4 region, int pcf)
+float pcfShadow(vec4 P, vec2 offset, sampler2D sm, vec4 region, int pcf, float spreading)
 {
   ivec2 texDim = textureSize(sm, 0).xy;
 	float dx = 1.0 / float(texDim.x);
@@ -260,10 +286,11 @@ float pcfShadow(vec4 P, vec2 offset, sampler2D sm, vec4 region, int pcf)
 	int range = pcf;
 
 	for (int x = -range; x <= range; x++) {
-		for (int y = -range; y <= range; y++) {
-			shadowFactor += textureProj(P, vec2(dx*x, dy*y), sm, region);
-			count++;
-		}
+    int index = int(16.0 * randomf(vec4(floor(FragmentPosition.xyz * 1000.0), x)))%16;
+    vec2 random_offset = vec2(dx, dy) + poissonDisk[index] / spreading;
+
+    shadowFactor += textureProj(P, random_offset, sm, region);
+    count++;
 	}
   //now decrease
 	return shadowFactor / count;
@@ -332,23 +359,6 @@ vec3 calcDirectionalLight(DirectionalLight light, vec3 F0)
 		}
 	}
 
-  /*
-  switch (cascadeIndex){
-      case 0 :
-				return vec3(1.0f, 0.0, 0.0);
-        break;
-			case 1 :
-				return vec3(0.0, 1.0f, 0.0);
-        break;
-			case 2 :
-				return vec3(0.0, 0.0, 1.0f);
-        break;
-			case 3 :
-				return vec3(1.0f, 1.0f, 0.0);
-        break;
-  }
-  */
-
   vec4 shadow_region = light.shadow_region[cascadeIndex];
   mat4 light_space = light.light_space[cascadeIndex];
 
@@ -359,7 +369,8 @@ vec3 calcDirectionalLight(DirectionalLight light, vec3 F0)
     vec2(0,0),
     t_DirectionalShadows,
     shadow_region,
-    int(light.pcf_samples)
+    int(light.pcf_samples),
+    light.poisson_spread
   );
   radiance = shadow * radiance;
 
