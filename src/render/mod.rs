@@ -5,6 +5,12 @@ pub mod renderer;
 pub mod render_helper;
 ///Creates a builder struct to configure the renderer. And creates a renderer object from it.
 pub mod render_builder;
+///Defines the usable render passes for this engine
+pub mod render_passes;
+///Contains all traits which must be implemented by resources if they want to be handled by the
+///Renderer.
+pub mod render_traits;
+
 ///A primitve which describes one frame. It handles the creation of the frame buffer images
 /// needed to preform this frame, returns a commnad buffer which can be filled and finaly
 /// executes the command buffer and returns the future of it.
@@ -34,9 +40,6 @@ pub mod shader;
 ///This modules defines how a shader set and its inputs work. The engine can create pipelines based on the
 /// shader sets and creates the descriptorsets on runtime based on the input definitions defined in the shader set.
 pub mod shader_manager;
-
-///Defines the usable render passes for this engine
-pub mod render_passes;
 
 ///Handels the rendering of all shadow maps
 pub mod shadow_system;

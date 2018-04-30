@@ -3,10 +3,21 @@ use std::sync::{Arc, Mutex};
 use cgmath::*;
 use collision;
 
-use vulkano;
+use render::frame_system::{FrameStage, FrameSystem};
+use render::light_system::LightSystem;
+use render::render_traits::ForwardRenderAble;
+
+use vulkano::buffer::ImmutableBuffer;
+use vulkano::device::Device;
+use vulkano::buffer::BufferUsage;
+use vulkano::buffer::BufferAccess;
+use vulkano::device::Queue;
+
 
 use core::ReturnBoundInfo;
 use core::resources::material;
+
+
 
 ///Defines the information a Vertex should have
 #[derive(Clone,Copy)]
@@ -49,16 +60,16 @@ impl Vertex{
 pub struct Mesh {
     pub name: String,
 
-    device: Arc<vulkano::device::Device>,
+    device: Arc<Device>,
 
     ///Holds the raw vertices of this mesh
     vertices: Vec<Vertex>,
     ///Holds the vulkan buffer, gets change if the vertices change
-    vertex_buffer: Arc<vulkano::buffer::BufferAccess + Send + Sync>,
+    vertex_buffer: Option<Arc<ImmutableBuffer<[Vertex]>>>,
 
     indices: Vec<u32>,
 
-    index_buffer: Arc<vulkano::buffer::cpu_access::CpuAccessibleBuffer<[u32]>>,
+    index_buffer: Option<Arc<ImmutableBuffer<[u32]>>>,
 
     material: Arc<Mutex<material::Material>>,
 
@@ -69,7 +80,7 @@ impl Mesh {
     ///Returns the Member with the passed `name`
     pub fn new(
         name: &str,
-        device: Arc<vulkano::device::Device>,
+        device: Arc<Device>,
         material: Arc<Mutex<material::Material>>
         )
         ->Self{
@@ -77,31 +88,18 @@ impl Mesh {
         let min = Point3::new(0.5, 0.5, 0.5);
         let max = Point3::new(0.5, 0.5, 0.5);
 
-        let mut vertices: Vec<Vertex> = Vec::new();
-        vertices.push(Vertex::new([0.0; 3], [0.0; 2], [0.0; 3], [0.0; 4], [0.0; 4]));
-
-
-
-        let sample_vertex_buffer = vulkano::buffer::cpu_access::CpuAccessibleBuffer
-                                    ::from_iter(device.clone(), vulkano::buffer::BufferUsage::all(), vertices.iter().cloned())
-                                    .expect("failed to create buffer");
-
-        let sample_index_buffer = vulkano::buffer::cpu_access::CpuAccessibleBuffer
-            ::from_iter(device.clone(), vulkano::buffer::BufferUsage::all(), Vec::new().iter().cloned())
-            .expect("failed to create index buffer 02");
-
         Mesh{
             name: String::from(name),
 
             device: device.clone(),
 
             //TODO Create a persistend vertex and indice buffer
-            vertices: vertices,
-            vertex_buffer: sample_vertex_buffer,
+            vertices: Vec::new(),
+            vertex_buffer: None,
 
             indices: Vec::new(),
 
-            index_buffer: sample_index_buffer,
+            index_buffer: None,
 
             material: material,
 
@@ -110,14 +108,15 @@ impl Mesh {
     }
 
     ///Sets the vertex and indice buffer to a new set of `Vertex` and `u32` indices
-    ///The device and queue are needed for rebuilding the buffer
-    pub fn set_vertices_and_indices(&mut self, vertices: Vec<Vertex>, indices: Vec<u32>){
+    ///The supplied queue will be used for uploading the buffer. If there are several, try to to use
+    /// the worker queue for this job.
+    pub fn set_vertices_and_indices(&mut self, vertices: Vec<Vertex>, indices: Vec<u32>, upload_queue: Arc<Queue>){
 
         //Set the new values
         self.vertices = vertices;
         self.indices = indices;
         //Rebuild vertex and indice buffer with new vertices
-        self.re_create_buffer();
+        self.re_create_buffer(upload_queue);
         //self.indices = indices;
     }
 
@@ -201,34 +200,112 @@ impl Mesh {
     }
 
     ///Returns the current vertex buffer of this mesh
-    pub fn get_vertex_buffer(&self) -> Vec<Arc<vulkano::buffer::BufferAccess + Send + Sync>>{
-
+    pub fn get_vertex_buffer(&self) -> Option<Vec<Arc<BufferAccess + Send + Sync>>>{
         let mut return_vec = Vec::new();
-        return_vec.push(self.vertex_buffer.clone());
-        return_vec
+        match self.vertex_buffer.clone(){
+            Some(vb) => {
+                return_vec.push(vb as Arc<BufferAccess + Send + Sync>);
+                return Some(return_vec);
+            }
+            _ => return None,
+        }
 
     }
 
     ///Recreates the vertex buffer from a specified device and queue
-    pub fn re_create_buffer(&mut self)
+    pub fn re_create_buffer(&mut self, upload_queue: Arc<Queue>)
     {
-        self.vertex_buffer = vulkano::buffer::cpu_access::CpuAccessibleBuffer
-                                    ::from_iter(self.device.clone(), vulkano::buffer::BufferUsage::all(),
-                                    self.vertices.iter().cloned()
-                                ).expect("failed to create buffer");
+        //create both buffers and wait for the graphics card to actually upload them
+        let (vertex_buffer, buffer_future) = ImmutableBuffer::from_iter(
+            self.vertices.iter().cloned(),
+            BufferUsage::all(),
+            upload_queue.clone()
+        ).expect("failed to create vertex buffer");
 
-        self.index_buffer = vulkano::buffer::cpu_access::CpuAccessibleBuffer
-            ::from_iter(self.device.clone(), vulkano::buffer::BufferUsage::all(), self.indices.iter().cloned())
-            .expect("failed to create index buffer 02");
+
+
+
+
+        let (index_buffer, future) = ImmutableBuffer::from_iter(
+            self.indices.iter().cloned(),
+            BufferUsage::all(),
+            upload_queue.clone()
+        ).expect("failed to create index buffer");
+
+        //overwrite internally
+        self.vertex_buffer = Some(vertex_buffer);
+        self.index_buffer = Some(index_buffer);
 
     }
 
 
     ///Returns a index bufffer for this mesh
     pub fn get_index_buffer(&self) ->
-        Arc<vulkano::buffer::cpu_access::CpuAccessibleBuffer<[u32]>>
+        Option<Arc<ImmutableBuffer<[u32]>>>
     {
         self.index_buffer.clone()
+    }
+
+    ///Renders this mesh if the supplied framestage is in the froward stage
+    pub fn draw(
+        &self,
+        frame_stage: FrameStage,
+        frame_system: &FrameSystem,
+        light_system: &LightSystem,
+        transform: Matrix4<f32>,
+    ) -> FrameStage{
+        //Before doing anything, we check if that mesh is active, if not we just pass
+        if self.vertex_buffer.is_none(){
+            return frame_stage;
+        }
+
+
+        match frame_stage{
+            FrameStage::Forward(cb) => {
+
+                let material_locked = self.get_material();
+                let mut material = material_locked
+                .lock()
+                .expect("failed to lock mesh for command buffer generation");
+
+                let pipeline = material.get_vulkano_pipeline();
+
+                let set_01 = {
+                    //aquirre the tranform matrix and generate the new set_01
+                    material.get_set_01(transform)
+                };
+
+                let set_02 = {
+                    material.get_set_02()
+                };
+
+                let set_03 = {
+                    material.get_set_03()
+                };
+
+                let set_04 = {
+                    material.get_set_04(&light_system, &frame_system)
+                };
+
+                //extend the current command buffer by this mesh
+                let new_cb = cb.draw_indexed(
+                    pipeline,
+                    frame_system.get_dynamic_state().clone(),
+                    self.get_vertex_buffer().expect("Found no vertex buffer, should not happen"), //vertex buffer (static usually)
+                    self.get_index_buffer().expect("Found no index buffer, should not happen"), //index buffer
+                    (set_01, set_02, set_03, set_04), //descriptor sets (currently static)
+                    ()
+                )
+                .expect("Failed to draw mesh in command buffer!");
+
+                return FrameStage::Forward(new_cb);
+            },
+            _ => {
+                println!("Tried to draw mesh in wrong stage!", );
+            }
+        }
+
+        return frame_stage;
     }
 
 }

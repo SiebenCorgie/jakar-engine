@@ -4,15 +4,20 @@ use core::resources::light;
 use core::resources::empty;
 use core::resources::camera;
 use core::ReturnBoundInfo;
+use render::render_traits::ForwardRenderAble;
 
 use jakar_tree;
 
 use cgmath::*;
 use collision::*;
+
 ///All possible types of content a Node can hold.
 ///Changed in order to apply a new type
 #[derive(Clone)]
 pub enum ContentType {
+    ///Can store other renderable structures. However, try to use meshes since they don't have to
+    /// perform dynamic dispatch.
+    Renderable(Arc<Mutex<ForwardRenderAble + Send + Sync>>),
     /// is a mesh with a vertex buffer as well as a material
     Mesh(Arc<Mutex<mesh::Mesh>>),
     /// is a light casting a 360° light
@@ -32,6 +37,10 @@ impl ContentType{
     ///Returns the bound of this content
     pub fn get_bound(&self) -> Aabb3<f32>{
         match self{
+            &ContentType::Renderable(ref renderable) => {
+                let render_able_lck = renderable.lock().expect("Failed to lock renderable");
+                render_able_lck.get_bound()
+            },
             &ContentType::Mesh(ref mesh) => {
                 //lock the mesh resource to get the bound
                 let mesh_lck = mesh.lock().expect("failed to lock mesh");
@@ -111,6 +120,10 @@ impl jakar_tree::node::NodeContent for ContentType{
     ///Should return the name of this content
     fn get_name(&self) -> String{
         match self{
+            &ContentType::Renderable(ref ra) =>{
+                let ra_lock = ra.lock().expect("failed to lock mesh");
+                ra_lock.get_name()
+            },
             &ContentType::Mesh(ref c) =>{
                 let mesh_lock = c.lock().expect("failed to lock mesh");
                 (*mesh_lock).name.clone()

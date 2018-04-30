@@ -765,7 +765,7 @@ impl Material {
     ///Returns the 4th desciptor set responsible for the lighting information based on the current lights in the culling system
     #[inline]
     pub fn get_set_04(
-        &self, compute_sys: &mut light_system::LightSystem, frame_system: &FrameSystem,
+        &self, compute_sys: &light_system::LightSystem, frame_system: &FrameSystem,
     ) -> Arc<DescriptorSet + Send + Sync>{
 
         //This has to be build based on the currently used light lists in the compute system.

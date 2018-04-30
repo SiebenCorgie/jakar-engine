@@ -440,11 +440,13 @@ pub fn load_gltf_mesh(
         let mesh_name = scene_name.clone() + "_mesh_" + &primitive_index.to_string();
 
         let device = {
-            let device = {
-                let managers_lck = managers.lock().expect("failed to lock managers struct");
-                (*managers_lck).device.clone()
-            };
-            device
+            let managers_lck = managers.lock().expect("failed to lock managers struct");
+            managers_lck.device.clone()
+        };
+
+        let queue = {
+            let managers_lck = managers.lock().expect("failed to lock managers struct");
+            managers_lck.queue.clone()
         };
 
         //get the fallback material for the mesh creation, if there is another materail set for
@@ -533,7 +535,7 @@ pub fn load_gltf_mesh(
             vertices.push(vertex);
         }
         //write new vertices as well as indices to mesh
-        add_mesh.set_vertices_and_indices(vertices, indices);
+        add_mesh.set_vertices_and_indices(vertices, indices, queue);
         //TODO SETUP BOUNDS
         add_mesh.set_bound(
             Point3::new(mins[0], mins[1], mins[2]),

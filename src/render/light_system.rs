@@ -358,7 +358,7 @@ impl LightSystem{
     /// - Binding 3 = struct which describes how many actual lights where send
     /// - Binding 4 = The texture with all directional shadows.
     pub fn get_light_descriptorset(
-        &mut self, binding_id: u32,
+        &self, binding_id: u32,
         pipeline: Arc<vulkano::pipeline::GraphicsPipelineAbstract + Send + Sync>,
         frame_system: &frame_system::FrameSystem,
     ) -> Arc<DescriptorSet + Send + Sync>{

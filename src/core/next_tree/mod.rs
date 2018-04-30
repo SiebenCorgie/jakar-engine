@@ -22,6 +22,7 @@ use collision::*;
 ///Can be set to specialize which type of content a node should have to be considered im the comparing
 #[derive(Clone, PartialEq)]
 pub struct ValueTypeBool {
+    pub render_able: bool,
     pub mesh: bool,
     pub point_light: bool,
     pub directional_light: bool,
@@ -34,6 +35,7 @@ impl ValueTypeBool {
     ///Returns with all bools set to true
     pub fn all() -> Self{
         ValueTypeBool {
+            render_able: true,
             mesh: true,
             point_light: true,
             directional_light: true,
@@ -46,6 +48,7 @@ impl ValueTypeBool {
     ///Returns with all bool set to false
     pub fn none() -> Self{
         ValueTypeBool {
+            render_able: false,
             mesh: false,
             point_light: false,
             directional_light: false,
@@ -57,26 +60,34 @@ impl ValueTypeBool {
 
     ///Returns `true` if self is parth of `other`
     pub fn is_part_of(&self, other: &ValueTypeBool) -> bool{
-        if self.mesh && !other.mesh{
+        if (self.render_able && !other.render_able) || (!self.render_able && other.render_able){
             return false;
         }
-        if self.point_light && !other.point_light{
+        if (self.mesh && !other.mesh) || (!self.mesh && other.mesh){
             return false;
         }
-        if self.spot_light && !other.spot_light{
+        if (self.point_light && !other.point_light) || (!self.point_light && other.point_light){
             return false;
         }
-        if self.directional_light && !other.directional_light{
+        if (self.spot_light && !other.spot_light) || (!self.spot_light && other.spot_light){
             return false;
         }
-        if self.empty && !other.empty{
+        if (self.directional_light && !other.directional_light) || (!self.directional_light && other.directional_light){
             return false;
         }
-        if self.camera && !other.camera{
+        if (self.empty && !other.empty) || (!self.empty && other.empty){
+            return false;
+        }
+        if (self.camera && !other.camera) || (!self.camera && other.camera){
             return false;
         }
         //everything self has is also contained in other therefore return true
         true
+    }
+
+    pub fn with_render_able(mut self) -> Self{
+        self.render_able = true;
+        self
     }
 
     pub fn with_mesh(mut self) -> Self{
@@ -287,6 +298,7 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
                         //value type, checks if the current value is within the parameters.
                         let mut tmp_bool = ValueTypeBool::none();
                         match self.value{
+                            content::ContentType::Renderable(_) => tmp_bool.render_able = true,
                             content::ContentType::Mesh(_) => tmp_bool.mesh = true,
                             content::ContentType::PointLight(_) => tmp_bool.point_light = true,
                             content::ContentType::DirectionalLight(_) => tmp_bool.directional_light = true,
@@ -332,6 +344,7 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
                         //value type, checks if the current value is within the parameters.
                         let mut tmp_bool = ValueTypeBool::none();
                         match self.value{
+                            content::ContentType::Renderable(_) => tmp_bool.render_able = true,
                             content::ContentType::Mesh(_) => tmp_bool.mesh = true,
                             content::ContentType::PointLight(_) => tmp_bool.point_light = true,
                             content::ContentType::DirectionalLight(_) => tmp_bool.directional_light = true,

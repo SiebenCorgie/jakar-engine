@@ -425,24 +425,32 @@ impl ShadowSystem{
             .build().expect("failed to build data descriptorset")
 
         };
-        //self.data_deciptor_pool
+        //checkfor the vertex and index buffer, if there are none we won't render at all
+        if let Some(vertex_buffer) = mesh.get_vertex_buffer(){
+            if let Some(index_buffer) = mesh.get_index_buffer(){
+                let new_cb = command_buffer.draw_indexed(
+                    if should_be_double { //find right pipeline fitting to the descriptor and execute
+                        &mut self.shadow_pipeline_none_culled
+                    }else{
+                        &mut self.shadow_pipeline_front_culled
+                    }.get_pipeline_ref(),
+                    dynamic_state,
+                    vertex_buffer,
+                    index_buffer,
+                    (descriptor),
+                    ()
+                ).expect("failed to draw mesh in directional depth pass");
 
-        //println!("Drawing shadow mesh");
-        let new_cb = command_buffer.draw_indexed(
-            if should_be_double { //find right pipeline fitting to the descriptor and execute
-                &mut self.shadow_pipeline_none_culled
+                //return cb
+                return new_cb
             }else{
-                &mut self.shadow_pipeline_front_culled
-            }.get_pipeline_ref(),
-            dynamic_state,
-            mesh.get_vertex_buffer(),
-            mesh.get_index_buffer(),
-            (descriptor),
-            ()
-        ).expect("failed to draw mesh in directional depth pass");
-
-        //return cb
-        new_cb
+                println!("Found no depth mesh index buffer", );
+                return command_buffer;
+            }
+        }else{
+            println!("Found no depth mesh vertex buffer", );
+            return command_buffer;
+        }
     }
 }
 

@@ -14,7 +14,7 @@ use render::shadow_system;
 use core::next_tree::{SceneTree, ValueTypeBool, SceneComparer};
 use core::engine_settings;
 //use core::simple_scene_system::node_helper;
-use core::next_tree;
+use core::next_tree::content::ContentType;
 use jakar_tree;
 
 use winit;
@@ -329,7 +329,20 @@ impl Renderer {
         //now we are in the main render pass in the forward pass, using this to draw all meshes
         //add all opaque meshes to the command buffer
         for opaque_mesh in opaque_meshes.iter(){
-            command_buffer = self.add_forward_node(opaque_mesh, command_buffer);
+            let transform = opaque_mesh.attributes.get_matrix();
+
+            if let ContentType::Mesh(ref mesh) = opaque_mesh.value{
+                let mesh_lck = mesh.lock().expect("failed to lock mesh for drawing!");
+                command_buffer = mesh_lck.draw(
+                    command_buffer,
+                    &self.frame_system,
+                    &self.light_system,
+                    transform,
+                );
+            }else{
+                println!("Mesh was no actual mesh...", );
+                continue;
+            }
         }
         if should_capture{
             let time_needed = time_step.elapsed().subsec_nanos();
@@ -363,9 +376,20 @@ impl Renderer {
             Ok(ord_tr) => {
 
                 for translucent_mesh in ord_tr.iter(){
-                    command_buffer = self.add_forward_node(
-                        translucent_mesh, command_buffer
-                    );
+                    let transform = translucent_mesh.attributes.get_matrix();
+
+                    if let ContentType::Mesh(ref mesh) = translucent_mesh.value{
+                        let mesh_lck = mesh.lock().expect("failed to lock mesh for drawing!");
+                        command_buffer = mesh_lck.draw(
+                            command_buffer,
+                            &self.frame_system,
+                            &self.light_system,
+                            transform,
+                        );
+                    }else{
+                        println!("Mesh was no actual mesh...", );
+                        continue;
+                    }
                 }
 
                 if should_capture{
@@ -458,6 +482,12 @@ impl Renderer {
             &self.frame_system
         );
 
+        if should_capture{
+            let time_needed = time_step.elapsed().subsec_nanos();
+            println!("\tRE: Nedded {} ms to sort hdr!", time_needed as f32 / 1_000_000.0);
+            time_step = Instant::now()
+        }
+
         //Performe next pass
         command_buffer = self.frame_system.next_pass(command_buffer);
 
@@ -474,6 +504,12 @@ impl Renderer {
             command_buffer,
             &self.frame_system,
         );
+
+        if should_capture{
+            let time_needed = time_step.elapsed().subsec_nanos();
+            println!("\tRE: Nedded {} ms to blur!", time_needed as f32 / 1_000_000.0);
+            time_step = Instant::now()
+        }
 
         //Change to compute average lumiosity stage
         command_buffer = self.frame_system.next_pass(command_buffer);
@@ -495,6 +531,11 @@ impl Renderer {
             );
         }
 
+        if should_capture{
+            let time_needed = time_step.elapsed().subsec_nanos();
+            println!("\tRE: Nedded {} ms to do auto exposure!", time_needed as f32 / 1_000_000.0);
+            time_step = Instant::now()
+        }
 
         //Change to assamble stage
         command_buffer = self.frame_system.next_pass(command_buffer);
@@ -505,6 +546,12 @@ impl Renderer {
             &self.frame_system
         );
 
+
+        if should_capture{
+            let time_needed = time_step.elapsed().subsec_nanos();
+            println!("\tRE: Nedded {} ms to do final postprogress!", time_needed as f32 / 1_000_000.0);
+            time_step = Instant::now()
+        }
 
         if should_capture{
             println!("\tRE: Added postprogress thingy", );
@@ -528,6 +575,12 @@ impl Renderer {
             println!("\tRE: Ending frame", );
         }
 
+        if should_capture{
+            let time_needed = time_step.elapsed().subsec_nanos();
+            println!("\tRE: Nedded {} ms to finish!", time_needed as f32 / 1_000_000.0);
+            time_step = Instant::now()
+        }
+
         //now since we did everything we can in this frame, wait for the last frame and start the new one
         //previous_frame.wait(None).expect_err("Failed to wait for last frame !");
         let this_frame = Box::new(vulkano::sync::now(self.device.clone()));
@@ -547,16 +600,41 @@ impl Renderer {
             before_present_frame, self.queue.clone(),
             image_number
         );
+
+        if should_capture{
+            let time_needed = time_step.elapsed().subsec_nanos();
+            println!("\tRE: Nedded {} ms to present!", time_needed as f32 / 1_000_000.0);
+            time_step = Instant::now()
+        }
         //now signal fences
         let mut after_frame = after_present_frame.then_signal_fence_and_flush().expect("failed to signal and flush");
+
+        if should_capture{
+            let time_needed = time_step.elapsed().subsec_nanos();
+            println!("\tRE: Nedded {} ms to flush!", time_needed as f32 / 1_000_000.0);
+            time_step = Instant::now()
+        }
 
         //while the gpu is working, clean the old data
         //clean old frame
         after_frame.cleanup_finished();
 
+        if should_capture{
+            let time_needed = time_step.elapsed().subsec_nanos();
+            println!("\tRE: Nedded {} ms to cleanup!", time_needed as f32 / 1_000_000.0);
+            time_step = Instant::now()
+        }
+
         //now wait for the graphics card to finish. However, I might implement some better way.
         // It would be nice if the engine could record the next command buffer while the last frame is executing.
         after_frame.wait(None).expect("Could not wait for gpu");
+
+        if should_capture{
+            let time_needed = time_step.elapsed().subsec_nanos();
+            println!("\tRE: Nedded {} ms to wait for the gpu!", time_needed as f32 / 1_000_000.0);
+            time_step = Instant::now()
+        }
+
 
         //Resetting debug options
         if should_capture{
@@ -575,6 +653,7 @@ impl Renderer {
         //Box::new(after_frame)
     }
 
+/*
     ///adds a `node` to the `command_buffer` if possible to be rendered.
     fn add_forward_node(
         &mut self,
@@ -637,7 +716,7 @@ impl Renderer {
                 //time_step = Instant::now();
 
                 let set_04 = {
-                    material.get_set_04(&mut self.light_system, &self.frame_system)
+                    material.get_set_04(&self.light_system, &self.frame_system)
                 };
 
                 //println!("Needed {}ms set 04", time_step.elapsed().subsec_nanos() as f32 / 1_000_000.0);
@@ -668,7 +747,7 @@ impl Renderer {
         return frame_stage;
 
     }
-
+*/
 
     ///Returns the uniform manager
     pub fn get_uniform_manager(&self) -> Arc<Mutex<uniform_manager::UniformManager>>{
