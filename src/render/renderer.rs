@@ -26,7 +26,11 @@ use vulkano::swapchain::SwapchainAcquireFuture;
 use vulkano::swapchain::AcquireError;
 use vulkano::sync::GpuFuture;
 use vulkano::sync::FenceSignalFuture;
-
+use vulkano::swapchain::PresentFuture;
+use vulkano::command_buffer::CommandBufferExecFuture;
+use vulkano::sync::JoinFuture;
+use vulkano::sync::NowFuture;
+use vulkano::command_buffer::AutoCommandBuffer;
 
 use std::sync::{Arc,Mutex};
 use std::time::{Instant};
@@ -81,7 +85,7 @@ pub struct Renderer  {
     uniform_manager: Arc<Mutex<uniform_manager::UniformManager>>,
 
     state: Arc<Mutex<RendererState>>,
-    //last_frame: Arc<FenceSignalFuture<GpuFuture>>,
+    last_frame_end: Option<Arc<FenceSignalFuture<PresentFuture<CommandBufferExecFuture<JoinFuture<Box<NowFuture>, SwapchainAcquireFuture<winit::Window>>, AutoCommandBuffer>, winit::Window>>>>,
 }
 
 impl Renderer {
@@ -128,6 +132,7 @@ impl Renderer {
             engine_settings: engine_settings,
             uniform_manager: uniform_manager,
             state: state,
+            last_frame_end: None,
         }
     }
 
@@ -249,6 +254,17 @@ impl Renderer {
                 }
             }
         };
+
+        //now try to get the time at which the last frame ends, join it with the aquire future and let
+        //the cpu build the command buffer
+        let this_frame_start: Box<GpuFuture> = {
+            match self.last_frame_end{
+                Some(ref end) => Box::new(acquire_future.join(end.clone())),
+                None => Box::new(acquire_future),
+            }
+        };
+
+
 
         if should_capture{
             time_step = Instant::now();
@@ -581,43 +597,29 @@ impl Renderer {
             time_step = Instant::now()
         }
 
-        //now since we did everything we can in this frame, wait for the last frame and start the new one
-        //previous_frame.wait(None).expect_err("Failed to wait for last frame !");
-        let this_frame = Box::new(vulkano::sync::now(self.device.clone()));
-
         //thanks firewater
         let real_cb = finished_command_buffer.build().expect("failed to build command buffer");
 
-        let after_prev_and_aq = this_frame.join(acquire_future);
+        //now we submitt the frame, this will add the command buffer to the comman queue
+        //we then tell the gpu/cpu to present the new image and signal the fence for this frame as well as flush all
+        //the operations
+        let mut this_frame = this_frame_start.then_execute(self.queue.clone(), real_cb)
+        .expect("failed to add execute to the frame")
+        .then_swapchain_present(self.queue.clone(), self.swapchain.clone(), image_number)
+        .then_signal_fence_and_flush()
+        .expect("failed to signal fences and flush");
 
-        let before_present_frame = after_prev_and_aq.then_execute(self.queue.clone(), real_cb)
-        .expect("failed to add execute to the frame");
-
-
-        //now present to the image
-        let after_present_frame = vulkano::swapchain::present(
-            self.swapchain.clone(),
-            before_present_frame, self.queue.clone(),
-            image_number
-        );
 
         if should_capture{
             let time_needed = time_step.elapsed().subsec_nanos();
-            println!("\tRE: Nedded {} ms to present!", time_needed as f32 / 1_000_000.0);
+            println!("\tRE: Nedded {} ms to present and flush!", time_needed as f32 / 1_000_000.0);
             time_step = Instant::now()
         }
-        //now signal fences
-        let mut after_frame = after_present_frame.then_signal_fence_and_flush().expect("failed to signal and flush");
 
-        if should_capture{
-            let time_needed = time_step.elapsed().subsec_nanos();
-            println!("\tRE: Nedded {} ms to flush!", time_needed as f32 / 1_000_000.0);
-            time_step = Instant::now()
-        }
 
         //while the gpu is working, clean the old data
         //clean old frame
-        after_frame.cleanup_finished();
+        this_frame.cleanup_finished();
 
         if should_capture{
             let time_needed = time_step.elapsed().subsec_nanos();
@@ -625,129 +627,20 @@ impl Renderer {
             time_step = Instant::now()
         }
 
-        //now wait for the graphics card to finish. However, I might implement some better way.
-        // It would be nice if the engine could record the next command buffer while the last frame is executing.
-        after_frame.wait(None).expect("Could not wait for gpu");
-
-        if should_capture{
-            let time_needed = time_step.elapsed().subsec_nanos();
-            println!("\tRE: Nedded {} ms to wait for the gpu!", time_needed as f32 / 1_000_000.0);
-            time_step = Instant::now()
-        }
-
+        //now we overwrite the internal "last_frame_end" with the finish future of this frame
+        //self.last_frame_end = Some(Arc::new(this_frame));
 
         //Resetting debug options
         if should_capture{
             //ait for the gput to mesure frame time
-
-
             let frame_time = start_time.elapsed().subsec_nanos();
             println!("\t RE: FrameTime: {}ms", frame_time as f32/1_000_000.0);
             println!("\t RE: Which is {}fps", 1.0/(frame_time as f32/1_000_000_000.0));
             self.engine_settings.lock().expect("failed to lock settings").stop_capture();
-
-            //Since we waited for the gpu, we can return a now GpuFuture
-            return; // Box::new(vulkano::sync::now(self.device.clone()));
         }
 
         //Box::new(after_frame)
     }
-
-/*
-    ///adds a `node` to the `command_buffer` if possible to be rendered.
-    fn add_forward_node(
-        &mut self,
-        node: &jakar_tree::node::Node<
-            next_tree::content::ContentType,
-            next_tree::jobs::SceneJobs,
-            next_tree::attributes::NodeAttributes
-        >,
-        frame_stage: frame_system::FrameStage
-    )
-    -> frame_system::FrameStage
-    where AutoCommandBufferBuilder: Sized + 'static
-    {
-        match frame_stage{
-            frame_system::FrameStage::Forward(cb) => {
-                //let mut time_step = Instant::now();
-                //get the actual mesh as well as its pipeline an create the descriptor sets
-                let mesh_locked = match node.value{
-                    next_tree::content::ContentType::Mesh(ref mesh) => mesh.clone(),
-                    _ => return frame_system::FrameStage::Forward(cb), //is no mesh :(
-                };
-
-                //println!("Needed {}ms to get mesh lock", time_step.elapsed().subsec_nanos() as f32 / 1_000_000.0);
-                //time_step = Instant::now();
-
-                let mesh = mesh_locked.lock().expect("failed to lock mesh in cb creation");
-
-                let mesh_transform = node.attributes.get_matrix();
-
-                let material_locked = mesh.get_material();
-                let mut material = material_locked
-                .lock()
-                .expect("failed to lock mesh for command buffer generation");
-
-                let pipeline = material.get_vulkano_pipeline();
-
-                //println!("Needed {}ms Till sets", time_step.elapsed().subsec_nanos() as f32 / 1_000_000.0);
-                //time_step = Instant::now();
-
-                let set_01 = {
-                    //aquirre the tranform matrix and generate the new set_01
-                    material.get_set_01(mesh_transform)
-                };
-
-                //println!("Needed {}ms set 01", time_step.elapsed().subsec_nanos() as f32 / 1_000_000.0);
-                //time_step = Instant::now();
-
-                let set_02 = {
-                    material.get_set_02()
-                };
-
-                //println!("Needed {}ms set 02", time_step.elapsed().subsec_nanos() as f32 / 1_000_000.0);
-                //time_step = Instant::now();
-
-                let set_03 = {
-                    material.get_set_03()
-                };
-
-                //println!("Needed {}ms set 03", time_step.elapsed().subsec_nanos() as f32 / 1_000_000.0);
-                //time_step = Instant::now();
-
-                let set_04 = {
-                    material.get_set_04(&self.light_system, &self.frame_system)
-                };
-
-                //println!("Needed {}ms set 04", time_step.elapsed().subsec_nanos() as f32 / 1_000_000.0);
-                //time_step = Instant::now();
-
-                //extend the current command buffer by this mesh
-                let new_cb = cb.draw_indexed(
-                    pipeline,
-                    self.frame_system.get_dynamic_state().clone(),
-                    mesh.get_vertex_buffer(), //vertex buffer (static usually)
-                    mesh.get_index_buffer(), //index buffer
-                    (set_01, set_02, set_03, set_04), //descriptor sets (currently static)
-                    ()
-                )
-                .expect("Failed to draw in command buffer!");
-
-
-                //println!("Needed {}ms to draw", time_step.elapsed().subsec_nanos() as f32 / 1_000_000.0);
-                //time_step = Instant::now();
-
-                return frame_system::FrameStage::Forward(new_cb);
-            },
-            _ => {
-                println!("Tried to draw mesh in wrong stage!", );
-            }
-        }
-
-        return frame_stage;
-
-    }
-*/
 
     ///Returns the uniform manager
     pub fn get_uniform_manager(&self) -> Arc<Mutex<uniform_manager::UniformManager>>{
