@@ -85,7 +85,7 @@ pub struct Renderer  {
     uniform_manager: Arc<Mutex<uniform_manager::UniformManager>>,
 
     state: Arc<Mutex<RendererState>>,
-    last_frame_end: Option<Arc<FenceSignalFuture<PresentFuture<CommandBufferExecFuture<JoinFuture<Box<NowFuture>, SwapchainAcquireFuture<winit::Window>>, AutoCommandBuffer>, winit::Window>>>>,
+    last_frame_end: Option<Arc<FenceSignalFuture<PresentFuture<CommandBufferExecFuture<Box<vulkano::sync::GpuFuture + Send + Sync>, AutoCommandBuffer>, winit::Window>>>>,
 }
 
 impl Renderer {
@@ -257,13 +257,18 @@ impl Renderer {
 
         //now try to get the time at which the last frame ends, join it with the aquire future and let
         //the cpu build the command buffer
-        let this_frame_start: Box<GpuFuture> = {
+        /*
+        let this_frame_start = {
             match self.last_frame_end{
-                Some(ref end) => Box::new(acquire_future.join(end.clone())),
+                Some(ref end) => {
+                    let thingy: Arc<FenceSignalFuture<_>> = end.clone();
+                    let new_future = acquire_future.join(thingy);
+                    Arc::new(new_future)
+                },
                 None => Box::new(acquire_future),
             }
         };
-
+        */
 
 
         if should_capture{
@@ -600,10 +605,18 @@ impl Renderer {
         //thanks firewater
         let real_cb = finished_command_buffer.build().expect("failed to build command buffer");
 
-        //now we submitt the frame, this will add the command buffer to the comman queue
+        //now we submitt the frame, this will add the command buffer to the command queue
         //we then tell the gpu/cpu to present the new image and signal the fence for this frame as well as flush all
         //the operations
-        let mut this_frame = this_frame_start.then_execute(self.queue.clone(), real_cb)
+
+
+
+        let mut this_frame =
+        match self.last_frame_end{
+            Some(ref end) => Box::new(acquire_future.join(end.clone())) as Box<GpuFuture + Send + Sync>,
+            None => Box::new(acquire_future) as Box<GpuFuture  + Send + Sync>
+        }
+        .then_execute(self.queue.clone(), real_cb)
         .expect("failed to add execute to the frame")
         .then_swapchain_present(self.queue.clone(), self.swapchain.clone(), image_number)
         .then_signal_fence_and_flush()
@@ -628,7 +641,7 @@ impl Renderer {
         }
 
         //now we overwrite the internal "last_frame_end" with the finish future of this frame
-        //self.last_frame_end = Some(Arc::new(this_frame));
+        self.last_frame_end = Some(Arc::new(this_frame));
 
         //Resetting debug options
         if should_capture{
@@ -640,6 +653,12 @@ impl Renderer {
         }
 
         //Box::new(after_frame)
+        //now overwrite the current future
+        //self.last_frame_end = Some(this_frame)
+    }
+
+    fn execute_cb_async(&self, cb: AutoCommandBuffer){
+        //kekus-longus
     }
 
     ///Returns the uniform manager

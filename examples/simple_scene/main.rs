@@ -42,7 +42,7 @@ fn main() {
     .with_name("Jakar Instance")
     .in_release_mode()
     .with_input_poll_speed(500)
-    .with_fullscreen_mode(true)
+    .with_fullscreen_mode(false)
     //.with_cursor_state(winit::CursorState::Normal)
     .with_cursor_state(winit::CursorState::Grab)
     //.with_cursor_visibility(winit::MouseCursor::Default)

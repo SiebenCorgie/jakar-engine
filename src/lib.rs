@@ -367,8 +367,19 @@ impl JakarEngine {
                     .lock().expect("failed to lock asset manager");
                     (*asset_manager_lck).clone()
                 };
+
+                let fps_time = fps_time_start.elapsed().subsec_nanos();
+
+                let fps = (fps_time as f32 / 1_000_000.0);
+                println!("This Frame before rendering: {}ms", fps);
+
                 //gpu_future =
                 renderer_lck.render(&mut asset_copy); // gpu_future);
+
+                let fps_time = fps_time_start.elapsed().subsec_nanos();
+
+                let fps = (fps_time as f32 / 1_000_000.0);
+                println!("This Frame after rendering: {}ms", fps);
 
                 //Tet if the engine should still run
                 let engine_is_running = {
@@ -390,13 +401,18 @@ impl JakarEngine {
                     break;
                 }
                 //now sleep the rest if needed
+                let fps_time = fps_time_start.elapsed().subsec_nanos();
+
+                let fps = (fps_time as f32 / 1_000_000.0);
+                println!("This Frame before waiting: {}ms", fps);
+
                 last_time = sleep_rest_time(last_time, max_fps);
 
 
                 let fps_time = fps_time_start.elapsed().subsec_nanos();
 
-                let fps = 1.0/ (fps_time as f32 / 1_000_000_000.0);
-                println!("This Frame after waiting: {}", fps);
+                let fps = (fps_time as f32 / 1_000_000.0);
+                println!("This Frame after waiting: {}ms", fps);
 
                 fps_time_start = Instant::now();
 
