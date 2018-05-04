@@ -67,8 +67,8 @@ fn main() {
     };
 
 
-    //engine.get_asset_manager().import_gltf("TestScene", "examples/simple_scene/TestScenes/Cube_Plane.gltf");
-    engine.get_asset_manager().import_gltf("TestScene", "examples/simple_scene/Sponza/Sponza.gltf");
+    engine.get_asset_manager().import_gltf("TestScene", "examples/simple_scene/TestScenes/Cube_Plane.gltf");
+    //engine.get_asset_manager().import_gltf("TestScene", "examples/simple_scene/Sponza/Sponza.gltf");
     //engine.get_asset_manager().import_gltf("TestScene", "examples/simple_scene/Helmet/Helmet.gltf");
 
 
@@ -81,9 +81,9 @@ fn main() {
     //SUN========================================================================
     //add a matrix of lights
 
-    let mut matrix_size = 0;
+    let mut matrix_size = 16;
     matrix_size = matrix_size - (matrix_size / 2);
-    let spacing = 5.0;
+    let spacing = 1.5;
 
     for x in -(matrix_size)..matrix_size{
         for y in -(matrix_size)..matrix_size{
@@ -155,7 +155,7 @@ fn main() {
             }
         }
     }
-
+    /*
     //Now add a sun
     let mut sun = light::LightDirectional::new("Sunny");
     sun.set_intensity(100.0);
@@ -184,7 +184,7 @@ fn main() {
         },
         None => {println!("Could not find sun", );}
     }
-
+    */
 
     light_tree.update();
     engine.get_asset_manager().get_active_scene().join_at_root(&light_tree);

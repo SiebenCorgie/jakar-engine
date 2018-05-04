@@ -257,18 +257,6 @@ impl Renderer {
 
         //now try to get the time at which the last frame ends, join it with the aquire future and let
         //the cpu build the command buffer
-        /*
-        let this_frame_start = {
-            match self.last_frame_end{
-                Some(ref end) => {
-                    let thingy: Arc<FenceSignalFuture<_>> = end.clone();
-                    let new_future = acquire_future.join(thingy);
-                    Arc::new(new_future)
-                },
-                None => Box::new(acquire_future),
-            }
-        };
-        */
 
 
         if should_capture{
@@ -315,7 +303,12 @@ impl Renderer {
 
         //First of all we compute the light clusters
         //Since we currently have no nice system to track
-        self.light_system.update_light_set(&mut self.shadow_system, asset_manager);
+        let light_buffer_future = self.light_system.update_light_set(
+            &mut self.shadow_system, asset_manager
+        );
+
+        //we can now join the acquire future and the light_set_future
+        let after_light_future: Box<GpuFuture + Send + Sync> = Box::new(acquire_future.join(light_buffer_future));
 
         if should_capture{
             let time_needed = time_step.elapsed().subsec_nanos();
@@ -613,8 +606,8 @@ impl Renderer {
 
         let mut this_frame =
         match self.last_frame_end{
-            Some(ref end) => Box::new(acquire_future.join(end.clone())) as Box<GpuFuture + Send + Sync>,
-            None => Box::new(acquire_future) as Box<GpuFuture  + Send + Sync>
+            Some(ref end) => Box::new(after_light_future.join(end.clone())) as Box<GpuFuture + Send + Sync>,
+            None => Box::new(after_light_future) as Box<GpuFuture  + Send + Sync>
         }
         .then_execute(self.queue.clone(), real_cb)
         .expect("failed to add execute to the frame")
@@ -637,6 +630,14 @@ impl Renderer {
         if should_capture{
             let time_needed = time_step.elapsed().subsec_nanos();
             println!("\tRE: Nedded {} ms to cleanup!", time_needed as f32 / 1_000_000.0);
+            time_step = Instant::now()
+        }
+
+        if should_capture{
+            //also wait for the graphics card to end
+            this_frame.wait(None).expect("failed to wait for graphics to debug");
+            let time_needed = time_step.elapsed().subsec_nanos();
+            println!("\tRE: Nedded {} ms to wait for gpu!", time_needed as f32 / 1_000_000.0);
             time_step = Instant::now()
         }
 

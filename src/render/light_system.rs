@@ -24,6 +24,8 @@ use vulkano::buffer::device_local::DeviceLocalBuffer;
 use vulkano::descriptor::descriptor_set::FixedSizeDescriptorSetsPool;
 use vulkano::buffer::immutable::ImmutableBuffer;
 use vulkano::buffer::BufferUsage;
+use vulkano::sync::GpuFuture;
+use vulkano::sync::JoinFuture;
 use vulkano;
 
 use std::sync::{Arc,Mutex};
@@ -211,14 +213,19 @@ impl LightSystem{
         &mut self,
         shadow_system: &mut ShadowSystem,
         asset_manager: &mut AssetManager
-    ){
-
-
-
+    )-> Box<GpuFuture + Send + Sync>{
+        use std::time::Instant;
+        let mut start = Instant::now();
+        let start_tracker =  Instant::now();
         //Let the shadow system find the lights we need and set their shadow atlases.
         self.light_store = shadow_system.set_shadow_atlases(
             asset_manager,
         );
+
+        let ms = start.elapsed().subsec_nanos() as f32 / 1_000_000.0;
+        println!("\t RE: {}ms to update shadow_atlases", ms);
+        start = Instant::now();
+
         //Now create a buffer from theese lights
         let light_counts = LightCount{
             points: self.light_store.point_lights.len() as u32,
@@ -255,39 +262,56 @@ impl LightSystem{
             (p_lights, d_lights, s_lights)
         };
 
-        self.current_point_light_list = {
+        let ms = start.elapsed().subsec_nanos() as f32 / 1_000_000.0;
+        println!("\t RE: {}ms to setup info vecs", ms);
+        start = Instant::now();
+
+
+        let (new_point_light_list, point_future) = {
             let (buffer, future) = ImmutableBuffer::from_iter(
                 points.into_iter(),
                 BufferUsage::all(),
                 self.queue.clone()
             ).expect("Failed to create point light buffer");
             //Now drop the future (which will execute and then return)
-            buffer
+            (buffer, Box::new(future) as Box<GpuFuture + Send + Sync>)
         };
 
-        self.current_spot_light_list = {
+        let (new_spot_light_list, spot_future) = {
             let (buffer, future) = ImmutableBuffer::from_iter(
                 spots.into_iter(),
                 BufferUsage::all(),
                 self.queue.clone()
             ).expect("Failed to create spot light buffer");
             //Now drop the future (which will execute and then return)
-            buffer
+            (buffer, Box::new(future) as Box<GpuFuture + Send + Sync>)
         };
-        self.current_dir_light_list = {
+        let (new_dir_light_list, dir_future) = {
             let (buffer, future) = ImmutableBuffer::from_iter(
                 directionals.into_iter(),
                 BufferUsage::all(),
                 self.queue.clone()
             ).expect("Failed to create directional light buffer");
             //Now drop the future (which will execute and then return)
-            buffer
+            (buffer, Box::new(future) as Box<GpuFuture + Send + Sync>)
         };
+
+        self.current_point_light_list = new_point_light_list;
+        self.current_spot_light_list = new_spot_light_list;
+        self.current_dir_light_list = new_dir_light_list;
+
+        let ms = start.elapsed().subsec_nanos() as f32 / 1_000_000.0;
+        println!("\t RE: {}ms to create buffers", ms);
+        start = Instant::now();
 
         //And finally allocate a new buffer of light counts which describes the buffers above
         self.current_light_count = self.buffer_pool_05_count.next(
             light_counts
-        ).expect("Failed to allocate new light count buffer")
+        ).expect("Failed to allocate new light count buffer");
+
+        let inter: Box<GpuFuture + Send + Sync> = Box::new(point_future.join(spot_future));
+        let ret_future: Box<GpuFuture + Send + Sync> = Box::new(inter.join(dir_future));
+        ret_future
     }
 
 

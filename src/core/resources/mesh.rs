@@ -259,7 +259,6 @@ impl Mesh {
             return frame_stage;
         }
 
-
         match frame_stage{
             FrameStage::Forward(cb) => {
 

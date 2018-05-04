@@ -411,8 +411,10 @@ impl JakarEngine {
 
                 let fps_time = fps_time_start.elapsed().subsec_nanos();
 
-                let fps = (fps_time as f32 / 1_000_000.0);
-                println!("This Frame after waiting: {}ms", fps);
+                let ms = (fps_time as f32 / 1_000_000.0);
+                let fps = 1.0 / (fps_time as f32 / 1_000_000_000.0);
+                println!("This Frame after waiting: {}ms", ms);
+                println!("which is {} fps", fps);
 
                 fps_time_start = Instant::now();
 
