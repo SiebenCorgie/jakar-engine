@@ -8,8 +8,6 @@ extern crate collision;
 extern crate winit;
 #[macro_use]
 extern crate vulkano;
-use vulkano::sync::GpuFuture;
-use vulkano::sync::FenceSignalFuture;
 
 #[macro_use]
 extern crate vulkano_shader_derive;
@@ -21,6 +19,8 @@ extern crate gltf_importer;
 extern crate gltf_utils;
 //the new custom tree crate
 extern crate jakar_tree;
+//The threadpool implementation
+extern crate jakar_threadpool;
 
 
 ///The engine core defines most functions and
@@ -35,6 +35,10 @@ pub mod tools;
 ///A small thread who will run and administrate the winit window, as well as its input
 ///processing
 pub mod input;
+
+///Handels the messageing between the main threads (Rendering, Resource-Management, Physics, Input)
+pub mod module_handler;
+
 
 use std::time::{Instant, Duration};
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -80,7 +84,7 @@ pub struct JakarEngine {
     asset_thread: thread::JoinHandle<()>,
 
     pub input_system_messages: Arc<Mutex<Option<input::InputMessage>>>,
-    pub keymap: Arc<Mutex<input::KeyMap>>,
+    pub keymap: Arc<Mutex<input::keymap::KeyMap>>,
     input_thread: thread::JoinHandle<()>,
 
     pub engine_settings: Arc<Mutex<core::engine_settings::EngineSettings>>,
@@ -422,7 +426,7 @@ impl JakarEngine {
         });
 
         //last but not least, we try to recive the renderer  as fast as possible
-        //if something went wrong, teh status should be aborad.
+        //if something went wrong, the status should be aborad.
         //if this is the case we can already return the function the the error messages.
         //else we test if we can recive something.
         //all this happens in the loop
@@ -699,7 +703,7 @@ impl JakarEngine {
     }
 
     ///Returns the input handler, for usage have a look at `get_asset_manager()`
-    pub fn get_current_keymap(&self) -> input::KeyMap{
+    pub fn get_current_keymap(&self) -> input::keymap::KeyMap{
         let map = {
             (self.keymap.lock().expect("Failed to get current keymap")).clone()
         };

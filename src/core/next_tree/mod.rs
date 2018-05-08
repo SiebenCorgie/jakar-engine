@@ -13,11 +13,16 @@ pub mod content;
 ///Describes the attributes the tree can have
 pub mod attributes;
 use jakar_tree::node::Attribute;
+use jakar_tree::node::Node;
 ///Describes the jobs this tree can execute when updated
 pub mod jobs;
 
 use cgmath::*;
 use collision::*;
+
+///The type of a typical jakar-tree node in this engine
+pub type JakarNode = Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>;
+
 
 ///Can be set to specialize which type of content a node should have to be considered im the comparing
 #[derive(Clone, PartialEq)]

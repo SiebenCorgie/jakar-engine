@@ -29,7 +29,7 @@ use render::uniform_manager;
 use render::pipeline_manager;
 use render::shader::shader_inputs::default_data;
 
-use input::KeyMap;
+use input::keymap::KeyMap;
 
 use cgmath::*;
 use vulkano;

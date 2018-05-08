@@ -5,7 +5,7 @@ use std::f64::consts;
 use std::sync::{Arc, Mutex};
 
 use core::engine_settings::{EngineSettings,CameraSettings};
-use input::KeyMap;
+use input::keymap::KeyMap;
 
 use std::time::{Instant};
 

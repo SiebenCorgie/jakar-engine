@@ -18,7 +18,8 @@ gltf-importer = "0.10.1"
 gltf-utils = "0.10.1"
 gltf = "0.10.1"
 
-jakar-tree = { path = "jakar-tree" }
+jakar-tree = { git = "https://github.com/SiebenCorgie/jakar-tree"}
+jakar-threadpool = { git = "https://github.com/SiebenCorgie/jakar-threadpool"}
 
 [[example]]
 name = "simple"

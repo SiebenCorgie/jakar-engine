@@ -14,6 +14,7 @@ use jakar_engine::core::resources::light;
 use jakar_engine::core::next_tree::*;
 use jakar_tree::node::*;
 use jakar_engine::core::render_settings::*;
+use jakar_engine::core::next_tree::JakarNode;
 
 use std::thread;
 use std::sync::{Arc, Mutex};
@@ -81,9 +82,9 @@ fn main() {
     //SUN========================================================================
     //add a matrix of lights
 
-    let mut matrix_size = 16;
+    let mut matrix_size = 10;
     matrix_size = matrix_size - (matrix_size / 2);
-    let spacing = 1.5;
+    let spacing = 2.5;
 
     for x in -(matrix_size)..matrix_size{
         for y in -(matrix_size)..matrix_size{
@@ -120,7 +121,7 @@ fn main() {
 
                     //also rotate randomly
                     scene.set_tick(
-                        move |x:f32, arg: &mut Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>|{
+                        move |x:f32, arg: &mut JakarNode|{
                             let add_vec = Vector3::new(
                                 2.0 * x,
                                 1.0, //3.0 * x,
@@ -155,7 +156,7 @@ fn main() {
             }
         }
     }
-    /*
+
     //Now add a sun
     let mut sun = light::LightDirectional::new("Sunny");
     sun.set_intensity(100.0);
@@ -167,7 +168,7 @@ fn main() {
             sun.add_job(jobs::SceneJobs::Rotate(Vector3::new(0.0, 0.0, -60.0)));
 
             sun.set_tick(
-                move |x:f32, arg: &mut Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>|{
+                move |x:f32, arg: &mut JakarNode|{
                     let add_vec = Vector3::new(
                         0.0,
                         1.0 * x,
@@ -184,7 +185,7 @@ fn main() {
         },
         None => {println!("Could not find sun", );}
     }
-    */
+
 
     light_tree.update();
     engine.get_asset_manager().get_active_scene().join_at_root(&light_tree);
@@ -342,21 +343,6 @@ fn main() {
             engine.get_engine_settings_unlocked().get_render_settings_mut()
             .get_debug_settings_mut().debug_view = jakar_engine::core::render_settings::DebugView::Shaded;
         }
-
-        if engine.get_current_keymap().p{
-            let mut settings = engine.get_engine_settings_unlocked();
-            let current_strength = settings.get_render_settings().get_blur().strength;
-            let current_scale = settings.get_render_settings().get_blur().scale;
-            settings.get_render_settings_mut().set_blur(current_scale + 0.05, current_strength + 0.05);
-        }
-
-        if engine.get_current_keymap().o{
-            let mut settings = engine.get_engine_settings_unlocked();
-            let current_strength = settings.get_render_settings().get_blur().strength;
-            let current_scale = settings.get_render_settings().get_blur().scale;
-            settings.get_render_settings_mut().set_blur(current_scale - 0.05, current_strength - 0.05);
-        }
-
 
         //test if a is pressed
         if engine.get_current_keymap().escape{

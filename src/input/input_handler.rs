@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use core::engine_settings;
-use input::KeyMap;
+use input::keymap::KeyMap;
 use winit;
 
 pub struct InputHandler {
