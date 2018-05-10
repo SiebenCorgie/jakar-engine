@@ -222,10 +222,6 @@ impl LightSystem{
             asset_manager,
         );
 
-        let ms = start.elapsed().subsec_nanos() as f32 / 1_000_000.0;
-        println!("\t RE: {}ms to update shadow_atlases", ms);
-        start = Instant::now();
-
         //Now create a buffer from theese lights
         let light_counts = LightCount{
             points: self.light_store.point_lights.len() as u32,
@@ -262,10 +258,6 @@ impl LightSystem{
             (p_lights, d_lights, s_lights)
         };
 
-        let ms = start.elapsed().subsec_nanos() as f32 / 1_000_000.0;
-        println!("\t RE: {}ms to setup info vecs", ms);
-        start = Instant::now();
-
 
         let (new_point_light_list, point_future) = {
             let (buffer, future) = ImmutableBuffer::from_iter(
@@ -299,10 +291,6 @@ impl LightSystem{
         self.current_point_light_list = new_point_light_list;
         self.current_spot_light_list = new_spot_light_list;
         self.current_dir_light_list = new_dir_light_list;
-
-        let ms = start.elapsed().subsec_nanos() as f32 / 1_000_000.0;
-        println!("\t RE: {}ms to create buffers", ms);
-        start = Instant::now();
 
         //And finally allocate a new buffer of light counts which describes the buffers above
         self.current_light_count = self.buffer_pool_05_count.next(

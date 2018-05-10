@@ -10,6 +10,7 @@ use core::next_tree::jobs;
 use core::next_tree::*;
 use core::next_tree::SceneTree;
 
+use tools::engine_state_machine::AssetUpdateState;
 
 use core::resource_management::texture_manager;
 use core::resource_management::material_manager;
@@ -66,6 +67,10 @@ pub struct AssetManager {
 
     /// a copy of the keymap to be used for passing to everything gameplay related
     key_map: Arc<Mutex<KeyMap>>,
+
+    ///Documents the current state of the asset manager
+    state: Arc<Mutex<AssetUpdateState>>,
+
 
 }
 
@@ -131,6 +136,8 @@ impl AssetManager {
 
             settings: settings,
             key_map: key_map.clone(),
+
+            state: Arc::new(Mutex::new(AssetUpdateState::wait())),
         }
     }
 
@@ -145,6 +152,8 @@ impl AssetManager {
 
             (time_step, Instant::now(), sh_cap)
         };
+        //Show the other system that we are working
+        self.set_working();
 
         let (far, near) = {
             let set_lck = self.settings.lock().expect("Failed to settings");
@@ -227,6 +236,9 @@ impl AssetManager {
         }
         //also update the bounds for the current scene.
         self.active_main_scene.rebuild_bounds();
+
+        //Show the other system that we are waiting again
+        self.set_waiting();
 
         if should_cap{
             println!(
@@ -480,6 +492,23 @@ impl AssetManager {
     #[inline]
     pub fn get_keymap(&self) -> KeyMap{
         self.key_map.lock().expect("failed to lock keymap").clone()
+    }
+
+    ///Changes to the state of the asset manager to working
+    fn set_working(&mut self){
+        let mut state_lck = self.state.lock().expect("failed to lock asset manager state");
+        *state_lck = AssetUpdateState::working();
+    }
+
+    ///Changes to the state of the asset manager to waiting
+    fn set_waiting(&mut self){
+        let mut state_lck = self.state.lock().expect("failed to lock asset manager state");
+        *state_lck = AssetUpdateState::wait();
+    }
+
+    ///Returns the asset manager state
+    pub fn get_asset_manager_state(&self) -> Arc<Mutex<AssetUpdateState>>{
+        self.state.clone()
     }
 
 }

@@ -1,12 +1,10 @@
 use vulkano;
-use vulkano::sync::GpuFuture;
 use vulkano_win;
 use vulkano::instance::debug::{DebugCallback, MessageTypes};
 use vulkano::instance::Instance;
 
 use std::sync::{Arc, Mutex};
-use std::sync::mpsc;
-use std::error::Error;
+
 
 use render;
 use render::renderer::Renderer;
@@ -22,7 +20,7 @@ use render::window::Window;
 use render::shadow_system::ShadowSystem;
 
 use core::engine_settings;
-
+use tools::engine_state_machine::RenderState;
 ///Describes how the handler should load the layers, by default set to NoLayer
 #[derive(PartialEq, Clone)]
 pub enum LayerLoading{
@@ -37,6 +35,8 @@ pub enum LayerLoading{
 
 ///This struct saves the configuration options for the renderer and rebuilds it when needed.
 pub struct RenderBuilder {
+    ///The engine settings used to build this renderer.
+    pub settings: Arc<Mutex<engine_settings::EngineSettings>>,
     ///Describes the extensions needed to work properly. By **default** its only the extensions needed
     /// To create the window surface. The craetion will fail if those aren't met.
     pub instance_extensions_needed: vulkano::instance::InstanceExtensions,
@@ -61,159 +61,30 @@ pub struct RenderBuilder {
     /// is not met.
     /// **Default: No Features are needed **
     pub minimal_features: vulkano::instance::Features,
+    ///Becomes Some(instance) when calling `start_build`. This intermediate step is neede to make
+    ///it possible to start the input thread.
+    pub instance: Option<Arc<Instance>>,
+
 }
 
 impl BuildRender for RenderBuilder{
-    ///Build a renderer based on settings and a window which will recive the iamges
+    ///Builds a renderer for a specified window
     fn build(
         mut self,
-        instance_sender: mpsc::Sender<Arc<Instance>>,
-        window_reciver: mpsc::Receiver<Window>,
-        engine_settings: Arc<Mutex<engine_settings::EngineSettings>>,
-    ) -> Result<(Renderer, Box<GpuFuture>), String>{
-        println!("Starting Vulkan Renderer!", );
-        //Init Vulkan
-        //Check for needed extensions
-        //let mut extensions = vulkano_win::required_extensions();
-        //Add the debug extension
-
-        //Generate the list of debuging layers used
-        let debuging_layers_string = {
-            //Decide based on the engine settings if there should be list. If yes, decide the list
-            // based on the builder setting.
-            if (*(engine_settings.lock().expect("failed to lock settings in render builder")))
-            .build_mode != engine_settings::BuildType::Release
-            {
-                match self.layer_loading.clone(){
-                    LayerLoading::All => {
-
-                        let list = vulkano::instance::layers_list().expect("failed to get layer list");
-                        let mut ret_list: Vec<String> = Vec::new();
-                        println!("LoadingAllDebugLayers", );
-                        for item in list.into_iter(){
-                            if item.name().to_string() == "VK_LAYER_RENDERDOC_Capture".to_string(){
-                                println!("\t{}", item.name().to_string());
-                                ret_list.push(item.name().to_string());
-                            }
-
-                            if item.name().to_string() == "VK_LAYER_LUNARG_standard_validation".to_string(){
-                                println!("\t{}", item.name().to_string());
-                                ret_list.push(item.name().to_string());
-                            }
-
-                        }
-                        ret_list
-                    },
-                    LayerLoading::NoLayer => {
-                        let vec: Vec<String> = Vec::new();
-                        //vec.push("".to_string());
-                        vec
-                    },
-                    LayerLoading::Load(try_list) => {
-                        let mut ret_vec: Vec<String> = Vec::new();
-                        //try out each element
-                        for item in vulkano::instance::layers_list().expect("failed to get layer list").into_iter()
-
-                        {
-                            for try_item in try_list.clone().into_iter(){
-                                if try_item == item.name(){
-                                    ret_vec.push(item.name().to_string());
-                                }
-                            }
-                        }
-                        ret_vec
-                    }
-                }
-            }else{
-                let vec: Vec<String> = Vec::new();
-                //vec.push("".to_string());
-                vec
-            }
-        };
-
-        //I don't know a better method which is why we transform the Vec<String> now to a Vec<&str>
-        let mut debug_layers = Vec::new();
-        for layer in debuging_layers_string.iter(){
-            debug_layers.push(layer.as_str());
-        }
-
-
-        //Create an vulkano app info from the settings
-        let app_info = {
-            use std::borrow::Cow;
-            let engine_settings_lck = engine_settings.lock().expect("failed to lock settings");
-
-            let app_name = Some(Cow::Owned((*engine_settings_lck).app_name.clone()));
-            let engine_name = Some(Cow::Owned((*engine_settings_lck).engine_name.clone()));
-
-            vulkano::instance::ApplicationInfo{
-                application_name: app_name,
-                application_version: Some((*engine_settings_lck).app_version.clone()),
-                engine_name: engine_name,
-                engine_version: Some((*engine_settings_lck).engine_version.clone()),
-            }
-        };
-
-        println!("Created App Info", );
-        //Since we need some more logical extension if we want to use all debug layer, we query
-        //all possible layers from the physical device and register them for the run
-        let should_enable_all = {
-            if self.layer_loading == LayerLoading::All{
-                true
-            }else{
-                false
-            }
-        };
-
-        if should_enable_all{
-            self.instance_extensions_needed = self.instance_extensions_needed.intersection(
-                &vulkano::instance::InstanceExtensions{
-                    ext_debug_report: true,
-                    khr_surface: true,
-                    khr_xcb_surface: true,
-                    ..vulkano::instance::InstanceExtensions::none()
-                }
-            );
-            println!("InstanceExtensions: ", );
-            println!("\t{:?}", self.instance_extensions_needed);
-            println!("Loaded all core extensions", );
-        }
-
-        //Create a vulkan instance from these extensions
-        let try_instance = vulkano::instance::Instance::new(
-            Some(&app_info),
-            &self.instance_extensions_needed, //TODO verify
-            &debug_layers
-        );
-
-        //now unwarp our new instance
-        let instance = {
-            match try_instance {
-                Ok(k) => k,
-                Err(vkerr) => {
-                    println!("Vulkano_err: {}", vkerr);
-                    return Err("Failed to create instance!".to_string())
-                },
-            }
-        };
-
-        println!("Created Instance", );
-
-        //While doing other stuff the input system will now build the a window based on this
-        //instance and send it back later
-        match instance_sender.send(instance.clone()){
-            Ok(_) =>  {},
-            Err(_) => {
-                println!("Failed to send instance to input system!", );
-                return Err("failed to send instance!".to_string());
-            }
-        }
-
-
+        mut window: Window,
+    ) -> Result<Renderer, String>{
         //now decide for a mesaging service from vulkan, when in release mode, we wont do any
         //if not we read from the builder and construct a callback
+
+        let instance = {
+            match self.instance{
+                Some(ref inst) => inst.clone(),
+                None => return Err(String::from("Tried to build without instance!")),
+            }
+        };
+
         {
-            match (*(engine_settings
+            match (*(self.settings
             .lock()
             .expect("failed to lock engine settings"))).build_mode{
                 engine_settings::BuildType::Release => {
@@ -297,6 +168,14 @@ impl BuildRender for RenderBuilder{
 
         println!("Selected best graphics card", );
 
+        let should_enable_all = {
+            if self.layer_loading == LayerLoading::All{
+                true
+            }else{
+                false
+            }
+        };
+
         if should_enable_all{
             let extensions = vulkano::device::DeviceExtensions::supported_by_device(
                 physical_device.clone()
@@ -307,21 +186,7 @@ impl BuildRender for RenderBuilder{
             println!("Enabled all logical layers", );
         }
 
-
-        //and create a window for it
-        let mut window = {
-            match window_reciver.recv(){
-                Ok(win) => win,
-                Err(er) => {
-                    println!("Could not get window from input system while starting ...", );
-                    println!("Error: {}", er.description());
-                    return Err(String::from("Failed to recive Window from Input System!"));
-                }
-            }
-        };
-        println!("Opened Window", );
-
-        println!("==========", );
+        println!("QUEUEINFO:\n==========", );
         //Create a queue
         for queue in physical_device.queue_families(){
 
@@ -367,7 +232,7 @@ impl BuildRender for RenderBuilder{
             .capabilities(physical_device).expect("failed to get surface capabilities");
 
             //lock settings to read fallback settings
-            let mut engine_settings_lck = engine_settings
+            let mut engine_settings_lck = self.settings
             .lock()
             .expect("Failed to lock settings");
 
@@ -428,20 +293,17 @@ impl BuildRender for RenderBuilder{
 
         let uniform_manager = Arc::new(Mutex::new(uniform_manager_tmp));
 
-        //start the future chain
-        let previous_frame = Box::new(vulkano::sync::now(device.clone())) as Box<GpuFuture>;
-
         println!("Starting frame passes", );
         let passes = render::render_passes::RenderPasses::new(
             device.clone(),
             swapchain.format(),
-            engine_settings.clone(),
+            self.settings.clone(),
         );
 
         println!("Starting frame system", );
         //now create us a default frame system
         let frame_system = frame_system::FrameSystem::new(
-            engine_settings.clone(),
+            self.settings.clone(),
             device.clone(),
             passes.clone(),
             queue.clone(),
@@ -500,7 +362,7 @@ impl BuildRender for RenderBuilder{
 
         println!("Starting post progress framework", );
         let post_progress = post_progress::PostProgress::new(
-            engine_settings.clone(),
+            self.settings.clone(),
             post_progress_pipeline,
             resolve_pipeline,
             blur_pipeline,
@@ -517,7 +379,7 @@ impl BuildRender for RenderBuilder{
         );
 
         let shadow_system = ShadowSystem::new(
-            device.clone(), engine_settings.clone(), pipeline_manager_arc.clone()
+            device.clone(), self.settings.clone(), pipeline_manager_arc.clone()
         );
 
         println!("Finished Render Setup", );
@@ -538,18 +400,20 @@ impl BuildRender for RenderBuilder{
             post_progress,
 
             false,
-            engine_settings,
+            self.settings,
             uniform_manager,
-            Arc::new(Mutex::new(render::renderer::RendererState::WAITING)),
+            Arc::new(Mutex::new(RenderState::Idle)),
         );
-        Ok((renderer, previous_frame))
+        Ok(renderer)
     }
 }
 
 impl RenderBuilder {
     ///Creates a new default renderer. For the default values, see the struct documentation.
     /// After the creation you are free to change any parameter.
-    pub fn new() -> Self{
+    pub fn new(engine_settings: Arc<Mutex<engine_settings::EngineSettings>>) -> Self{
+
+
         //Init the default values
         let instance_extensions_needed = vulkano_win::required_extensions();
         println!("Starting render builder", );
@@ -568,17 +432,168 @@ impl RenderBuilder {
             depth_clamp: true, //needed for correct shadow mapping
             .. vulkano::instance::Features::none()
         };
-
-
-
-
         RenderBuilder{
+            settings: engine_settings,
             instance_extensions_needed: instance_extensions_needed,
             device_extensions_needed: device_extensions_needed,
             layer_loading: layers,
             vulkan_messages: vulkan_messages,
             preferred_physical_device: None,
             minimal_features: minimal_features,
+            instance: None,
+        }
+    }
+
+    ///Creates an instance from the current settings. Returns an error string if something went wrong,
+    ///else stores the instance and returns `Ok()`.
+    pub fn create_instance(&mut self) -> Result<(), String>{
+        //=========================================================
+        //Now we start to create an instance of vulkan which is needed to build a window
+        //Init Vulkan
+        //Check for needed extensions
+        //let mut extensions = vulkano_win::required_extensions();
+        //Add the debug extension
+
+        //Generate the list of debuging layers used
+        let debuging_layers_string = {
+            //Decide based on the engine settings if there should be list. If yes, decide the list
+            // based on the builder setting.
+            if (*(self.settings.lock().expect("failed to lock settings in render builder")))
+            .build_mode != engine_settings::BuildType::Release
+            {
+                match self.layer_loading.clone(){
+                    LayerLoading::All => {
+
+                        let list = vulkano::instance::layers_list().expect("failed to get layer list");
+                        let mut ret_list: Vec<String> = Vec::new();
+                        println!("LoadingAllDebugLayers", );
+                        for item in list.into_iter(){
+                            if item.name().to_string() == "VK_LAYER_RENDERDOC_Capture".to_string(){
+                                println!("\t{}", item.name().to_string());
+                                ret_list.push(item.name().to_string());
+                            }
+
+                            if item.name().to_string() == "VK_LAYER_LUNARG_standard_validation".to_string(){
+                                println!("\t{}", item.name().to_string());
+                                ret_list.push(item.name().to_string());
+                            }
+
+                        }
+                        ret_list
+                    },
+                    LayerLoading::NoLayer => {
+                        let vec: Vec<String> = Vec::new();
+                        //vec.push("".to_string());
+                        vec
+                    },
+                    LayerLoading::Load(try_list) => {
+                        let mut ret_vec: Vec<String> = Vec::new();
+                        //try out each element
+                        for item in vulkano::instance::layers_list().expect("failed to get layer list").into_iter()
+
+                        {
+                            for try_item in try_list.clone().into_iter(){
+                                if try_item == item.name(){
+                                    ret_vec.push(item.name().to_string());
+                                }
+                            }
+                        }
+                        ret_vec
+                    }
+                }
+            }else{
+                let vec: Vec<String> = Vec::new();
+                //vec.push("".to_string());
+                vec
+            }
+        };
+
+        //I don't know a better method which is why we transform the Vec<String> now to a Vec<&str>
+        let mut debug_layers = Vec::new();
+        for layer in debuging_layers_string.iter(){
+            debug_layers.push(layer.as_str());
+        }
+
+
+        //Create an vulkano app info from the settings
+        let app_info = {
+            use std::borrow::Cow;
+            let engine_settings_lck = self.settings.lock().expect("failed to lock settings");
+
+            let app_name = Some(Cow::Owned((*engine_settings_lck).app_name.clone()));
+            let engine_name = Some(Cow::Owned((*engine_settings_lck).engine_name.clone()));
+
+            vulkano::instance::ApplicationInfo{
+                application_name: app_name,
+                application_version: Some((*engine_settings_lck).app_version.clone()),
+                engine_name: engine_name,
+                engine_version: Some((*engine_settings_lck).engine_version.clone()),
+            }
+        };
+
+        println!("Created App Info", );
+        //Since we need some more logical extension if we want to use all debug layer, we query
+        //all possible layers from the physical device and register them for the run
+        let should_enable_all = {
+            if self.layer_loading == LayerLoading::All{
+                true
+            }else{
+                false
+            }
+        };
+
+        if should_enable_all{
+            self.instance_extensions_needed = self.instance_extensions_needed.intersection(
+                &vulkano::instance::InstanceExtensions{
+                    ext_debug_report: true,
+                    khr_surface: true,
+                    khr_xcb_surface: true,
+                    ..vulkano::instance::InstanceExtensions::none()
+                }
+            );
+            println!("InstanceExtensions: ", );
+            println!("\t{:?}", self.instance_extensions_needed);
+            println!("Loaded all core extensions", );
+        }
+
+        //Create a vulkan instance from these extensions
+        let try_instance = vulkano::instance::Instance::new(
+            Some(&app_info),
+            &self.instance_extensions_needed, //TODO verify
+            &debug_layers
+        );
+
+        //now unwarp our new instance
+        let instance = {
+            match try_instance {
+                Ok(k) => k,
+                Err(vkerr) => {
+                    println!("Vulkano_err: {}", vkerr);
+                    return Err("Failed to create instance!".to_string())
+                },
+            }
+        };
+
+        self.instance = Some(instance);
+
+        println!("Created Instance", );
+        Ok({})
+    }
+
+    ///Returns an instance if there is already one, or takes the current information of the builder
+    /// to create one and returns this instead.
+    /// #Panic If this doesn't work it will panic.
+    pub fn get_instance(&mut self) -> Arc<Instance>{
+        match self.instance{
+            Some(ref inst) => inst.clone(),
+            None => {
+                match self.create_instance(){
+                    Ok(_) => {},
+                    Err(_) => panic!("Failed to create an instance"),
+                }
+                //now return the instance which should be there now.
+                self.instance.clone().expect("there was no instance, but there should be one!")
+            }
         }
     }
 }

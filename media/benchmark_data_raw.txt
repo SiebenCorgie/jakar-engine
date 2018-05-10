@@ -52,3 +52,8 @@ Cluster speed (small scene):
 64,16,64 ~18 sponza
 16,4,16 ~55 sponza
 16,16,16 ~45 sponza
+
+MultiThreading
+==============================================
+10x10 point-lights + sun "Cube_Plane" map: 4ms CPU, 5ms GPU
+10x10 point-lights + sun "Sponza" map: 25ms CPU, 9ms GPU

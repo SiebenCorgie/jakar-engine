@@ -7,6 +7,7 @@ use winit;
 pub struct InputHandler {
     key_map: Arc<Mutex<KeyMap>>,
     settings: Arc<Mutex<engine_settings::EngineSettings>>,
+    events_loop: winit::EventsLoop,
 }
 
 
@@ -15,16 +16,18 @@ impl InputHandler{
     pub fn new(
         key_map: Arc<Mutex<KeyMap>>,
         settings: Arc<Mutex<engine_settings::EngineSettings>>,
+
     ) -> Self{
 
         InputHandler{
             key_map: key_map,
             settings: settings,
+            events_loop: winit::EventsLoop::new(),
         }
     }
 
     ///Starts the input reading and saves the current key-map for usage in everything input releated
-    pub fn update_keys(&mut self, events_loop: &mut winit::EventsLoop){
+    pub fn update_keys(&mut self){
 
         //Create a time which keeps track of the lst time to calculate the later
 
@@ -38,8 +41,10 @@ impl InputHandler{
         //Kill the axis motion for now
         current_keys.reset_data();
 
+        let settings_copy = self.settings.clone();
+
         //Now do the events polling
-        events_loop.poll_events(|ev| {
+        self.events_loop.poll_events(|ev| {
 
             match ev {
                 //Check the event type
@@ -54,7 +59,7 @@ impl InputHandler{
 
                             //Copy our selfs a settings instance to change settings which ... changed
                             let mut settings_instance = {
-                                let lck = self.settings.lock().expect("failed to lock settings in input handler");
+                                let lck = settings_copy.lock().expect("failed to lock settings in input handler");
                                 (*lck).clone()
                             };
 
@@ -366,5 +371,10 @@ impl InputHandler{
             .expect("failed to hold key_map_inst lock while updating key info");
             (*key_map_unlck) = current_keys;
         }
+    }
+
+    ///Returns a reference to the events-loop used by this inputhandler
+    pub fn get_events_loop(&self) -> &winit::EventsLoop{
+        &self.events_loop
     }
 }

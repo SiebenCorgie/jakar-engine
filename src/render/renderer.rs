@@ -15,6 +15,8 @@ use core::next_tree::{SceneTree, ValueTypeBool, SceneComparer};
 use core::engine_settings;
 //use core::simple_scene_system::node_helper;
 use core::next_tree::content::ContentType;
+use tools::engine_state_machine::RenderState;
+
 use jakar_tree;
 
 use winit;
@@ -37,23 +39,15 @@ use std::time::{Instant};
 use std::mem;
 use std::sync::mpsc;
 
-///An enum describing states of the renderer
-#[derive(Eq, PartialEq)]
-pub enum RendererState {
-    RUNNING,
-    WAITING,
-    ENDED
-}
+
 
 ///Used tp build a render instance
 pub trait BuildRender {
     ///Build a renderer based on settings and a window which will recive the iamges
     fn build(
         self,
-        instance_sender: mpsc::Sender<Arc<Instance>>,
-        window_reciver: mpsc::Receiver<Window>,
-        engine_settings: Arc<Mutex<engine_settings::EngineSettings>>,
-    ) -> Result<(Renderer, Box<GpuFuture>), String>;
+        window: Window,
+    ) -> Result<Renderer, String>;
 }
 
 ///The main renderer. Should be created through a RenderBuilder
@@ -84,7 +78,7 @@ pub struct Renderer  {
     engine_settings: Arc<Mutex<engine_settings::EngineSettings>>,
     uniform_manager: Arc<Mutex<uniform_manager::UniformManager>>,
 
-    state: Arc<Mutex<RendererState>>,
+    state: Arc<Mutex<RenderState>>,
     last_frame_end: Option<Arc<FenceSignalFuture<PresentFuture<CommandBufferExecFuture<Box<vulkano::sync::GpuFuture + Send + Sync>, AutoCommandBuffer>, winit::Window>>>>,
 }
 
@@ -111,7 +105,7 @@ impl Renderer {
         recreate_swapchain: bool,
         engine_settings: Arc<Mutex<engine_settings::EngineSettings>>,
         uniform_manager: Arc<Mutex<uniform_manager::UniformManager>>,
-        state: Arc<Mutex<RendererState>>,
+        state: Arc<Mutex<RenderState>>,
     ) -> Renderer{
         Renderer{
             pipeline_manager: pipeline_manager,
@@ -229,8 +223,10 @@ impl Renderer {
     pub fn render(
         &mut self,
         asset_manager: &mut asset_manager::AssetManager,
-        //previous_frame: Arc<FenceSignalFuture<GpuFuture>>,
     ){
+
+        ///Show the other system that we are working
+        self.set_working_cpu();
 
         //First of all we get info if we should debug anything, if so this bool will be true
         let (should_capture, mut time_step, start_time, sould_draw_bounds) = {
@@ -339,6 +335,11 @@ impl Renderer {
 
         //change to the forward pass
         command_buffer = self.frame_system.next_pass(command_buffer);
+
+
+        ///Since we fininshed the primary work on the asset manager, change to gpu working state
+        self.set_working_gpu();
+
 
         //now we are in the main render pass in the forward pass, using this to draw all meshes
         //add all opaque meshes to the command buffer
@@ -659,7 +660,7 @@ impl Renderer {
     }
 
     fn execute_cb_async(&self, cb: AutoCommandBuffer){
-        //kekus-longus
+        //IMPLEMENT
     }
 
     ///Returns the uniform manager
@@ -694,7 +695,17 @@ impl Renderer {
     }
 
     ///Returns the current engine state
-    pub fn get_engine_state(&self) -> Arc<Mutex<RendererState>>{
+    pub fn get_render_state(&self) -> Arc<Mutex<RenderState>>{
         self.state.clone()
+    }
+
+    fn set_working_cpu(&mut self){
+        let mut state_lck = self.state.lock().expect("failed to lock render state");
+        *state_lck = RenderState::work_cpu();
+    }
+
+    fn set_working_gpu(&mut self){
+        let mut state_lck = self.state.lock().expect("failed to lock render state");
+        *state_lck = RenderState::work_gpu();
     }
 }
