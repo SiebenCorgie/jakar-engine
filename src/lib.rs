@@ -85,6 +85,8 @@ pub struct JakarEngine {
     pub engine_settings: Arc<Mutex<core::engine_settings::EngineSettings>>,
     pub engine_status: Arc<Mutex<EngineStatus>>,
 
+    main_loop_thread: Option<JoinHandle<()>>,
+
     pub thread_pool: Arc<Mutex<jakar_threadpool::ThreadPool>>,
 
 }
@@ -230,6 +232,7 @@ impl JakarEngine {
 
             engine_settings: engine_settings,
             engine_status: engine_status,
+            main_loop_thread: None,
             thread_pool: thread_pool,
         })
     }
@@ -279,7 +282,7 @@ impl JakarEngine {
                 };
 
                 if should_end{
-                    break
+                    break;
                 }
 
                 //Now get the next step from the state_machine
@@ -287,7 +290,7 @@ impl JakarEngine {
 
                 match next_step{
                     NextStep::Render => {
-                        println!("Rendering!", );
+                        //println!("Rendering!", );
                         let mut thread_pool_lck = thread_pool.lock().expect("failed to lock thread pool");
                         let asset_man_loc = asset_manager.clone();
                         let render_loc = renderer.clone();
@@ -306,7 +309,7 @@ impl JakarEngine {
                         });
                     },
                     NextStep::UpdateAssets => {
-                        println!("UpdateingAssets!", );
+                        //println!("UpdateingAssets!", );
                         let mut thread_pool_lck = thread_pool.lock().expect("failed to lock thread pool");
                         let asset_man_loc = asset_manager.clone();
                         //DEBUG
@@ -323,18 +326,20 @@ impl JakarEngine {
                     },
                     NextStep::Nothing(remaining) => {
                         //println!("EmptyCycle! {:?}", remaining);
-                        sleep(remaining)
+                        //sleep(remaining)
                     }
                 }
             }
         }).expect("Failed to start main engine loop");
+
+        self.main_loop_thread = Some(engine_thread);
 
     }
 
 
     ///Ends all threads of the engine and then Returns. **NOTE** When the engine struct is dropped
     /// the same happens.
-    pub fn end(self){
+    pub fn end(mut self){
         //Setting the engine status to end
         //then close input
         //then wait for the threads to finish
@@ -344,6 +349,11 @@ impl JakarEngine {
         }
         //wait some milliseconds to give the threads some time as well as the gpu
         sleep(Duration::from_millis(100));
+        if let Some(thread) = self.main_loop_thread.take(){
+            thread.join().expect("failed to join main thread")
+        }else{
+            println!("Mainthread as already paniced!", );
+        }
     }
 
     ///Returns the asset manager as mutex guard.
@@ -433,6 +443,11 @@ impl Drop for JakarEngine{
         }
         //wait some milliseconds to give the threads some time as well as the gpu
         sleep(Duration::from_millis(100));
+        if let Some(thread) = self.main_loop_thread.take(){
+            thread.join().expect("failed to join main thread")
+        }else{
+            println!("Mainthread as already paniced!", );
+        }
     }
 }
 

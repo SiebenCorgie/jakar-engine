@@ -40,6 +40,30 @@ use std::mem;
 use std::sync::mpsc;
 
 
+///manages some some debug information
+struct RenderDebug {
+    last_sec_start: Instant,
+    current_counter: u32,
+}
+
+impl RenderDebug{
+    pub fn new() -> Self{
+        RenderDebug{
+            last_sec_start: Instant::now(),
+            current_counter: 0,
+        }
+    }
+    pub fn update(&mut self){
+        if self.last_sec_start.elapsed().as_secs() > 0{
+            println!("FPS: {}", self.current_counter);
+            self.last_sec_start = Instant::now();
+            self.current_counter = 1;
+        }else{
+            self.current_counter += 1;
+        }
+    }
+}
+
 
 ///Used tp build a render instance
 pub trait BuildRender {
@@ -80,6 +104,8 @@ pub struct Renderer  {
 
     state: Arc<Mutex<RenderState>>,
     last_frame_end: Option<Arc<FenceSignalFuture<PresentFuture<CommandBufferExecFuture<Box<vulkano::sync::GpuFuture + Send + Sync>, AutoCommandBuffer>, winit::Window>>>>,
+
+    debug_info: RenderDebug,
 }
 
 impl Renderer {
@@ -127,6 +153,7 @@ impl Renderer {
             uniform_manager: uniform_manager,
             state: state,
             last_frame_end: None,
+            debug_info: RenderDebug::new(),
         }
     }
 
@@ -225,7 +252,7 @@ impl Renderer {
         asset_manager: &mut asset_manager::AssetManager,
     ){
 
-        ///Show the other system that we are working
+        //Show the other system that we are working
         self.set_working_cpu();
 
         //First of all we get info if we should debug anything, if so this bool will be true
@@ -251,9 +278,12 @@ impl Renderer {
             }
         };
 
-        //now try to get the time at which the last frame ends, join it with the aquire future and let
-        //the cpu build the command buffer
-
+        //Update the camera data for this frame
+        {
+            let mut uniform_manager_lck = self.uniform_manager.lock().expect("failed to lock uniform_man.");
+            //Finally upadte the MVP data as well
+            uniform_manager_lck.update(asset_manager.get_camera().as_uniform_data());
+        }
 
         if should_capture{
             time_step = Instant::now();
@@ -337,7 +367,7 @@ impl Renderer {
         command_buffer = self.frame_system.next_pass(command_buffer);
 
 
-        ///Since we fininshed the primary work on the asset manager, change to gpu working state
+        //Since we fininshed the primary work on the asset manager, change to gpu working state
         self.set_working_gpu();
 
 
@@ -653,6 +683,9 @@ impl Renderer {
             println!("\t RE: Which is {}fps", 1.0/(frame_time as f32/1_000_000_000.0));
             self.engine_settings.lock().expect("failed to lock settings").stop_capture();
         }
+
+        //update the debug info with this frame
+        self.debug_info.update();
 
         //Box::new(after_frame)
         //now overwrite the current future

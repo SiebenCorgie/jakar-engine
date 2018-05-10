@@ -4,6 +4,7 @@ use collision;
 use std::f64::consts;
 use std::sync::{Arc, Mutex};
 
+use render::shader::shader_inputs::default_data;
 use core::engine_settings::{EngineSettings,CameraSettings};
 use input::keymap::KeyMap;
 
@@ -49,6 +50,9 @@ pub trait Camera {
     fn get_frustum_bound(&self) -> collision::Frustum<f32>;
     ///Returns the current far/near plane settings used
     fn get_near_far(&self) -> CameraSettings;
+    ///Returns the uniform data of this camera as an `default_data::ty::Data`. The transform field
+    /// has to be set to an identity matrix.
+    fn as_uniform_data(&self) -> default_data::ty::Data;
 }
 
 
@@ -350,6 +354,26 @@ impl Camera for DefaultCamera{
 
     fn get_near_far(&self) -> CameraSettings{
         self.current_cam_settings.clone()
+    }
+
+    fn as_uniform_data(&self) -> default_data::ty::Data{
+
+        let cam_near_far = self.get_near_far();
+
+        let uniform_data = default_data::ty::Data {
+            //Updating camera from camera transform
+            camera_position: self.position.clone().into(),
+            _dummy0: [0; 4],
+            //This is getting a dummy value which is updated right bevore set creation via the new
+            //model provided transform matrix. There might be a better way though.
+            model: Matrix4::<f32>::identity().into(),
+            view: self.get_view_matrix().into(),
+            proj: self.get_perspective().into(),
+            near: cam_near_far.near_plane,
+            far: cam_near_far.far_plane,
+        };
+
+        uniform_data
     }
 
 }

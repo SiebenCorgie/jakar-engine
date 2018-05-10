@@ -172,107 +172,48 @@ impl EngineStateMachine{
     }
 
     pub fn update(&mut self) -> NextStep{
-        //Priorise the renderer
-        let render_should_update = {
-            let render_state_lck = self.render_state.lock().expect("failed to lock render_state");
-            if render_state_lck.should_update(self.duration_collection.render_duration){
-                //Only update if the asset manager or the physics are not currently working
-                let asset_is_working = {
-                    let asset_state_lck = self.asset_state.lock().expect("failed to lock asset state");
-                    match *asset_state_lck{
-                        AssetUpdateState::Working(_) => true,
-                        _ => false,
-                    }
-                };
 
-                if !asset_is_working{
-                    //println!("Should update Renderer", );
-                    true
-                }else{
-                    //println!("Should render, but asset manager is working", );
-                    false
-                }
-            }else{
-                //println!("Render not ready", );
-                false
-            }
-        };
-        //TODO add physics system, for now asset system
-        let asset_should_update = {
-            let asset_state_lck = self.asset_state.lock().expect("failed to lock asset_state");
-            if asset_state_lck.should_update(self.duration_collection.asset_duration){
-                //Only update if the renderer is currently occupyed on the gpu
-                let render_working = {
-                    let render_state_lck = self.render_state.lock().expect("failed to lock render state");
-                    match *render_state_lck{
-                        RenderState::IsWorkingOnGpu(_) => true,
-                        _ => false,
-                    }
-                };
-                if render_working{
-                    //println!("Should update Assets", );
-                    true
-                }else{
-                    //println!("Should update assets, but renderer is working", );
-                    false
-                }
-            }else{
-                //println!("Asset manager not ready", );
-                false
+        //Check the system statuses
+        let render_working_on_cpu = {
+            let render_state_lck = self.render_state.lock().expect("failed to lock render state");
+            match *render_state_lck{
+                RenderState::IsWorkingOnCpu(_) => true,
+                _ => false,
             }
         };
 
-        //Now decide. Try to let the asset manager follow the renderer, follow the asset manager etc.
+        let asset_is_working = {
+            let asset_state_lck = self.asset_state.lock().expect("failed to lock asset state");
+            match *asset_state_lck{
+                AssetUpdateState::Working(_) => true,
+                _ => false,
+            }
+        };
+
         match self.last_step{
             LastStep::Asset => {
-                if render_should_update{
+                if !render_working_on_cpu{
                     self.last_step = LastStep::Render;
                     return NextStep::Render;
                 }
             },
             LastStep::Render => {
-                if asset_should_update{
+                if !asset_is_working{
                     self.last_step = LastStep::Asset;
                     return NextStep::UpdateAssets;
                 }
+
             }
-            LastStep::Physics => {
-                //TODO we currently have no physics :)
-                if asset_should_update{
-                    self.last_step = LastStep::Asset;
-                    return NextStep::UpdateAssets;
-                }
+            _ => {
+                println!("In Physics, Cant be!", );
+                self.last_step = LastStep::Render;
+                return NextStep::Render;
             }
         }
-
-        //Compare the durations left
-        let asset_remain = {
-            let asset_state_lck = self.asset_state.lock().expect("failed to lock asset state");
-            asset_state_lck.duration_left(self.duration_collection.asset_duration)
-        };
-
-        let render_remain = {
-            let render_state_lck = self.render_state.lock().expect("failed to lock render state");
-            render_state_lck.duration_left(self.duration_collection.render_duration)
-        };
-
         let mut remaining = Duration::from_secs(0);
 
-        if asset_remain <= Duration::from_millis(0) {
-            //println!("Asset time smaller", );
-            remaining = render_remain;
-        }else if render_remain <= Duration::from_millis(0){
-            //println!("Render time smaller", );
-            remaining = asset_remain;
-        }else{
-            //println!("Both bigger zero", );
-            remaining = asset_remain.min(render_remain)
-        }
-
-        //println!("RenderRem: {:?} Assset_rem: {:?}", render_remain, asset_remain);
-        //println!("Using: {:?}", remaining);
-        //if both shouldn't be updated
         NextStep::Nothing(remaining)
+
     }
 
     pub fn asset_working(&mut self){

@@ -155,41 +155,6 @@ impl AssetManager {
         //Show the other system that we are working
         self.set_working();
 
-        let (far, near) = {
-            let set_lck = self.settings.lock().expect("Failed to settings");
-            (set_lck.camera.far_plane.clone(), set_lck.camera.near_plane.clone())
-        };
-
-        //figure out the main uniform matrix to be sent to the shaders
-        let mat_4: Matrix4<f32> = Matrix4::identity();
-        let uniform_data = default_data::ty::Data {
-            //Updating camera from camera transform
-            camera_position: self.camera.position.clone().into(),
-            _dummy0: [0; 4],
-            //This is getting a dummy value which is updated right bevore set creation via the new
-            //model provided transform matrix. There might be a better way though.
-            model: mat_4.into(),
-            view: self.get_camera().get_view_matrix().into(),
-            proj: self.get_camera().get_perspective().into(),
-            near: near,
-            far: far,
-        };
-
-        if should_cap{
-            println!(
-                "\t \t AS: needed {}ms to setup uniform DATA",
-                time_stamp.elapsed().subsec_nanos() as f32 / 1_000_000.0
-            );
-            time_stamp = Instant::now()
-        }
-
-        //Update the uniform manager with the latest infos about camera and light
-        {
-            let mut uniform_manager_lck = self.uniform_manager.lock().expect("failed to lock uniform_man.");
-            //Finally upadte the MVP data as well
-            uniform_manager_lck.update(uniform_data);
-        }
-
         if should_cap{
             println!(
                 "\t \t AS: needed {}ms to update unform manager",
