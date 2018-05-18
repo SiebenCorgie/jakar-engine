@@ -32,7 +32,7 @@ pub fn order_by_distance(
 
             use cgmath::InnerSpace;
 
-            let mesh_location = mesh.attributes.get_transform().disp;
+            let mesh_location = mesh.get_attrib().get_transform().disp;
 
             //get distance between camera and position
             let distance = mesh_location - location;
@@ -58,7 +58,6 @@ pub fn order_by_distance(
             Ok(_) => {},
             Err(er) => panic!("failed to send ordered nodes! {:?}", er)
         }
-
 
     });
 

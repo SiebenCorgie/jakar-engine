@@ -284,7 +284,7 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
     fn get_all_names(&self, sorting: &Option<SceneComparer>) -> Vec<String>{
         //going recrusivly through each child (from the bottom), with each adding up to the whole.
         let mut return_vec = Vec::new();
-        for (_, child) in self.children.iter(){
+        for (_, child) in self.get_children().iter(){
             return_vec.append(&mut child.get_all_names(sorting)); //append all children
         }
         //first of all test if self has the right attributes, if not we can already return the child
@@ -292,7 +292,7 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
         match sorting{
             &Some(ref comparer) => {
                 //early return if self doesnt match the sorting
-                if !self.attributes.compare(comparer){
+                if !self.get_attrib().compare(comparer){
                     return return_vec;
                 }
                 //NOTE since the scene attributes don't know about the node value we havbe to compare
@@ -302,7 +302,7 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
                     Some(ref val_ty) => {
                         //value type, checks if the current value is within the parameters.
                         let mut tmp_bool = ValueTypeBool::none();
-                        match self.value{
+                        match self.get_value(){
                             content::ContentType::Renderable(_) => tmp_bool.render_able = true,
                             content::ContentType::Mesh(_) => tmp_bool.mesh = true,
                             content::ContentType::PointLight(_) => tmp_bool.point_light = true,
@@ -323,14 +323,14 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
             &None =>  {}, //all is nice, add
         }
         //Passed the test, lets add our own name
-        return_vec.push(self.name.clone());
+        return_vec.push(self.get_name().clone());
         return_vec
     }
 
     fn copy_all_nodes(&self, sorting: &Option<SceneComparer>) -> Vec<jakar_tree::node::Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>>{
         //going recrusivly through each child (from the bottom), with each adding up to the whole.
         let mut return_vec = Vec::new();
-        for (_, child) in self.children.iter(){
+        for (_, child) in self.get_children().iter(){
             return_vec.append(&mut child.copy_all_nodes(sorting)); //append all children
         }
         //first of all test if self has the right attributes, if not we can already return the child
@@ -338,7 +338,7 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
         match sorting{
             &Some(ref comparer) => {
                 //early return if self doesnt match the sorting
-                if !self.attributes.compare(comparer){
+                if !self.get_attrib().compare(comparer){
                     return return_vec;
                 }
                 //NOTE since the scene attributes don't know about the node value we havbe to compare
@@ -348,7 +348,7 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
                     Some(ref val_ty) => {
                         //value type, checks if the current value is within the parameters.
                         let mut tmp_bool = ValueTypeBool::none();
-                        match self.value{
+                        match self.get_value(){
                             content::ContentType::Renderable(_) => tmp_bool.render_able = true,
                             content::ContentType::Mesh(_) => tmp_bool.mesh = true,
                             content::ContentType::PointLight(_) => tmp_bool.point_light = true,
@@ -369,14 +369,7 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
         }
 
         //If self passed the ckeck for the attrributes, copy the current node and return
-        let node_copy = jakar_tree::node::Node{
-            name: self.name.clone(),
-            value: self.value.clone(),
-            children: BTreeMap::new(),
-            jobs: Vec::new(),
-            attributes: self.attributes.clone(),
-            tick_closure: self.tick_closure.clone(),
-        };
+        let mut node_copy = self.copy();
         return_vec.push(node_copy);
 
         return_vec
@@ -388,11 +381,11 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
         //first of all rebuild the bounds for the children, then, based on the current
         // biggest and smallet values of the children, rebuild self's
         //node bound.
-        for (_, child) in self.children.iter_mut(){
+        for (_, child) in self.get_children_mut().iter_mut(){
             child.rebuild_bounds();
         }
         //Calculate new mins and maxs value from the object bounds
-        let object_bound = self.value.get_bound();
+        let object_bound = self.get_value().get_bound();
         let points = object_bound.to_corners();
 
         //Transform the points to worldspace
@@ -400,23 +393,23 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
         for point in points.iter(){
             //transform the point in worldspace
             transformed_points.push(
-                self.attributes.transform.transform_point(point.clone())
+                self.get_attrib().transform.transform_point(point.clone())
             );
         }
         let (mut mins, mut maxs) = get_min_max(transformed_points);
         //Now its time to overwrite the value bounds for the new transformation, after this we'll
         //test out new bounds agains the children and create a new node extend which is used for
         //hierachy sorting etc.
-        self.attributes.value_bound = Aabb3::new(mins.clone(), maxs.clone());
+        self.get_attrib_mut().value_bound = Aabb3::new(mins.clone(), maxs.clone());
         //Finally update the draw distance
-        self.attributes.max_draw_distance = get_max_aabb_len(&self.attributes.value_bound);
+        self.get_attrib_mut().max_draw_distance = get_max_aabb_len(&self.get_attrib().value_bound);
 
 
         //now get selfs min and max values in world space build by the object bound transformed by world space
-        for (_, child) in self.children.iter(){
+        for (_, child) in self.get_children().iter(){
             //get child min and max values
-            let child_mins = child.attributes.bound.min;
-            let child_maxs = child.attributes.bound.max;
+            let child_mins = child.get_attrib().bound.min;
+            let child_maxs = child.get_attrib().bound.max;
             //check mins
             if child_mins.x < mins.x{
                 mins.x = child_mins.x;
@@ -441,7 +434,7 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
         }
 
         //finished the checks, update self
-        self.attributes.bound = Aabb3::new(mins, maxs);
+        self.get_attrib_mut().bound = Aabb3::new(mins, maxs);
     }
 
 
@@ -490,7 +483,7 @@ impl SaveUnwrap for Vec<jakar_tree::node::Node<content::ContentType, jobs::Scene
         let mut return_vector = Vec::new();
         for mesh in self.into_iter(){
             //test and push
-            match mesh.value{
+            match mesh.get_value(){
                 content::ContentType::Mesh(ref mesh) => return_vector.push(mesh.clone()),
                 _ => {}, //do nothing
             }
@@ -504,7 +497,7 @@ impl SaveUnwrap for Vec<jakar_tree::node::Node<content::ContentType, jobs::Scene
 
         for node in self.into_iter(){
             //test and push
-            match node.value{
+            match node.get_value(){
                 content::ContentType::PointLight(ref light) => return_vector.push(light.clone()),
                 _ => {}, //do nothing
             }
@@ -518,7 +511,7 @@ impl SaveUnwrap for Vec<jakar_tree::node::Node<content::ContentType, jobs::Scene
 
         for node in self.into_iter(){
             //test and push
-            match node.value{
+            match node.get_value(){
                 content::ContentType::DirectionalLight(ref light) => return_vector.push(light.clone()),
                 _ => {}, //do nothing
             }
@@ -532,7 +525,7 @@ impl SaveUnwrap for Vec<jakar_tree::node::Node<content::ContentType, jobs::Scene
 
         for node in self.into_iter(){
             //test and push
-            match node.value{
+            match node.get_value(){
                 content::ContentType::SpotLight(ref light) => return_vector.push(light.clone()),
                 _ => {}, //do nothing
             }
@@ -546,7 +539,7 @@ impl SaveUnwrap for Vec<jakar_tree::node::Node<content::ContentType, jobs::Scene
 
         for node in self.into_iter(){
             //test and push
-            match node.value{
+            match node.get_value(){
                 content::ContentType::Empty(ref empty) => return_vector.push(empty.clone()),
                 _ => {}, //do nothing
             }
@@ -560,7 +553,7 @@ impl SaveUnwrap for Vec<jakar_tree::node::Node<content::ContentType, jobs::Scene
 
         for node in self.into_iter(){
             //test and push
-            match node.value{
+            match node.get_value(){
                 content::ContentType::Camera(ref cam) => return_vector.push(cam.clone()),
                 _ => {}, //do nothing
             }

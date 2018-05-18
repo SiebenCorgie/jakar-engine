@@ -71,8 +71,6 @@ pub struct EngineSettings {
     ///The camera settings
     pub camera: CameraSettings,
 
-
-
 }
 
 impl EngineSettings{
@@ -144,7 +142,7 @@ impl EngineSettings{
     pub fn get_render_settings(&self) -> &render_settings::RenderSettings {
         &self.render_settings
     }
-    
+
     ///Returns the current render settings, but mutable
     pub fn get_render_settings_mut(&mut self) -> &mut render_settings::RenderSettings {
         &mut self.render_settings

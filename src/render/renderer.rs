@@ -17,12 +17,9 @@ use core::engine_settings;
 use core::next_tree::content::ContentType;
 use tools::engine_state_machine::RenderState;
 
-use jakar_tree;
 
 use winit;
 use vulkano;
-use vulkano::instance::Instance;
-use vulkano::command_buffer::AutoCommandBufferBuilder;
 use vulkano::swapchain::SwapchainCreationError;
 use vulkano::swapchain::SwapchainAcquireFuture;
 use vulkano::swapchain::AcquireError;
@@ -30,20 +27,19 @@ use vulkano::sync::GpuFuture;
 use vulkano::sync::FenceSignalFuture;
 use vulkano::swapchain::PresentFuture;
 use vulkano::command_buffer::CommandBufferExecFuture;
-use vulkano::sync::JoinFuture;
-use vulkano::sync::NowFuture;
 use vulkano::command_buffer::AutoCommandBuffer;
 
 use std::sync::{Arc,Mutex};
-use std::time::{Instant};
+use std::time::{Instant, Duration};
 use std::mem;
-use std::sync::mpsc;
 
 
 ///manages some some debug information
 struct RenderDebug {
     last_sec_start: Instant,
     current_counter: u32,
+    avg_mesh_render_time: Duration,
+    first_mesh_time: bool,
 }
 
 impl RenderDebug{
@@ -51,6 +47,8 @@ impl RenderDebug{
         RenderDebug{
             last_sec_start: Instant::now(),
             current_counter: 0,
+            avg_mesh_render_time: Duration::from_secs(0),
+            first_mesh_time: true,
         }
     }
     pub fn update(&mut self){
@@ -61,6 +59,21 @@ impl RenderDebug{
         }else{
             self.current_counter += 1;
         }
+    }
+
+    pub fn update_avr_mesh(&mut self, dur: Duration){
+        if self.first_mesh_time{
+            self.avg_mesh_render_time = dur;
+            self.first_mesh_time = false;
+            return;
+        }
+
+        self.avg_mesh_render_time += dur;
+        self.avg_mesh_render_time = self.avg_mesh_render_time.checked_div(2).expect("Failed to calc time!");
+    }
+
+    pub fn print_stat(&self){
+        println!("Average mesh draw time: {:?}", self.avg_mesh_render_time);
     }
 }
 
@@ -75,7 +88,7 @@ pub trait BuildRender {
 }
 
 ///The main renderer. Should be created through a RenderBuilder
-pub struct Renderer  {
+pub struct Renderer {
     ///Holds the renderers pipeline_manager
     pipeline_manager: Arc<Mutex<pipeline_manager::PipelineManager>>,
 
@@ -118,7 +131,6 @@ impl Renderer {
         queue: Arc<vulkano::device::Queue>,
         swapchain: Arc<vulkano::swapchain::Swapchain<winit::Window>>,
         images: Vec<Arc<vulkano::image::SwapchainImage<winit::Window>>>,
-        //renderpass: Arc<RenderPassAbstract + Send + Sync>,
 
         //the used frame system
         frame_system: frame_system::FrameSystem,
@@ -273,7 +285,7 @@ impl Renderer {
                 Err(e) => {
                     println!("Could not get next swapchain image: {}", e);
                     //early return to restart the frame
-                    return; //this_frame;
+                    return;
                 }
             }
         };
@@ -374,9 +386,12 @@ impl Renderer {
         //now we are in the main render pass in the forward pass, using this to draw all meshes
         //add all opaque meshes to the command buffer
         for opaque_mesh in opaque_meshes.iter(){
-            let transform = opaque_mesh.attributes.get_matrix();
+            let transform = opaque_mesh.get_attrib().get_matrix();
 
-            if let ContentType::Mesh(ref mesh) = opaque_mesh.value{
+            if let ContentType::Mesh(ref mesh) = opaque_mesh.get_value(){
+
+                let draw_start = Instant::now();
+
                 let mesh_lck = mesh.lock().expect("failed to lock mesh for drawing!");
                 command_buffer = mesh_lck.draw(
                     command_buffer,
@@ -384,6 +399,9 @@ impl Renderer {
                     &self.light_system,
                     transform,
                 );
+
+                self.debug_info.update_avr_mesh(draw_start.elapsed());
+
             }else{
                 println!("Mesh was no actual mesh...", );
                 continue;
@@ -421,9 +439,9 @@ impl Renderer {
             Ok(ord_tr) => {
 
                 for translucent_mesh in ord_tr.iter(){
-                    let transform = translucent_mesh.attributes.get_matrix();
+                    let transform = translucent_mesh.get_attrib().get_matrix();
 
-                    if let ContentType::Mesh(ref mesh) = translucent_mesh.value{
+                    if let ContentType::Mesh(ref mesh) = translucent_mesh.get_value(){
                         let mesh_lck = mesh.lock().expect("failed to lock mesh for drawing!");
                         command_buffer = mesh_lck.draw(
                             command_buffer,
@@ -681,6 +699,7 @@ impl Renderer {
             let frame_time = start_time.elapsed().subsec_nanos();
             println!("\t RE: FrameTime: {}ms", frame_time as f32/1_000_000.0);
             println!("\t RE: Which is {}fps", 1.0/(frame_time as f32/1_000_000_000.0));
+            self.debug_info.print_stat();
             self.engine_settings.lock().expect("failed to lock settings").stop_capture();
         }
 

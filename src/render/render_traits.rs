@@ -1,8 +1,15 @@
 use render::frame_system::{FrameStage, FrameSystem};
 use render::light_system::LightSystem;
 
+use core::next_tree::attributes::NodeAttributes;
+use core::next_tree::content::ContentType;
+use core::next_tree::jobs::SceneJobs;
+use jakar_tree::node::NodeController;
+
 use cgmath::*;
 use collision::*;
+
+use std::sync::{Arc,Mutex};
 
 ///Every object that implements this trait is able to to be rendered in the forward pass.
 ///This are mostly wireframe models or other primitives like voxels.
@@ -23,4 +30,8 @@ pub trait ForwardRenderAble {
 
     ///Returns the name of this object
     fn get_name(&self) -> String;
+
+    ///Returns a controller if there is one
+    fn get_controller(&mut self) -> Arc<Mutex<NodeController<ContentType, SceneJobs, NodeAttributes>>>;
+
 }

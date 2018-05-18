@@ -38,7 +38,7 @@ pub fn order_by_distance(
 
             use cgmath::InnerSpace;
 
-            let mesh_location = mesh.attributes.get_transform().disp;
+            let mesh_location = mesh.get_attrib().get_transform().disp;
 
             //get distance between camera and position
             let distance = mesh_location - camera_location;
@@ -94,12 +94,12 @@ pub fn add_bound_draw(
             let pipeline = pipeline_lck.get_pipeline_by_config(pipeline_needed);
             //now we get out self the points of the bound and create a vertex buffer form it
 
-            let mut min = object_node.attributes.get_value_bound().min; //already in worldspace
-            let mut max = object_node.attributes.get_value_bound().max; //already in worldspace
+            let mut min = object_node.get_attrib().get_value_bound().min; //already in worldspace
+            let mut max = object_node.get_attrib().get_value_bound().max; //already in worldspace
             //Now we transform them to match the object scale and location
             let value_vertices = create_vertex_buffer_for_bound(min, max, [1.0, 1.0, 0.0, 1.0]);
             let node_vertices = create_vertex_buffer_for_bound(
-                object_node.attributes.bound.min, object_node.attributes.bound.max,
+                object_node.get_attrib().bound.min, object_node.get_attrib().bound.max,
                 [0.0, 1.0, 1.0, 1.0]
             );
 
@@ -163,7 +163,7 @@ pub fn add_bound_draw(
                 dynamic_state.clone(),
                 vec![value_vertex_buffer],
                 index_buffer.clone(),
-                (attachments_ds_value),  //now descriptor sets for now
+                attachments_ds_value,  //now descriptor sets for now
                 () //also no constants
             ).expect("failed to draw bounds!");
 
@@ -173,7 +173,7 @@ pub fn add_bound_draw(
                 dynamic_state.clone(),
                 vec![node_vertex_buffer],
                 index_buffer,
-                (attachments_ds_node),  //now descriptor sets for now
+                attachments_ds_node,  //now descriptor sets for now
                 () //also no constants
             ).expect("failed to draw bounds!");
 

@@ -10,9 +10,7 @@ use collision::Frustum;
 use cgmath::*;
 
 use core::resources::camera::Camera;
-use core::resources::{light, mesh};
 use core::next_tree::{SceneTree, SceneComparer, ValueTypeBool};
-use core::next_tree::SaveUnwrap;
 use jakar_tree::node::Node;
 
 use core::resource_management::asset_manager;
@@ -21,7 +19,7 @@ use render::frame_system::FrameStage;
 use render::light_system::LightStore;
 use render::frame_system::FrameSystem;
 use render::pipeline::Pipeline;
-use render::pipeline_manager::{PipelineManager, PipelineRequirements};
+use render::pipeline_manager::{PipelineManager};
 use render::pipeline_builder;
 use render::render_passes::RenderPassConf;
 use render::shader::shaders::shadow_fragment::ty::MaskedInfo;
@@ -33,7 +31,6 @@ use core::next_tree::attributes::NodeAttributes;
 use core::next_tree::jobs::SceneJobs;
 
 // the shader infors we return
-use render::shader::shader_inputs::lights::ty::{PointLight, SpotLight, DirectionalLight};
 
 
 /// Stores the data related to shadow creation.
@@ -180,9 +177,9 @@ impl ShadowSystem{
         );
         //now, iterate through ech light/ lightspace on ther directional shadowmap and
         for (region, d_light) in d_light_spaces.into_iter().zip(directional_lights.into_iter()){
-            let light_rotation = d_light.attributes.transform.rot;
+            let light_rotation = d_light.get_attrib().transform.rot;
             let light = {
-                match d_light.value{
+                match d_light.get_value(){
                     ContentType::DirectionalLight(ref light) => light.clone(),
                     _ => {
                         continue; //Is no dir light, test next
@@ -212,9 +209,9 @@ impl ShadowSystem{
         };
 
         for p_light in new_points.into_iter(){
-            let light_location = p_light.attributes.transform.disp;
+            let light_location = p_light.get_attrib().transform.disp;
             let light = {
-                match p_light.value{
+                match p_light.get_value(){
                     ContentType::PointLight(ref light) => light.clone(),
                     _ => continue, //Is no pointlight, test next
                 }
@@ -228,10 +225,10 @@ impl ShadowSystem{
         };
 
         for s_light in new_spot_lights.into_iter(){
-            let light_location = s_light.attributes.transform.disp;
-            let light_rotation = s_light.attributes.transform.rot;
+            let light_location = s_light.get_attrib().transform.disp;
+            let light_rotation = s_light.get_attrib().transform.rot;
             let light = {
-                match s_light.value{
+                match s_light.get_value(){
                     ContentType::SpotLight(ref light) => light.clone(),
                     _ => continue, //Is no pointlight, test next
                 }
@@ -372,7 +369,7 @@ impl ShadowSystem{
         dynamic_state: vulkano::command_buffer::DynamicState,
     ) -> AutoCommandBufferBuilder {
         //get the actual mesh as well as its pipeline an create the descriptor sets
-        let mesh_locked = match node.value{
+        let mesh_locked = match node.get_value(){
             ContentType::Mesh(ref mesh) => mesh.clone(),
             _ => {
                 println!("No Mesh!", );
@@ -381,7 +378,7 @@ impl ShadowSystem{
         };
         let mesh = mesh_locked.lock().expect("failed to lock mesh in cb creation");
 
-        let mesh_transform = node.attributes.get_matrix();
+        let mesh_transform = node.get_attrib().get_matrix();
 
         let data = LightData{
             model: mesh_transform.into(),
@@ -437,7 +434,7 @@ impl ShadowSystem{
                     dynamic_state,
                     vertex_buffer,
                     index_buffer,
-                    (descriptor),
+                    descriptor,
                     ()
                 ).expect("failed to draw mesh in directional depth pass");
 

@@ -4,7 +4,9 @@ use core::resources::light;
 use core::resources::empty;
 use core::resources::camera;
 use core::ReturnBoundInfo;
+
 use render::render_traits::ForwardRenderAble;
+
 
 use jakar_tree;
 
@@ -33,7 +35,6 @@ pub enum ContentType {
 }
 
 impl ContentType{
-
     ///Returns the bound of this content
     pub fn get_bound(&self) -> Aabb3<f32>{
         match self{
@@ -112,8 +113,6 @@ impl ContentType{
             _ => None
         }
     }
-
-
 }
 
 impl jakar_tree::node::NodeContent for ContentType{

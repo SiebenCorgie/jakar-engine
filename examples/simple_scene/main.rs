@@ -84,7 +84,7 @@ fn main() {
 
     let mut matrix_size = 10;
     matrix_size = matrix_size - (matrix_size / 2);
-    let spacing = 2.5;
+    let spacing = 5.0;
 
     for x in -(matrix_size)..matrix_size{
         for y in -(matrix_size)..matrix_size{
@@ -99,10 +99,10 @@ fn main() {
                     (1-y + matrix_size) as f32 / matrix_size as f32
                 )
             );
-            point.set_radius(2.0);
+            point.set_radius(5.0);
 
             let node_name = light_tree
-            .add_at_root(content::ContentType::PointLight(point), None, None);
+            .add_at_root(content::ContentType::PointLight(point), None);
 
             //Set the location
             match light_tree.get_node(&node_name.unwrap()){
@@ -156,7 +156,7 @@ fn main() {
             }
         }
     }
-
+/*
     //Now add a sun
     let mut sun = light::LightDirectional::new("Sunny");
     sun.set_intensity(100.0);
@@ -186,7 +186,7 @@ fn main() {
         None => {println!("Could not find sun", );}
     }
 
-
+*/
     light_tree.update();
     engine.get_asset_manager().get_active_scene().join_at_root(&light_tree);
     println!("LightreeJoined!", );
