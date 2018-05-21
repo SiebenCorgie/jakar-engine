@@ -8,7 +8,9 @@ use core::next_tree::content;
 use core::next_tree::attributes;
 use core::next_tree::jobs;
 use core::next_tree::*;
-use core::next_tree::SceneTree;
+use core::next_tree::{JakarNode, SceneTree};
+use core::next_tree::content::ContentType;
+use core::next_tree::node_controller::camera_controller::CameraController;
 
 use tools::engine_state_machine::AssetUpdateState;
 
@@ -60,8 +62,9 @@ pub struct AssetManager {
     uniform_manager: Arc<Mutex<uniform_manager::UniformManager>>,
 
 
-    ///A Debug camera, will be removed in favor of a camera_managemant system
-    camera: DefaultCamera,
+    ///Holds the current active camera, if non is set, falls back to a custom one
+    active_camera: Option<String>,
+    fall_back: JakarNode,
 
     settings: Arc<Mutex<engine_settings::EngineSettings>>,
 
@@ -89,6 +92,11 @@ impl AssetManager {
 
         //The camera will be moved to a camera manager
         let camera = DefaultCamera::new(settings.clone(), key_map.clone());
+        let mut fallback_camera_node = node::Node::new(
+            ContentType::Camera(camera), attributes::NodeAttributes::default()
+        );
+
+        fallback_camera_node.set_controller(CameraController::new(key_map.clone()));
 
         //Start up the texture manager
         let mut tmp_texture_manager = texture_manager::TextureManager::new(
@@ -132,7 +140,8 @@ impl AssetManager {
             queue: queue,
             uniform_manager: uniform_manager,
 
-            camera: camera,
+            active_camera: None,
+            fall_back: fallback_camera_node,
 
             settings: settings,
             key_map: key_map.clone(),
@@ -163,7 +172,7 @@ impl AssetManager {
             time_stamp = Instant::now()
         }
 
-
+        self.fall_back.update(0.0, &Vec::new());
         //println!("STATUS: ASSET_MANAGER: Now I'll update the materials", );
         //Update materials
         self.get_material_manager().update();
@@ -177,9 +186,6 @@ impl AssetManager {
             );
             time_stamp = Instant::now()
         }
-
-        //Now update the camera
-        self.camera.update_view();
 
         if should_cap{
             println!(
@@ -229,9 +235,18 @@ impl AssetManager {
     }
 
     ///Returns the camera in use TODO this will be managed by a independent camera manager in the future
-    #[inline]
     pub fn get_camera(&mut self) -> &mut DefaultCamera{
-        &mut self.camera
+
+        if let Some(camera_name) = self.active_camera.clone(){
+            let node = self.active_main_scene.get_node(&camera_name);
+            if let Some(camera_node) = node{
+                if let Some(camera) = camera_node.get_value_mut().as_camera(){
+                    println!("Found active camera", );
+                    return camera;
+                }
+            }
+        }
+        self.fall_back.get_value_mut().as_camera().expect("failed to get camera")
     }
 
     ///Sets the root scene to a `new_scene_root`
@@ -293,10 +308,10 @@ impl AssetManager {
             match sort_options{
                 Some(para) => para
                     .with_value_type(ValueTypeBool::none().with_mesh())
-                    .with_frustum(self.camera.get_frustum_bound()),
+                    .with_frustum(self.get_camera().get_frustum_bound()),
                 None => SceneComparer::new()
                     .with_value_type(ValueTypeBool::none().with_mesh())
-                    .with_frustum(self.camera.get_frustum_bound())
+                    .with_frustum(self.get_camera().get_frustum_bound())
             }
         };
         self.active_main_scene.copy_all_nodes(&Some(new_sorter))

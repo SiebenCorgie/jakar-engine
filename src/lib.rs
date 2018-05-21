@@ -414,6 +414,15 @@ impl JakarEngine {
         map
     }
 
+    ///Returns the key map with its Mutex guard.
+    pub fn get_key_map(&self) -> Arc<Mutex<input::keymap::KeyMap>>{
+        let map = {
+            let inp_sys = self.input_system.lock().expect("failed to lock input system");
+            inp_sys.get_key_map()
+        };
+        map
+    }
+
     ///Returns the unlocked settings for easy changing. However the engine won't do anything as long as the
     //Mutex is unlocked, so use with care.
     pub fn get_engine_settings_unlocked<'a>(&'a mut self) -> MutexGuard<'a, core::engine_settings::EngineSettings>{

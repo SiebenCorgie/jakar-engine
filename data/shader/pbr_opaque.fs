@@ -512,9 +512,15 @@ void main()
     //from three-rs
     surf_normal = v_normal; //use the vertex normal
   }else {
-    surf_normal = texture(t_Normal, v_TexCoord).rgb ;
-    surf_normal = normalize(v_TBN * ((surf_normal * 2 - 1) * vec3(u_tex_fac.normal_factor, u_tex_fac.normal_factor, 1.0)));
+    vec3 surf_normal_tex = texture(t_Normal, v_TexCoord).rgb;
+    surf_normal = normalize(v_TBN * ((surf_normal_tex * 2.0 - 1.0) * vec3(u_tex_fac.normal_factor, u_tex_fac.normal_factor, 1.0)));
   }
+
+  surf_normal = normalize(surf_normal);
+
+  //f_color = vec4(surf_normal, 1.0);
+  //return;
+
   V = normalize(u_main.camera_position - FragmentPosition);
 
   // calculate reflectance at normal incidence; if dia-electric (like plastic) use F0

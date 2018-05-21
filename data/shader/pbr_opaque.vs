@@ -30,17 +30,17 @@ void main() {
 
   vec4 pos = u_main.model * vec4(position, 1.0);
 
-  mat3 normal_matrix = transpose(inverse(mat3(u_main.model)));
+  //mat3 normal_matrix = transpose(inverse(mat3(u_main.model)));
 
-  vec3 T = normalize(normal_matrix * tangent.xyz);
-  vec3 N = normalize(normal_matrix * normal);
+  //vec3 T = normalize(normal_matrix * tangent.xyz);
+  //vec3 N = normalize(normal_matrix * normal);
 
-  //vec3 T = normalize(vec3(u_main.model * vec4(tangent.xyz, 0.0)));
-  //vec3 N = normalize(vec3(u_main.model * vec4(normal, 0.0)));
+  vec3 T = normalize(vec3(u_main.model * vec4(tangent.xyz, 0.0)));
+  vec3 N = normalize(vec3(u_main.model * vec4(normal, 0.0)));
   // re-orthogonalize T with respect to N
-  //T = normalize(T - dot(T, N) * N);
+  T = normalize(T - dot(T, N) * N);
   // then retrieve perpendicular vector B with the cross product of T and N
-  vec3 B = normalize(cross(N, T) * tangent.w);
+  vec3 B = normalize(cross(N, T));// * tangent.w);
 
   v_TBN = mat3(T, B, N);
 
@@ -49,7 +49,7 @@ void main() {
   FragmentPosition = vec3(pos);
   v_position = pos.xyz;
   v_TexCoord = tex_coord;
-  v_normal = normalize(normal_matrix * normal);
+  v_normal = normalize(N);
   out_view_pos = (u_main.view * u_main.model * vec4(position, 1.0)).xyz;
   //The proj has been manipulated like here: https://matthewwellings.com/blog/the-new-vulkan-coordinate-system/
   gl_Position = u_main.proj * u_main.view * u_main.model * vec4(position, 1.0);

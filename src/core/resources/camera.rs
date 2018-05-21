@@ -7,6 +7,7 @@ use std::sync::{Arc, Mutex};
 use render::shader::shader_inputs::default_data;
 use core::engine_settings::{EngineSettings,CameraSettings};
 use input::keymap::KeyMap;
+use core::next_tree::attributes::NodeAttributes;
 
 use std::time::{Instant};
 
@@ -19,27 +20,17 @@ pub trait Camera {
     fn from_properties(
         settings: Arc<Mutex<EngineSettings>>,
         key_map: Arc<Mutex<KeyMap>>,
-        front: Vector3<f32>,
-        position: Vector3<f32>,
-        up: Vector3<f32>,
-        yaw: f32,
-        pitch: f32,
-        speed: f32,
+        transform: &Decomposed<Vector3<f32>, Quaternion<f32>>,
     ) -> Self;
 
-
-    ///Calculates / Update the view
-    fn update_view(&mut self);
+    //Calculates / Update the view
+    //fn update_view(&mut self);
+    ///Updates the internal transform information to return teh correct results.
+    fn update(&mut self, transform: &Decomposed<Vector3<f32>, Quaternion<f32>>);
     ///Returns the view matrix if needed
     fn get_view_matrix(&self) -> Matrix4<f32>;
-    ///Returns the current direction of the camera
-    fn get_direction(&self) -> Vector3<f32>;
-    ///Set current direction
-    fn set_direction(&mut self, new_direction: Vector3<f32>);
-    ///Returns Position
+    ///Returns Position used for view matrix calculation
     fn get_position(&self) -> Vector3<f32>;
-    ///Set current position
-    fn set_position(&mut self, new_pos: Vector3<f32>);
     ///Sets Fov on this camera
     fn set_fov(&mut self, new_fov: f32);
     ///Returns the perspective matrix based on the window settings
@@ -59,26 +50,20 @@ pub trait Camera {
 ///An example implementation
 #[derive(Clone)]
 pub struct DefaultCamera {
-    //camera General
-    pub position: Vector3<f32>,
-    pub front: Vector3<f32>,
-    pub up: Vector3<f32>,
-    pub right: Vector3<f32>,
-    pub world_up: Vector3<f32>,
-    //Camera Rotation
-    yaw: f32,
-    pitch: f32,
+
+    ///The node infromation used for the view matrix
+    node_transform: Decomposed<Vector3<f32>, Quaternion<f32>>,
+
+    direction: Vector3<f32>,
+    view: Matrix4<f32>,
+    projection: Matrix4<f32>,
 
     //Setting
     fov: f32,
-    speed: f32,
 
     current_cam_settings: CameraSettings,
 
     settings: Arc<Mutex<EngineSettings>>,
-    key_map: Arc<Mutex<KeyMap>>,
-
-    last_time: Instant,
 }
 
 ///The Camera can use the opengl math beacuse be do
@@ -91,15 +76,6 @@ impl Camera for DefaultCamera{
         settings: Arc<Mutex<EngineSettings>>,
         key_map: Arc<Mutex<KeyMap>>
     ) -> Self {
-        //camera General
-        let position = Vector3::new(0.0, 0.0, 0.0);
-        let front = Vector3::new(0.0, 0.0, -1.0);
-        let up = Vector3::new(0.0, 1.0, 0.0);
-
-        //Camera Rotation
-        let yaw: f32 = -90.0;
-        let pitch: f32 = 0.0;
-
         let fov = 45.0;
 
         let current_cam_settings = {
@@ -108,24 +84,21 @@ impl Camera for DefaultCamera{
         };
 
         DefaultCamera {
-            position: position,
-            front: front,
-            up: up,
-            right: front.cross(up),
-            world_up: up,
 
-            yaw: yaw,
-            pitch: pitch,
+            node_transform: Decomposed{
+                rot: Quaternion::from_angle_y(Deg(0.0)),
+                disp: Vector3::new(0.0,0.0,0.0),
+                scale: 0.0,
+            },
+
+            direction: Vector3::new(0.0,0.0,1.0),
+            view: Matrix4::<f32>::identity(),
+            projection: Matrix4::<f32>::identity(),
+
             fov: fov,
 
             current_cam_settings: current_cam_settings,
-
-            speed: 25.0,
-
             settings: settings,
-
-            key_map: key_map,
-            last_time: Instant::now(),
         }
     }
 
@@ -133,12 +106,7 @@ impl Camera for DefaultCamera{
     fn from_properties(
         settings: Arc<Mutex<EngineSettings>>,
         key_map: Arc<Mutex<KeyMap>>,
-        front: Vector3<f32>,
-        position: Vector3<f32>,
-        up: Vector3<f32>,
-        yaw: f32,
-        pitch: f32,
-        speed: f32,
+        transform: &Decomposed<Vector3<f32>, Quaternion<f32>>,
     ) -> Self{
 
         let fov = 45.0;
@@ -149,32 +117,78 @@ impl Camera for DefaultCamera{
         };
 
         let mut new_cam = DefaultCamera {
-            position: position,
-            front: front,
-            up: up,
-            right: front.cross(up),
-            world_up: up,
 
-            yaw: yaw,
-            pitch: pitch,
+            node_transform: Decomposed{
+                rot: Quaternion::from_angle_y(Deg(0.0)),
+                disp: Vector3::new(0.0,0.0,0.0),
+                scale: 0.0,
+            },
+
+            direction: Vector3::new(0.0,0.0,1.0),
+            view: Matrix4::<f32>::identity(),
+            projection: Matrix4::<f32>::identity(),
+
             fov: fov,
 
             current_cam_settings: current_cam_settings,
 
-
-            speed: speed,
-
             settings: settings,
 
-            key_map: key_map,
-
-            last_time: Instant::now(),
         };
-
-        new_cam.update_view();
+        new_cam.update(transform);
         new_cam
     }
 
+    ///Updates the camera internal node transform to return the correct values for the view matrix.
+    fn update(&mut self, transform: &Decomposed<Vector3<f32>, Quaternion<f32>>){
+        //first update the view matrix
+        let front = transform.rot.rotate_vector(Vector3::new(0.0,0.0,1.0));
+        let tmp_target: Vector3<f32> = transform.disp + front;
+        let view = Matrix4::look_at(
+            Point3::new(transform.disp.x, transform.disp.y, transform.disp.z),
+            Point3::new(tmp_target.x, tmp_target.y, tmp_target.z),
+            Vector3::new(0.0,1.0,0.0)
+        );
+
+        self.view = view;
+        self.direction = front;
+
+        //now update the perspective as well
+        let (width, height, near_plane, far_plane) = {
+            let engine_settings_lck = self.settings.lock().expect("Faield to lock settings");
+            (
+                engine_settings_lck.get_dimensions()[0],
+                engine_settings_lck.get_dimensions()[1],
+                engine_settings_lck.camera.near_plane,
+                engine_settings_lck.camera.far_plane
+            )
+        };
+
+        //from https://matthewwellings.com/blog/the-new-vulkan-coordinate-system/
+        /*
+        let bias: Matrix4<f32> = Matrix4::new(
+            1.0, 0.0, 0.0, 0.0,
+            0.0, -1.0, 0.0, 0.0,
+            0.0, 0.0, 0.5, 0.5,
+            0.0, 0.0, 0.0, 1.0
+        );
+        */
+        //bias has to be multiplied to comply with the opengl -> vulkan coorinate system
+        //(+y is down and depth is -1.0 - 1.0)
+        //bias *
+        let mut pers = perspective(
+            Deg(self.fov),
+            (width as f32 / height as f32),
+            near_plane,
+            far_plane
+        );
+        pers[1][1] *= -1.0;
+        //pers = bias * pers;
+        self.projection = pers;
+    }
+
+
+/*
     ///Updates the camera view information
     fn update_view(&mut self){
 
@@ -259,18 +273,10 @@ impl Camera for DefaultCamera{
         self.up = self.right.cross(self.front).normalize();
 
     }
-
+*/
     //Return view matrix as [[f32; 4]; 4]
     fn get_view_matrix(&self) -> Matrix4<f32> {
-
-        let tmp_target = self.position + self.front;
-
-        let view = Matrix4::look_at(
-            Point3::new(self.position.x, self.position.y, self.position.z),
-            Point3::new(tmp_target.x, tmp_target.y, tmp_target.z),
-            self.up
-        );
-        view
+        self.view
     }
 
     ///Returns an 4x4 matrix containing view and projection
@@ -280,28 +286,10 @@ impl Camera for DefaultCamera{
         projection * view
     }
 
-    ///Returns the direction the camera is facing
-    #[inline]
-    fn get_direction(&self) -> Vector3<f32> {
-        self.front
-    }
-
-    ///Sets the direction of the camera to a Vector3<f32>
-    #[inline]
-    fn set_direction(&mut self, new_direction: Vector3<f32>){
-        self.front = new_direction.normalize();
-    }
-
     ///Returns the position of the camera as Vector3<f32>
     #[inline]
     fn get_position(&self) -> Vector3<f32> {
-        self.position
-    }
-
-    ///Sets the position
-    #[inline]
-    fn set_position(&mut self, new_pos: Vector3<f32>){
-        self.position = new_pos;
+        self.node_transform.disp
     }
 
     ///Sets the field of view for this camera
@@ -312,37 +300,7 @@ impl Camera for DefaultCamera{
 
     //Calculates the perspective based on the engine and camera settings
     fn get_perspective(&self) -> Matrix4<f32>{
-        let (width, height, near_plane, far_plane) = {
-            let engine_settings_lck = self.settings.lock().expect("Faield to lock settings");
-            (
-                engine_settings_lck.get_dimensions()[0],
-                engine_settings_lck.get_dimensions()[1],
-                engine_settings_lck.camera.near_plane,
-                engine_settings_lck.camera.far_plane
-            )
-        };
-
-        //from https://matthewwellings.com/blog/the-new-vulkan-coordinate-system/
-        /*
-        let bias: Matrix4<f32> = Matrix4::new(
-            1.0, 0.0, 0.0, 0.0,
-            0.0, -1.0, 0.0, 0.0,
-            0.0, 0.0, 0.5, 0.5,
-            0.0, 0.0, 0.0, 1.0
-        );
-        */
-        //bias has to be multiplied to comply with the opengl -> vulkan coorinate system
-        //(+y is down and depth is -1.0 - 1.0)
-        //bias *
-        let mut pers = perspective(
-            Deg(self.fov),
-            (width as f32 / height as f32),
-            near_plane,
-            far_plane
-        );
-        pers[1][1] *= -1.0;
-        //pers = bias * pers;
-        pers
+        self.projection
     }
 
     ///Returns the frustum bound of this camera as a AABB
@@ -362,7 +320,7 @@ impl Camera for DefaultCamera{
 
         let uniform_data = default_data::ty::Data {
             //Updating camera from camera transform
-            camera_position: self.position.clone().into(),
+            camera_position: self.node_transform.disp.clone().into(),
             _dummy0: [0; 4],
             //This is getting a dummy value which is updated right bevore set creation via the new
             //model provided transform matrix. There might be a better way though.
@@ -376,10 +334,4 @@ impl Camera for DefaultCamera{
         uniform_data
     }
 
-}
-
-//Helper function for calculating the view
-#[inline]
-fn to_radians(degree: f32) -> f32 {
-    degree * (consts::PI / 180.0) as f32
 }

@@ -22,6 +22,9 @@ pub mod node_tools;
 ///Is used to time the thread calls for the main engine parts
 pub mod engine_state_machine;
 
+///Math related tools, containing time and lin. alg
+pub mod math;
+
 
 ///A trait every importer should implement
 pub trait Importer {

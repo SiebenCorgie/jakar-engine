@@ -16,6 +16,9 @@ use jakar_tree::node::Attribute;
 use jakar_tree::node::Node;
 ///Describes the jobs this tree can execute when updated
 pub mod jobs;
+///Contains several controller which can be used for nodes.
+pub mod node_controller;
+
 
 use cgmath::*;
 use collision::*;
@@ -369,7 +372,7 @@ impl SceneTree<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes
         }
 
         //If self passed the ckeck for the attrributes, copy the current node and return
-        let mut node_copy = self.copy();
+        let node_copy = self.copy();
         return_vec.push(node_copy);
 
         return_vec

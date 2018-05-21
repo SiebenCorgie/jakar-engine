@@ -69,6 +69,7 @@ fn main() {
 
 
     engine.get_asset_manager().import_gltf("TestScene", "examples/simple_scene/TestScenes/Cube_Plane.gltf");
+    //engine.get_asset_manager().import_gltf("Arrow", "examples/simple_scene/TestScenes/Arrow.gltf");
     //engine.get_asset_manager().import_gltf("TestScene", "examples/simple_scene/Sponza/Sponza.gltf");
     //engine.get_asset_manager().import_gltf("TestScene", "examples/simple_scene/Helmet/Helmet.gltf");
 
@@ -82,7 +83,7 @@ fn main() {
     //SUN========================================================================
     //add a matrix of lights
 
-    let mut matrix_size = 10;
+    let mut matrix_size = 0;
     matrix_size = matrix_size - (matrix_size / 2);
     let spacing = 5.0;
 
@@ -156,37 +157,22 @@ fn main() {
             }
         }
     }
-/*
+
     //Now add a sun
     let mut sun = light::LightDirectional::new("Sunny");
     sun.set_intensity(100.0);
     sun.set_color(Vector3::new(1.0, 0.85, 0.9));
-    let sun_node = light_tree.add_at_root(content::ContentType::DirectionalLight(sun), None, None).expect("fail");
+    let sun_node = light_tree.add_at_root(content::ContentType::DirectionalLight(sun), None).expect("fail");
     //Now rotate it a bit on x
     match light_tree.get_node(&sun_node){
         Some(sun)=> {
-            sun.add_job(jobs::SceneJobs::Rotate(Vector3::new(0.0, 0.0, -60.0)));
-
-            sun.set_tick(
-                move |x:f32, arg: &mut JakarNode|{
-                    let add_vec = Vector3::new(
-                        0.0,
-                        1.0 * x,
-                        0.0
-                    );
-
-                    arg.add_job(jobs::SceneJobs::RotateAroundPoint(
-                            add_vec, Vector3::new(0.0,0.0,0.0)
-                        )
-                    );
-                }
-            );
+            sun.add_job(jobs::SceneJobs::Rotate(Vector3::new(0.0, 10.0, -60.0)));
 
         },
         None => {println!("Could not find sun", );}
     }
 
-*/
+
     light_tree.update();
     engine.get_asset_manager().get_active_scene().join_at_root(&light_tree);
     println!("LightreeJoined!", );
@@ -195,7 +181,7 @@ fn main() {
     //engine.get_asset_manager().get_active_scene().print_tree();
     //println!("END ========================================================", );
     let mut scene_added = false;
-
+    let mut arrow_added = false;
     //Its time to actually start the engine
     engine.start();
 
@@ -210,39 +196,17 @@ fn main() {
                     //println!("Could not find TestScene", );
                 }
             }
-
-            //Scale by .1
-            match engine.get_asset_manager().get_active_scene().get_node("TestScene"){
-                Some(scene) => {
-                    //println!("Scaling!", );
-                    //scene.add_job(jobs::SceneJobs::Scale(Vector3::new(0.01, 0.01, 0.01)));
-                }
-                None => {
-                    //println!("Could not find TestScene", );
-                }, //get on with it
-            }
-
         }
 
         //try to get the TestScene and move it if a key is pressed
 
-        //test if a is pressed
-        if engine.get_asset_manager().get_keymap().h{
-
-            match engine.get_asset_manager().get_active_scene().get_node("TestScene"){
-                Some(scene) => {
-                    scene.add_job(jobs::SceneJobs::Rotate(Vector3::new(1.0, 0.0, 0.0)));
-                }
-                None => {println!("Could not find TestScene", );}, //get on with it
-            }
-        }
 
         //test if a is pressed
         if engine.get_asset_manager().get_keymap().h{
 
             match engine.get_asset_manager().get_active_scene().get_node("TestScene"){
                 Some(scene) => {
-                    scene.add_job(jobs::SceneJobs::Rotate(Vector3::new(1.0, 0.0, 0.0)));
+                    scene.add_job(jobs::SceneJobs::Rotate(Vector3::new(0.0, 1.0, 0.0)));
                 }
                 None => {println!("Could not find TestScene", );}, //get on with it
             }
@@ -250,6 +214,10 @@ fn main() {
 
         if engine.get_current_keymap().p{
             engine.get_engine_settings_unlocked().capture_next_frame();
+        }
+
+        if engine.get_current_keymap().r{
+            engine.get_asset_manager().get_active_scene().print_tree();
         }
 
         if engine.get_current_keymap().up{

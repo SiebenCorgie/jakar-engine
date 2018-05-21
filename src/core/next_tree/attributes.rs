@@ -1,18 +1,13 @@
 use cgmath::*;
 use collision::*;
 use jakar_tree::node::Attribute;
-use super::content::ContentType;
 use super::jobs::SceneJobs;
-use std::sync::{Arc, Mutex};
-use core::PointToVector;
 use super::*;
-use std::f32::consts::*;
 use std::f32;
 
 ///A node can have this attributes
 #[derive(Clone)]
 pub struct NodeAttributes {
-
     ///Transform of this node in local space
     pub transform: Decomposed<Vector3<f32>, Quaternion<f32>>,
     ///The bounds of this node, takes the `content` bound as well as the max and min values of
@@ -116,6 +111,11 @@ impl Attribute<SceneJobs> for NodeAttributes{
                 self.transform.rot = delta_rot * self.transform.rot;
                 //if we rotate self, we want to rotate the children around self's location
                 SceneJobs::RotateAroundPoint(r, self.transform.disp)
+            }
+
+            &SceneJobs::RotateQ(quad) => {
+                self.transform.rot = quad * self.transform.rot;
+                SceneJobs::RotateQ(quad)
             }
 
             &SceneJobs::RotateAroundPoint(rotation, point) => {

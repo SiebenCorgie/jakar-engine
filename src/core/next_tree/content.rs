@@ -1,10 +1,14 @@
 use std::sync::{Arc, Mutex};
+use std::fmt;
+
 use core::resources::mesh;
 use core::resources::light;
 use core::resources::empty;
-use core::resources::camera;
+use core::resources::camera::{DefaultCamera, Camera};
 use core::ReturnBoundInfo;
 
+use super::attributes::NodeAttributes;
+use core;
 use render::render_traits::ForwardRenderAble;
 
 
@@ -31,8 +35,27 @@ pub enum ContentType {
     /// an empty type, can be used as "folder" in an node hierachy
     Empty(empty::Empty),
     /// a camera attached to the tree (TODO needs to be implemented correctly)
-    Camera(camera::DefaultCamera),
+    Camera(DefaultCamera),
 }
+
+impl fmt::Debug for ContentType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let string = {
+            match self{
+                ContentType::Renderable(_) => "renderable",
+                ContentType::Mesh(_) => "mesh",
+                ContentType::PointLight(_) => "point light",
+                ContentType::DirectionalLight(_) => "directional light",
+                ContentType::SpotLight(_) => "spot light",
+                ContentType::Empty(_) => "empty",
+                ContentType::Camera(_) => "camera",
+            }
+        };
+
+        write!(f, "{}", string)
+    }
+}
+
 
 impl ContentType{
     ///Returns the bound of this content
@@ -107,9 +130,11 @@ impl ContentType{
     }
 
     ///Returns the either a camera or a None
-    pub fn as_camera(&mut self) -> Option<&mut camera::DefaultCamera>{
+    pub fn as_camera(&mut self) -> Option<&mut DefaultCamera>{
         match self{
-            &mut ContentType::Camera(ref mut cam) => return Some(cam),
+            &mut ContentType::Camera(ref mut cam) => {
+                return Some(cam);
+            },
             _ => None
         }
     }
