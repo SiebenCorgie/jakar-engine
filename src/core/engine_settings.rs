@@ -59,14 +59,8 @@ pub struct EngineSettings {
     ///Graphics settings:
     pub render_settings: render_settings::RenderSettings,
 
-
-    ///Max input pollings per second (default 60)
+    ///Max iterations for the input polling per second
     pub max_input_speed: u32,
-    ///Max asset updates per second (default 120)
-    pub max_asset_updates: u32,
-    ///Max frames per second in the rendering thread (default 700 fps)
-    pub max_fps: u32,
-
 
     ///The camera settings
     pub camera: CameraSettings,
@@ -119,9 +113,7 @@ impl EngineSettings{
             //Graphics settings
             render_settings: render_settings::RenderSettings::default(),
 
-            max_input_speed: 60,
-            max_asset_updates: 120,
-            max_fps: 700,
+            max_input_speed: 200,
 
             camera: CameraSettings{
                 far_plane: 100.0,
@@ -171,28 +163,6 @@ impl EngineSettings{
         self.capture_frame = false;
     }
 
-
-    ///Sets the maximum updates per second value for the asset thread.
-    #[inline]
-    pub fn with_asset_update_speed(mut self, speed: u32) -> Self{
-        self.max_asset_updates = speed;
-        self
-    }
-
-    ///Sets the maximum polls per second value for the input thread.
-    #[inline]
-    pub fn with_input_poll_speed(mut self, speed: u32) -> Self{
-        self.max_input_speed = speed;
-        self
-    }
-
-    ///Sets the maximum frames per second value for the render thread.
-    #[inline]
-    pub fn with_max_fps(mut self, fps: u32) -> Self{
-        self.max_fps = fps;
-        self
-    }
-
     ///Sets the main monitor, used to define where the fullscreen mode has to be applied
     #[inline]
     pub fn with_main_monitor(mut self, id: i32) -> Self{
@@ -224,6 +194,13 @@ impl EngineSettings{
     #[inline]
     pub fn with_dimensions(mut self, width: u32, height: u32) -> Self{
         self.window_dimensions = [width, height];
+        self
+    }
+
+    ///Sets max iterations per second of the input polling.
+    #[inline]
+    pub fn with_max_input_polling_speed(mut self, new: u32) -> Self{
+        self.max_input_speed = new;
         self
     }
 

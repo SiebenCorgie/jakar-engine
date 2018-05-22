@@ -243,7 +243,7 @@ impl PostProgress{
     ) -> FrameStage{
 
         let blur_settings = {
-            self.engine_settings.lock().expect("failed to get settings").get_render_settings().get_blur()
+            self.engine_settings.lock().expect("failed to get settings").get_render_settings().get_bloom()
         };
 
         //get the command buffer and decide which blur to apply
@@ -266,10 +266,8 @@ impl PostProgress{
 
         let blur_settings = blur::ty::blur_settings{
             horizontal: blur_int,
-            //weight: [0.227027, 0.1945946, 0.1216216, 0.054054, 0.016216],
             scale: blur_settings.scale,
             strength: blur_settings.strength,
-
         };
 
         let blur_settings = self.blur_settings_pool.next(blur_settings).expect("failed to allocate blur settings");
@@ -395,7 +393,7 @@ impl PostProgress{
 
                 //Since we blittet all images, we take the last one (assuming that it is 1x1)
                 // and push it to the calculation on the gpu
-                let one_pix_image = frame_system.post_pass_images.scaled_ldr_images.iter().last().expect("failed to get last").clone();
+                let one_pix_image = frame_system.post_pass_images.scaled_ldr_images.iter().last().expect("failed to get last average image").clone();
 
 
                 let exposure_settings = {

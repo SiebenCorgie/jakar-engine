@@ -85,7 +85,7 @@ fn main() {
 
     let mut matrix_size = 0;
     matrix_size = matrix_size - (matrix_size / 2);
-    let spacing = 5.0;
+    let spacing = 3.0;
 
     for x in -(matrix_size)..matrix_size{
         for y in -(matrix_size)..matrix_size{

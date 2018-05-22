@@ -35,18 +35,21 @@ pub struct DebugSettings {
     pub draw_bounds: bool,
 }
 
-///BlurSettings.
+///BloomSettings.
 #[derive(Clone)]
-pub struct BlurSettings {
+pub struct BloomSettings {
     pub strength: f32,
     pub scale: f32,
+    ///more levels means nicer bloom but worse performance1
+    pub levels: u32,
 }
 
-impl BlurSettings{
-    pub fn new(scale: f32, strength: f32) -> Self{
-        BlurSettings{
-            strength: strength,
-            scale: scale
+impl BloomSettings{
+    pub fn new(scale: f32, strength: f32, levels: u32) -> Self{
+        BloomSettings{
+            strength,
+            scale,
+            levels
         }
     }
 }
@@ -258,8 +261,8 @@ pub struct RenderSettings {
     ///Collects all settings related to light and shadows
     light_settings: LightSettings,
 
-    ///Defines the blur settings. Mainly strength and scale.
-    blur: BlurSettings,
+    ///Defines the bloom settings. Mainly strength and scale.
+    bloom: BloomSettings,
 
     ///Describes the several debug settings one cna change
     debug_settings: DebugSettings,
@@ -293,9 +296,10 @@ impl RenderSettings{
             ),
             light_settings: LightSettings::default(),
 
-            blur: BlurSettings{
+            bloom: BloomSettings{
                 strength: 1.5,
                 scale: 1.0,
+                levels: 4,
             },
 
             debug_settings: DebugSettings{
@@ -474,23 +478,23 @@ impl RenderSettings{
         self
     }
 
-    ///Sets the current blur settings. Don't overdo it or your rendered image will look like a Michael Bay movie.
+    ///Sets the current bloom settings. Don't overdo it or your rendered image will look like a Michael Bay movie.
     #[inline]
-    pub fn with_blur(mut self, scale: f32, strength: f32) -> Self{
-        self.blur = BlurSettings::new(scale, strength);
+    pub fn with_bloom(mut self, scale: f32, strength: f32, levels: u32) -> Self{
+        self.bloom = BloomSettings::new(scale, strength, levels);
         self
     }
 
-    ///Sets the current blur settings. Don't overdo it or your rendered image will look like a Michael Bay movie.
+    ///Sets the current bloom settings. Don't overdo it or your rendered image will look like a Michael Bay movie.
     #[inline]
-    pub fn set_blur(&mut self, scale: f32, strength: f32){
-        self.blur = BlurSettings::new(scale, strength);
+    pub fn set_bloom(&mut self, scale: f32, strength: f32, levels: u32){
+        self.bloom = BloomSettings::new(scale, strength, levels);
     }
 
-    ///Returns the current blur settings. They might change per frame.
+    ///Returns the current bloom settings. They might change per frame.
     #[inline]
-    pub fn get_blur(&self,) -> BlurSettings{
-        self.blur.clone()
+    pub fn get_bloom(&self,) -> BloomSettings{
+        self.bloom.clone()
     }
 
 }

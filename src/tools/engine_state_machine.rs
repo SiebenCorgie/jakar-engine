@@ -134,7 +134,6 @@ pub struct EngineStateMachine{
     render_state: Arc<Mutex<RenderState>>,
     asset_state: Arc<Mutex<AssetUpdateState>>,
     engine_settings: Arc<Mutex<EngineSettings>>,
-    duration_collection: DurationCollection,
     last_step: LastStep,
 }
 
@@ -145,28 +144,11 @@ impl EngineStateMachine{
         engine_settings: Arc<Mutex<EngineSettings>>,
     ) -> Self{
 
-        let duration_collection = {
-            let engine_lck = engine_settings.lock().expect("Failed to lock engine settings");
-            DurationCollection{
-                render_duration: Duration::from_secs(1).checked_div(
-                    engine_lck.max_fps as u32
-                ).expect("Failed to create engine duration"),
-                asset_duration: Duration::from_secs(1).checked_div(
-                    engine_lck.max_asset_updates as u32
-                ).expect("Failed to create asset duration"),
-            }
-        };
-
-        println!("DURATIONS=================================", );
-        println!("{:?}", duration_collection.render_duration );
-        println!("{:?}", duration_collection.asset_duration );
-        println!("DURATIONS=================================", );
-
         EngineStateMachine{
             render_state,
             asset_state,
             engine_settings,
-            duration_collection,
+            //duration_collection,
             last_step: LastStep::Asset,
         }
     }
