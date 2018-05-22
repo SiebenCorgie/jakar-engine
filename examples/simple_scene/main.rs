@@ -42,15 +42,13 @@ fn main() {
     .with_dimensions(1600, 900)
     .with_name("Jakar Instance")
     .in_release_mode()
-    .with_input_poll_speed(200)
+    .with_max_input_polling_speed(200)
     .with_fullscreen_mode(false)
     //.with_cursor_state(winit::CursorState::Normal)
     .with_cursor_state(winit::CursorState::Grab)
     //.with_cursor_visibility(winit::MouseCursor::Default)
     .with_cursor_visibility(winit::MouseCursor::NoneCursor)
     .with_render_settings(graphics_settings)
-    .with_asset_update_speed(200)
-    .with_max_fps(700)
     .with_camera_settings(core::engine_settings::CameraSettings{
         far_plane: 500.0,
         near_plane: 0.1,

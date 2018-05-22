@@ -12,7 +12,7 @@ use vulkano::device::Device;
 use vulkano::buffer::BufferUsage;
 use vulkano::buffer::BufferAccess;
 use vulkano::device::Queue;
-
+use vulkano::command_buffer::AutoCommandBufferBuilder;
 
 use core::ReturnBoundInfo;
 use core::resources::material;

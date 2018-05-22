@@ -399,8 +399,6 @@ impl RenderSettings{
         self.v_sync
     }
 
-
-
     ///Sets up a custom gamma value.
     #[inline]
     pub fn with_gamma(mut self, gamma: f32) -> Self{

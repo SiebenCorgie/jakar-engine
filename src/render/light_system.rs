@@ -390,7 +390,7 @@ impl LightSystem{
             .expect("Failed to create descriptor set")
             //The shadow textures we have
             .add_sampled_image(
-                frame_system.shadow_images.directional_shadows.clone(),
+                frame_system.passes.shadow_pass.get_images().directional_shadows.clone(),
                 self.shadow_map_sampler.clone()
             )
             .expect("Failed to add shadow map image")

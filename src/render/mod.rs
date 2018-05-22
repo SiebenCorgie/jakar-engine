@@ -27,6 +27,10 @@ pub mod window;
 ///manages all universal accesible uniforms, like lights and world info
 pub mod uniform_manager;
 
+///Handles the rendering of everything forward rendering related, also emmits the sorted hdr values
+/// of this frame used for bluring.
+//pub mod forward_system;
+
 ///Provides some structs and methodes for the postprogressing of a frame
 pub mod post_progress;
 

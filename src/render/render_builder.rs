@@ -296,6 +296,7 @@ impl BuildRender for RenderBuilder{
         println!("Starting frame passes", );
         let passes = render::render_passes::RenderPasses::new(
             device.clone(),
+            queue.clone(),
             swapchain.format(),
             self.settings.clone(),
         );

@@ -302,7 +302,7 @@ impl ShadowSystem{
             };
             //image dimensions
             let img_dim = {
-                let tmp_dim = frame_system.shadow_images.directional_shadows.dimensions();
+                let tmp_dim = frame_system.passes.shadow_pass.get_images().directional_shadows.dimensions();
 
                 [tmp_dim[0] as f32, tmp_dim[1] as f32]
             };
