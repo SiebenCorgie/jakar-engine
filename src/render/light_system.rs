@@ -26,6 +26,7 @@ use vulkano::buffer::immutable::ImmutableBuffer;
 use vulkano::buffer::BufferUsage;
 use vulkano::sync::GpuFuture;
 use vulkano::sync::JoinFuture;
+use vulkano::command_buffer::AutoCommandBufferBuilder;
 use vulkano;
 
 use std::sync::{Arc,Mutex};
@@ -305,48 +306,38 @@ impl LightSystem{
 
     pub fn dispatch_compute_shader(
         &mut self,
-        command_buffer: frame_system::FrameStage,
-    ) -> frame_system::FrameStage{
+        command_buffer: AutoCommandBufferBuilder,
+    ) -> AutoCommandBufferBuilder{
+        //adds the light buffers (all lights and indice buffer)
+        let set_01 = self.descriptor_pool.next()
+            .add_buffer(self.cluster_buffer.clone())
+            .expect("failed to add index buffer")
+            //lights and counter
+            .add_buffer(self.current_point_light_list.clone())
+            .expect("Failed to create descriptor set")
 
-        match command_buffer{
-            frame_system::FrameStage::LightCompute(cb) => {
+            .add_buffer(self.current_dir_light_list.clone())
+            .expect("Failed to create descriptor set")
 
-                //adds the light buffers (all lights and indice buffer)
-                let set_01 = self.descriptor_pool.next()
-                    .add_buffer(self.cluster_buffer.clone())
-                    .expect("failed to add index buffer")
-                    //lights and counter
-                    .add_buffer(self.current_point_light_list.clone())
-                    .expect("Failed to create descriptor set")
+            .add_buffer(self.current_spot_light_list.clone())
+            .expect("Failed to create descriptor set")
 
-                    .add_buffer(self.current_dir_light_list.clone())
-                    .expect("Failed to create descriptor set")
+            .add_buffer(self.current_light_count.clone())
+            .expect("Failed to create descriptor set")
 
-                    .add_buffer(self.current_spot_light_list.clone())
-                    .expect("Failed to create descriptor set")
-
-                    .add_buffer(self.current_light_count.clone())
-                    .expect("Failed to create descriptor set")
-
-                    .build().expect("failed to build compute desc set 1")
-                ;
+            .build().expect("failed to build compute desc set 1")
+        ;
 
 
-                //Now add to cb the dispatch
-                let new_cb = cb.dispatch([32, 16, 32], self.compute_pipeline.clone(), set_01, ())
-                .expect("failed to add compute operation");
+        //Now add to cb the dispatch
+        let new_cb = command_buffer.dispatch([32, 16, 32], self.compute_pipeline.clone(), set_01, ())
+        .expect("failed to add compute operation");
 
 
-                //println!("Dispatched compute buffer", );
-                //END
-                return frame_system::FrameStage::LightCompute(new_cb);
+        //println!("Dispatched compute buffer", );
+        //END
+        new_cb
 
-            }
-            _ => {
-                println!("Got wrong framestage for dispatching compute shader, not going to do it ...", );
-                return command_buffer;
-            }
-        }
     }
 
     ///Returns only the cluster buffer
@@ -390,7 +381,7 @@ impl LightSystem{
             .expect("Failed to create descriptor set")
             //The shadow textures we have
             .add_sampled_image(
-                frame_system.passes.shadow_pass.get_images().directional_shadows.clone(),
+                frame_system.get_passes().shadow_pass.get_images().directional_shadows.clone(),
                 self.shadow_map_sampler.clone()
             )
             .expect("Failed to add shadow map image")

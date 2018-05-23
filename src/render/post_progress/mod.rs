@@ -2,7 +2,6 @@
 use render::shader::shaders::default_pstprg_fragment;
 use render::shader::shaders::blur;
 use render::pipeline;
-use render::frame_system::FrameStage;
 use render::frame_system::FrameSystem;
 use core::engine_settings;
 
@@ -13,12 +12,12 @@ use vulkano::sampler::Sampler;
 use vulkano::descriptor::descriptor_set::FixedSizeDescriptorSetsPool;
 use vulkano::buffer::DeviceLocalBuffer;
 use vulkano::buffer::BufferUsage;
-use vulkano::image::traits::ImageAccess;
+use vulkano::image::traits::{ImageAccess, ImageViewAccess};
 use vulkano::sampler::Filter;
 use vulkano::sampler::MipmapMode;
 use vulkano::sampler::SamplerAddressMode;
-
 use vulkano::image::ImageDimensions;
+use vulkano::command_buffer::AutoCommandBufferBuilder;
 
 use std::sync::{Arc, Mutex};
 
@@ -49,7 +48,7 @@ pub struct PostProgress{
     //device: Arc<vulkano::device::Device>,
 
     pipeline: Arc<pipeline::Pipeline>,
-    resolve_pipe: Arc<pipeline::Pipeline>,
+
     //Used for the average compute pass
     average_pipe: Arc<vulkano::pipeline::ComputePipelineAbstract + Send + Sync>,
     blur_pipe: Arc<pipeline::Pipeline>,
@@ -72,7 +71,6 @@ impl PostProgress{
     pub fn new(
         engine_settings: Arc<Mutex<engine_settings::EngineSettings>>,
         post_progress_pipeline: Arc<pipeline::Pipeline>,
-        resolve_pipe: Arc<pipeline::Pipeline>,
         blur_pipe: Arc<pipeline::Pipeline>,
         device: Arc<vulkano::device::Device>,
         queue: Arc<vulkano::device::Queue>,
@@ -140,7 +138,6 @@ impl PostProgress{
             //device: device,
 
             pipeline: post_progress_pipeline,
-            resolve_pipe: resolve_pipe,
             average_pipe: average_pipe,
             blur_pipe: blur_pipe,
 
@@ -155,7 +152,7 @@ impl PostProgress{
         }
     }
 
-    fn get_hdr_settings(&mut self) -> vulkano::buffer::cpu_pool::CpuBufferPoolSubbuffer
+    pub fn get_hdr_settings(&self) -> vulkano::buffer::cpu_pool::CpuBufferPoolSubbuffer
     <default_pstprg_fragment::ty::hdr_settings, Arc<vulkano::memory::pool::StdMemoryPool>> {
         //Might add screen extend
         let (gamma, msaa, show_mode_int, far, near, auto_exp_setting) = {
@@ -193,67 +190,73 @@ impl PostProgress{
         self.hdr_settings_pool.next(hdr_settings_data).expect("failed to alloc HDR settings")
     }
 
-    pub fn sort_hdr(&mut self,
-        command_buffer: FrameStage,
+    ///Changes into the blur pass, blurs the current hdr values several times to create a nice
+    /// Bloom efect, then dispatches a compute shader to get the current average lumiosity,
+    /// after that renders a fullscreen image which combines the ldr and hdr fragments as well
+    /// as does tone mapping, and writes the output to the swapchain image.
+    pub fn do_post_progress<I>(
+        &mut self,
+        command_buffer: AutoCommandBufferBuilder,
         frame_system: &FrameSystem,
-    ) -> FrameStage{
-        //match the current stage, if wrong, panic
-        match command_buffer{
-            FrameStage::HdrSorting(cb) => {
-
-                //create the descriptor set for the current image
-                let attachments_ds = PersistentDescriptorSet::start(self.resolve_pipe.get_pipeline_ref(), 0) //at binding 0
-                    .add_image(frame_system.passes.object_pass.get_images().forward_hdr_image.clone())
-                    .expect("failed to add hdr_image to sorting pass descriptor set")
-                    .build()
-                    .expect("failed to build postprogress cb");
-
-                //the settings for this pass
-                let settings = self.get_hdr_settings();
-
-                let settings_buffer = PersistentDescriptorSet::start(self.resolve_pipe.get_pipeline_ref(), 1) //At binding 1
-                    .add_buffer(settings)
-                    .expect("failed to add hdr image settings buffer to post progress attachment")
-                    .build()
-                    .expect("failed to build settings attachment for postprogress pass");
-
-                //perform the post progress
-                let mut command_buffer = cb;
-                command_buffer = command_buffer.draw(
-                    self.resolve_pipe.get_pipeline_ref(),
-                    frame_system.get_dynamic_state().clone(),
-                    vec![self.screen_vertex_buffer.clone()],
-                    (attachments_ds, settings_buffer),
-                    ()
-                ).expect("failed to add draw call for the sorting plane");
-
-                return FrameStage::HdrSorting(command_buffer);
-            },
-            _ => {
-                println!("Can't execute post_progress, wrong frame", );
-            }
-        }
-
-        command_buffer
+        target_image: I
+    ) -> AutoCommandBufferBuilder where I: ImageAccess + ImageViewAccess + Clone + Send + Sync + 'static{
+        //First blur images
+        let mut new_command_buffer = self.execute_blur(
+            command_buffer,
+            frame_system
+        );
+        //After bluring its time to downscale our image to one pixel to be able
+        //to read it back in a compute shader and get the average value.
+        //Since this is all in a compute shader we don't need to change passes here.
+        new_command_buffer = self.compute_lumiosity(new_command_buffer, frame_system);
+        //Now we are ready to assemble our image by changing into the assemble pass
+        new_command_buffer = self.assemble_image(new_command_buffer, frame_system, target_image);
+        new_command_buffer
     }
 
-    pub fn execute_blur(&mut self,
-        command_buffer: FrameStage,
+    fn execute_blur(&self,
+        command_buffer: AutoCommandBufferBuilder,
         frame_system: &FrameSystem,
-    ) -> FrameStage{
+    ) -> AutoCommandBufferBuilder{
+        //Change to blur_h pass
+        let blur_h_fb = frame_system.get_passes().blur_pass.get_fb_blur_h();
+        let clearings_h = vec![
+            [0.0, 0.0, 0.0, 0.0].into()
+        ];
+        let mut next_cb = command_buffer.begin_render_pass(
+            blur_h_fb, false, clearings_h
+        ).expect("failed to start blur_h pass");
+        //now blur
+        next_cb = self.blur(true, next_cb, frame_system);
 
+
+        //now end this pass and change to the blur_v pass
+        next_cb = next_cb.end_render_pass().expect("failed to end blur_h pass");
+
+        let blur_v_fb = frame_system.get_passes().blur_pass.get_fb_blur_v();
+        let clearings_v = vec![
+            [0.0, 0.0, 0.0, 0.0].into()
+        ];
+        next_cb = next_cb.begin_render_pass(
+            blur_v_fb, false, clearings_v
+        ).expect("failed to start blur_v pass");
+        //now blur
+        next_cb = self.blur(false, next_cb, frame_system);
+        //finally change into neutral mode again and return
+        next_cb = next_cb.end_render_pass().expect("failed to end blur_v renderpass");
+
+        next_cb
+    }
+
+    ///Adds a command to blur an image either horizontal or vertical
+    fn blur(
+        &self,
+        is_horizontal: bool,
+        command_buffer: AutoCommandBufferBuilder,
+        frame_system: &FrameSystem,
+    )-> AutoCommandBufferBuilder{
         let blur_settings = {
             self.engine_settings.lock().expect("failed to get settings").get_render_settings().get_bloom()
-        };
-
-        //get the command buffer and decide which blur to apply
-        let (unw_cb, is_horizontal) = match command_buffer{
-            FrameStage::BlurH(cb) => (cb, true),
-            FrameStage::BlurV(cb) => (cb, false),
-            _ => {
-                println!("We are in the wrong frame stage, no blur", );
-                panic!("wrong frame stage");
-            }
         };
 
         let blur_int = {
@@ -275,9 +278,9 @@ impl PostProgress{
         let attachments_ds = PersistentDescriptorSet::start(self.blur_pipe.get_pipeline_ref(), 0) //at binding 0
             .add_sampled_image(
                 if is_horizontal{
-                    frame_system.passes.object_pass.get_images().hdr_fragments.clone()
+                    frame_system.get_passes().object_pass.get_images().hdr_fragments.clone()
                 }else{
-                    frame_system.passes.blur_pass.get_images().after_blur_h.clone()
+                    frame_system.get_passes().blur_pass.get_images().after_blur_h.clone()
                 },
                 self.screen_sampler.clone()
             )
@@ -287,247 +290,247 @@ impl PostProgress{
             .build()
             .expect("failed to build postprogress cb");
 
-        let command_buffer = unw_cb.draw(
+        let new_command_buffer = command_buffer.draw(
             self.blur_pipe.get_pipeline_ref(),
             frame_system.get_dynamic_state().clone(),
             vec![self.screen_vertex_buffer.clone()],
-            (attachments_ds),
+            attachments_ds,
             ()
         ).expect("failed to add draw call for the blur plane");
 
-        //now return the right stage
-        if is_horizontal{
-            FrameStage::BlurH(command_buffer)
-        }else{
-            FrameStage::BlurV(command_buffer)
-        }
-
+        new_command_buffer
     }
 
     ///Takes the hdr_image computes the average lumiosity and stores it in its buffer. The information is used
     /// in the assamble stage to set the exposure setting.
-    pub fn compute_lumiosity(&mut self,
-        command_buffer: FrameStage,
+    fn compute_lumiosity(&mut self,
+        command_buffer: AutoCommandBufferBuilder,
         frame_system: &FrameSystem,
-    ) -> FrameStage{
-        match command_buffer{
-            FrameStage::ComputeAverageLumiosity(cb) => {
+    ) -> AutoCommandBufferBuilder{
+        //The walking source image, first one is the current ldr image.
+        let local_source_image_attachemtn = frame_system.get_passes().object_pass.get_images().ldr_fragments.clone();
+        let mut local_source_image = frame_system.get_passes().blur_pass.get_images().scaled_ldr_images[0].clone();
 
-                //The walking source image, first one is the current ldr image.
-                let mut local_source_image_attachemtn = frame_system.passes.object_pass.get_images().ldr_fragments.clone();
-                let mut local_source_image = frame_system.passes.blur_pass.get_images().scaled_ldr_images[0].clone();
+        let mut local_cb = command_buffer;
 
-                let mut local_cb = cb;
-
-                //First of all we create all "mipmaps" of the currently rendered frame
-                for (index, image) in frame_system.passes.blur_pass.get_images().scaled_ldr_images.iter().enumerate(){
-                    //Get the extend of the source (the firstone comes from the attachment)
-                    let sourc_dim = {
-                        if index == 0{
-                            ImageAccess::dimensions(&local_source_image_attachemtn)
-                        }else{
-                            ImageAccess::dimensions(&local_source_image)
-                        }
-                    };
-                    let source_lower_right: [i32; 3] = {
-                        match sourc_dim{
-                            ImageDimensions::Dim2d{width, height, array_layers, cubemap_compatible} => [width as i32, height as i32, 1],
-                            _ => {
-                                println!("Faking image source", );
-                                [1,1,1]
-                            }
-                        }
-                    };
-
-                    let target_dim = ImageAccess::dimensions(&image);
-                    //Now same for the target
-                    let target_lower_right: [i32; 3] = {
-                        match target_dim{
-                            ImageDimensions::Dim2d{width, height, array_layers, cubemap_compatible} => [width as i32, height as i32, 1],
-                            _ => {
-                                println!("Faking image destination", );
-                                [1,1,1]
-                            }
-                        }
-                    };
-
-                    if index == 0{
-                        //Now blit the current source to the target, first time its the attachment image
-                        local_cb = local_cb.blit_image(
-                            local_source_image_attachemtn.clone(),
-                            [0; 3],
-                            source_lower_right,
-                            0,
-                            0,
-                            image.clone(),
-                            [0; 3],
-                            target_lower_right,
-                            0,
-                            0,
-                            1,
-                            Filter::Linear
-                        ).expect("failed to blit ldr image to one pixel iamge");
-                    }else{
-                        //Now blit the current source to the target
-                        local_cb = local_cb.blit_image(
-                            local_source_image.clone(),
-                            [0; 3],
-                            source_lower_right,
-                            0,
-                            0,
-                            image.clone(),
-                            [0; 3],
-                            target_lower_right,
-                            0,
-                            0,
-                            1,
-                            Filter::Linear
-                        ).expect("failed to blit ldr image to one pixel iamge");
-                    }
-
-                    //Now setup the current target as the next source
-                    local_source_image = image.clone();
+        //First of all we create all "mipmaps" of the currently rendered frame
+        for (index, image) in frame_system.get_passes().blur_pass.get_images().scaled_ldr_images.iter().enumerate(){
+            //Get the extend of the source (the firstone comes from the attachment)
+            let sourc_dim = {
+                if index == 0{
+                    ImageAccess::dimensions(&local_source_image_attachemtn)
+                }else{
+                    ImageAccess::dimensions(&local_source_image)
                 }
+            };
+            let source_lower_right: [i32; 3] = {
+                match sourc_dim{
+                    ImageDimensions::Dim2d{width, height, array_layers, cubemap_compatible} => [width as i32, height as i32, 1],
+                    _ => {
+                        println!("Faking image source", );
+                        [1,1,1]
+                    }
+                }
+            };
 
+            let target_dim = ImageAccess::dimensions(&image);
+            //Now same for the target
+            let target_lower_right: [i32; 3] = {
+                match target_dim{
+                    ImageDimensions::Dim2d{width, height, array_layers, cubemap_compatible} => [width as i32, height as i32, 1],
+                    _ => {
+                        println!("Faking image destination", );
+                        [1,1,1]
+                    }
+                }
+            };
 
-
-                //Since we blittet all images, we take the last one (assuming that it is 1x1)
-                // and push it to the calculation on the gpu
-                let one_pix_image = frame_system.passes.blur_pass.get_images().scaled_ldr_images.iter().last().expect("failed to get last average image").clone();
-
-
-                let exposure_settings = {
-                    self.engine_settings.lock().expect("failed to lock settings").get_render_settings().get_exposure()
-                };
-
-                let exposure_data = average_lumiosity_compute_shader::ty::ExposureSettings{
-                    min_exposure: exposure_settings.min_exposure,
-                    max_exposure: exposure_settings.max_exposure,
-                    scale_up_speed: exposure_settings.scale_up_speed,
-                    scale_down_speed: exposure_settings.scale_down_speed,
-                    target_lumiosity: exposure_settings.target_lumiosity,
-                    use_auto_exposure: if exposure_settings.use_auto_exposure {
-                        0.0
-                    }else{
-                        self.engine_settings.lock().expect("failed to lock settings")
-                        .get_render_settings().get_exposure().min_exposure
-                    },
-                };
-
-                let exposure_settings_data = self.exposure_settings_pool.next(exposure_data)
-                .expect("failed to allocate new exposure settings data");
-
-
-                let des_set = self.average_set_pool.next()
-                    .add_sampled_image(
-                        one_pix_image.clone(),
-                        self.screen_sampler.clone()
-                    ).expect("failed to add sampled screen image")
-                    .add_buffer(self.average_buffer.clone())
-                    .expect("failed to add average buffer to compute descriptor")
-                    .add_buffer(exposure_settings_data)
-                    .expect("failed to add exposure settings to descriptor")
-                .build().expect("failed to build average compute descriptor");
-
-                //Start the compute operation
-                //Only one thread...
-                let new_command_buf = local_cb.dispatch([1, 1, 1], self.average_pipe.clone(), (des_set), ())
-                .expect("failed to add compute operation for average lumiosity");
-
-                return FrameStage::ComputeAverageLumiosity(new_command_buf);
+            if index == 0{
+                //Now blit the current source to the target, first time its the attachment image
+                local_cb = local_cb.blit_image(
+                    local_source_image_attachemtn.clone(),
+                    [0; 3],
+                    source_lower_right,
+                    0,
+                    0,
+                    image.clone(),
+                    [0; 3],
+                    target_lower_right,
+                    0,
+                    0,
+                    1,
+                    Filter::Linear
+                ).expect("failed to blit ldr image to one pixel iamge");
+            }else{
+                //Now blit the current source to the target
+                local_cb = local_cb.blit_image(
+                    local_source_image.clone(),
+                    [0; 3],
+                    source_lower_right,
+                    0,
+                    0,
+                    image.clone(),
+                    [0; 3],
+                    target_lower_right,
+                    0,
+                    0,
+                    1,
+                    Filter::Linear
+                ).expect("failed to blit ldr image to one pixel iamge");
             }
-            _ => {
-                println!("Wrong frame stage, returning the gotten one", );
-            }
+
+            //Now setup the current target as the next source
+            local_source_image = image.clone();
         }
-        command_buffer
+
+
+
+        //Since we blittet all images, we take the last one (assuming that it is 1x1)
+        // and push it to the calculation on the gpu
+        let one_pix_image = frame_system.get_passes().blur_pass.get_images().scaled_ldr_images.iter().last().expect("failed to get last average image").clone();
+
+
+        let exposure_settings = {
+            self.engine_settings.lock().expect("failed to lock settings").get_render_settings().get_exposure()
+        };
+
+        let exposure_data = average_lumiosity_compute_shader::ty::ExposureSettings{
+            min_exposure: exposure_settings.min_exposure,
+            max_exposure: exposure_settings.max_exposure,
+            scale_up_speed: exposure_settings.scale_up_speed,
+            scale_down_speed: exposure_settings.scale_down_speed,
+            target_lumiosity: exposure_settings.target_lumiosity,
+            use_auto_exposure: if exposure_settings.use_auto_exposure {
+                0.0
+            }else{
+                self.engine_settings.lock().expect("failed to lock settings")
+                .get_render_settings().get_exposure().min_exposure
+            },
+        };
+
+        let exposure_settings_data = self.exposure_settings_pool.next(exposure_data)
+        .expect("failed to allocate new exposure settings data");
+
+
+        let des_set = self.average_set_pool.next()
+            .add_sampled_image(
+                one_pix_image.clone(),
+                self.screen_sampler.clone()
+            ).expect("failed to add sampled screen image")
+            .add_buffer(self.average_buffer.clone())
+            .expect("failed to add average buffer to compute descriptor")
+            .add_buffer(exposure_settings_data)
+            .expect("failed to add exposure settings to descriptor")
+        .build().expect("failed to build average compute descriptor");
+
+        //Start the compute operation
+        //Only one thread...
+        let new_command_buf = local_cb.dispatch([1, 1, 1], self.average_pipe.clone(), des_set, ())
+        .expect("failed to add compute operation for average lumiosity");
+
+        new_command_buf
     }
 
 
     ///Executes the post progress on the recived command buffer and returns it, returns the buffer
     /// unchanged if it is in the wrong stage.
-    pub fn assemble_image(&mut self,
-        command_buffer: FrameStage,
+    fn assemble_image<I>(&self,
+        command_buffer: AutoCommandBufferBuilder,
         frame_system: &FrameSystem,
-    ) -> FrameStage{
-        //match the current stage, if wrong, panic
-        match command_buffer{
-            FrameStage::Postprogress(cb) => {
+        target_image: I
+    ) -> AutoCommandBufferBuilder where I: ImageAccess + ImageViewAccess + Clone + Send + Sync + 'static{
+        //first change into the assemble pass
+        let assemble_fb = frame_system.get_passes().assemble.get_fb_assemble(target_image);
+        let clearings = vec![
+            [0.0, 0.0, 0.0, 0.0].into()
+        ];
+        //Begin the assamble pass
+        let mut new_cb = command_buffer.begin_render_pass(assemble_fb, false, clearings)
+        .expect("failed to start assemble pass");
+        //now ready to do all the shading
 
-                //TO find the ldr image we analyse the debug settings
-                let ldr_level_image = {
-                    let debug_level = {
-                        self.engine_settings.lock().expect("failed to lock settings")
-                        .get_render_settings().get_debug_settings().ldr_debug_view_level
-                    };
-                    let level = {
-                        if debug_level > (frame_system.passes.blur_pass.get_images().scaled_ldr_images.len() - 1) as u32{
-                            (frame_system.passes.blur_pass.get_images().scaled_ldr_images.len() - 1) as u32
-                        }else{
-                            debug_level
-                        }
-                    };
-                    //now we can savely return the n-th image
-                    frame_system.passes.blur_pass.get_images().scaled_ldr_images[level as usize].clone()
+        //TO find the ldr image we analyse the debug settings
+        let ldr_level_image = {
+            let debug_level = {
+                self.engine_settings.lock().expect("failed to lock settings")
+                .get_render_settings().get_debug_settings().ldr_debug_view_level
+            };
 
-                };
+            let image_count = frame_system.get_passes().blur_pass.get_images().scaled_ldr_images.len() - 1;
+
+            let level = {
+                if debug_level > image_count as u32{
+                    image_count as u32
+                }else{
+                    debug_level
+                }
+            };
+            //now we can savely return the n-th image
+            frame_system.get_passes().blur_pass.get_images().scaled_ldr_images[level as usize].clone()
+        };
+
+        //create the descriptor set for the current image
+        let ldr_frag = frame_system.get_passes().object_pass.get_images().ldr_fragments.clone();
+        let forward_depth = frame_system.get_passes().object_pass.get_images().forward_hdr_depth.clone();
+        let blur = frame_system.get_passes().blur_pass.get_images().after_blur_v.clone();
+        let dir_shadow = frame_system.get_passes().shadow_pass.get_images().directional_shadows.clone();
+
+        let attachments_ds = PersistentDescriptorSet::start(self.pipeline.get_pipeline_ref(), 0) //at binding 0
+            .add_sampled_image(
+                ldr_frag,
+                self.screen_sampler.clone()
+            )
+            .expect("failed to add hdr_image to postprogress descriptor set")
+            //needs to be a input attachment since we don't want to also downsample the depths
+            .add_image(
+                forward_depth
+            )
+            .expect("failed to add depth map")
+            .add_sampled_image(
+                blur,
+                self.screen_sampler.clone()
+            ).expect("failed to add hdr fragments to assemble stage")
+            .add_sampled_image(
+                ldr_level_image,
+                self.screen_sampler.clone()
+            ).expect("failed to add average lumiosity texture to assemble stage")
+            .add_sampled_image(
+                dir_shadow,
+                self.screen_sampler.clone()
+            ).expect("failed to add shadow texture to assemble stage")
+            .build()
+            .expect("failed to build postprogress cb");
+
+        //the settings for this pass
+        let settings = self.get_hdr_settings();
 
 
+        let settings_buffer = PersistentDescriptorSet::start(self.pipeline.get_pipeline_ref(), 1) //At binding 1
+            .add_buffer(settings)
+            .expect("failed to add hdr image settings buffer to post progress attachment")
+            .add_buffer(self.average_buffer.clone())
+            .expect("failed to add lumiosity buffer to assemble pass")
+            .build()
+            .expect("failed to build settings attachment for postprogress pass");
 
-                //create the descriptor set for the current image
-                let attachments_ds = PersistentDescriptorSet::start(self.pipeline.get_pipeline_ref(), 0) //at binding 0
-                    .add_sampled_image(
-                        frame_system.passes.object_pass.get_images().ldr_fragments.clone(),
-                        self.screen_sampler.clone()
-                    )
-                    .expect("failed to add hdr_image to postprogress descriptor set")
-                    //needs to be a input attachment since we don't want to also downsample the depths
-                    .add_image(frame_system.passes.object_pass.get_images().forward_hdr_depth.clone())
-                    .expect("failed to add depth map")
-                    .add_sampled_image(
-                        frame_system.passes.blur_pass.get_images().after_blur_v.clone(),
-                        self.screen_sampler.clone()
-                    ).expect("failed to add hdr fragments to assemble stage")
-                    .add_sampled_image(
-                        ldr_level_image,
-                        self.screen_sampler.clone()
-                    ).expect("failed to add average lumiosity texture to assemble stage")
-                    .add_sampled_image(
-                        frame_system.passes.shadow_pass.get_images().directional_shadows.clone(),
-                        self.screen_sampler.clone()
-                    ).expect("failed to add shadow texture to assemble stage")
-                    .build()
-                    .expect("failed to build postprogress cb");
+        //perform the post progress
+        new_cb = new_cb.draw(
+            self.pipeline.get_pipeline_ref(),
+            frame_system.get_dynamic_state().clone(),
+            vec![self.screen_vertex_buffer.clone()],
+            (attachments_ds, settings_buffer),
+            ()
+        ).expect("failed to add draw call for the post progress plane");
 
-                //the settings for this pass
-                let settings = self.get_hdr_settings();
+        //Change back into neutral state
+        new_cb = new_cb.end_render_pass().expect("failed to end assemble stage");
 
-                let settings_buffer = PersistentDescriptorSet::start(self.pipeline.get_pipeline_ref(), 1) //At binding 1
-                    .add_buffer(settings)
-                    .expect("failed to add hdr image settings buffer to post progress attachment")
-                    .add_buffer(self.average_buffer.clone())
-                    .expect("failed to add lumiosity buffer to assemble pass")
-                    .build()
-                    .expect("failed to build settings attachment for postprogress pass");
+        new_cb
+    }
 
-                //perform the post progress
-                let mut command_buffer = cb;
-                command_buffer = command_buffer.draw(
-                    self.pipeline.get_pipeline_ref(),
-                    frame_system.get_dynamic_state().clone(),
-                    vec![self.screen_vertex_buffer.clone()],
-                    (attachments_ds, settings_buffer),
-                    ()
-                ).expect("failed to add draw call for the post progress plane");
-
-                return FrameStage::Postprogress(command_buffer);
-            },
-            _ => {
-                println!("Can't execute post_progress, wrong frame", );
-            }
-        }
-
-        command_buffer
+    ///Returns a vertexbuffer representing the screen.
+    pub fn get_screen_vb(&self) -> Arc<vulkano::buffer::BufferAccess + Send + Sync>{
+        self.screen_vertex_buffer.clone()
     }
 }
 

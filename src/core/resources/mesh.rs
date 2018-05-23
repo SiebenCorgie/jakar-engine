@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 use cgmath::*;
 use collision;
 
-use render::frame_system::{FrameStage, FrameSystem};
+use render::frame_system::{FrameSystem};
 use render::light_system::LightSystem;
 use render::render_traits::ForwardRenderAble;
 
@@ -249,62 +249,52 @@ impl Mesh {
     ///Renders this mesh if the supplied framestage is in the froward stage
     pub fn draw(
         &self,
-        frame_stage: FrameStage,
+        command_buffer: AutoCommandBufferBuilder,
         frame_system: &FrameSystem,
         light_system: &LightSystem,
         transform: Matrix4<f32>,
-    ) -> FrameStage{
+    ) -> AutoCommandBufferBuilder{
         //Before doing anything, we check if that mesh is active, if not we just pass
         if self.vertex_buffer.is_none(){
-            return frame_stage;
+            return command_buffer;
         }
 
-        match frame_stage{
-            FrameStage::Forward(cb) => {
+        let material_locked = self.get_material();
+        let mut material = material_locked
+        .lock()
+        .expect("failed to lock mesh for command buffer generation");
 
-                let material_locked = self.get_material();
-                let mut material = material_locked
-                .lock()
-                .expect("failed to lock mesh for command buffer generation");
+        let pipeline = material.get_vulkano_pipeline();
 
-                let pipeline = material.get_vulkano_pipeline();
+        let set_01 = {
+            //aquirre the tranform matrix and generate the new set_01
+            material.get_set_01(transform)
+        };
 
-                let set_01 = {
-                    //aquirre the tranform matrix and generate the new set_01
-                    material.get_set_01(transform)
-                };
+        let set_02 = {
+            material.get_set_02()
+        };
 
-                let set_02 = {
-                    material.get_set_02()
-                };
+        let set_03 = {
+            material.get_set_03()
+        };
 
-                let set_03 = {
-                    material.get_set_03()
-                };
+        let set_04 = {
+            material.get_set_04(&light_system, &frame_system)
+        };
 
-                let set_04 = {
-                    material.get_set_04(&light_system, &frame_system)
-                };
+        //extend the current command buffer by this mesh
+        let new_cb = command_buffer.draw_indexed(
+            pipeline,
+            frame_system.get_dynamic_state().clone(),
+            self.get_vertex_buffer().expect("Found no vertex buffer, should not happen"), //vertex buffer (static usually)
+            self.get_index_buffer().expect("Found no index buffer, should not happen"), //index buffer
+            (set_01, set_02, set_03, set_04), //descriptor sets (currently static)
+            ()
+        )
+        .expect("Failed to draw mesh in command buffer!");
 
-                //extend the current command buffer by this mesh
-                let new_cb = cb.draw_indexed(
-                    pipeline,
-                    frame_system.get_dynamic_state().clone(),
-                    self.get_vertex_buffer().expect("Found no vertex buffer, should not happen"), //vertex buffer (static usually)
-                    self.get_index_buffer().expect("Found no index buffer, should not happen"), //index buffer
-                    (set_01, set_02, set_03, set_04), //descriptor sets (currently static)
-                    ()
-                )
-                .expect("Failed to draw mesh in command buffer!");
-
-                return FrameStage::Forward(new_cb);
-            },
-            _ => {
-                println!("Tried to draw mesh in wrong stage!", );
-            }
-        }
-
-        return frame_stage;
+        new_cb
     }
 
 }

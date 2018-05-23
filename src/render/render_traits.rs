@@ -1,10 +1,12 @@
-use render::frame_system::{FrameStage, FrameSystem};
+use render::frame_system::FrameSystem;
 use render::light_system::LightSystem;
 
 use core::next_tree::attributes::NodeAttributes;
 use core::next_tree::content::ContentType;
 use core::next_tree::jobs::SceneJobs;
 use jakar_tree::node::NodeController;
+
+use vulkano::command_buffer::AutoCommandBufferBuilder;
 
 use cgmath::*;
 use collision::*;
@@ -19,11 +21,11 @@ pub trait ForwardRenderAble {
     ///the same stage again (mostly the forward stage).
     fn draw(
         &self,
-        frame_stage: FrameStage,
+        command_buffer: AutoCommandBufferBuilder,
         frame_system: &FrameSystem,
         light_system: &LightSystem,
         transform: Matrix4<f32>,
-    ) -> FrameStage;
+    ) -> AutoCommandBufferBuilder;
 
     ///Returns the bound of this object
     fn get_bound(&self) -> Aabb3<f32>;

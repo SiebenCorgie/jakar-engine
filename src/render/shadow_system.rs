@@ -15,7 +15,6 @@ use jakar_tree::node::Node;
 
 use core::resource_management::asset_manager;
 use core::engine_settings::EngineSettings;
-use render::frame_system::FrameStage;
 use render::light_system::LightStore;
 use render::frame_system::FrameSystem;
 use render::pipeline::Pipeline;
@@ -240,34 +239,39 @@ impl ShadowSystem{
     }
 
     //TODO configure shadow pass by light which was send here.
-
+    ///Takes a neutral state command buffer, changes into the shadow pass, renders all
+    /// shadowmaps and the changes back into neutral mode.
     pub fn render_shadows(
         &mut self,
-        command_buffer: FrameStage,
+        command_buffer: AutoCommandBufferBuilder,
         frame_system: &FrameSystem,
         asset_manager: &mut asset_manager::AssetManager,
         light_store: &mut LightStore,
-    ) -> FrameStage{
+    ) -> AutoCommandBufferBuilder{
+        //First change into the first shadow pass
+        //first of all try to get the main frame buffer, if not possible, panic
+        let shadow_fb = frame_system.get_passes().shadow_pass.get_fb_directional();
+        //For successfull clearing we generate a vector for all images.
+        let clearing_values = vec![
+            1f32.into(), //directional shadows
+        ];
+        let mut new_cb = command_buffer.begin_render_pass(shadow_fb, false, clearing_values)
+            .expect("failed to start shadow renderpass for the forward system");
+        //Render forward shadows
+        let mut new_cb = self.render_directional_light_map(
+            new_cb,
+            light_store,
+            asset_manager,
+            frame_system
+        );
 
-        match command_buffer{
-            FrameStage::Shadow(cb) =>{
+        //Now end directional shadow pass
+        new_cb = new_cb.end_render_pass().expect("failed to end directional light shadow pass");
 
-                let mut new_cb = cb;
+        //TODO change to other subpass for spot and point light rendering.
 
-                //Currently only rendering the first cascade of each directional light
-                new_cb = self.render_directional_light_map(
-                    new_cb,
-                    light_store,
-                    asset_manager,
-                    frame_system
-                );
-
-                return FrameStage::Shadow(new_cb);
-            }
-            _ => println!("wrong frame stage, not shadow!", ),
-        }
-
-        command_buffer
+        //return the cb with the shadow map rendering
+        new_cb
     }
     //Renders all directional light in the light store to the several targets on the directional ligh
     // shadow map.
@@ -301,7 +305,7 @@ impl ShadowSystem{
             };
             //image dimensions
             let img_dim = {
-                let tmp_dim = frame_system.passes.shadow_pass.get_images().directional_shadows.dimensions();
+                let tmp_dim = frame_system.get_passes().shadow_pass.get_images().directional_shadows.dimensions();
 
                 [tmp_dim[0] as f32, tmp_dim[1] as f32]
             };

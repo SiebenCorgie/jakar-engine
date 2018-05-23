@@ -6,7 +6,7 @@ use render::render_passes::{RenderPasses, RenderPassConf};
 use render::pipeline_builder;
 use render::shader_manager::ShaderManager;
 
-use std::sync::{Arc};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 use vulkano;
 
@@ -56,7 +56,7 @@ pub struct PipelineManager {
     device: Arc<vulkano::device::Device>,
     //A copy the available render passes. They will be used to translate the pass used in the
     //pipeline config
-    passes: RenderPasses,
+    passes: Arc<Mutex<RenderPasses>>,
 }
 
 
@@ -66,7 +66,7 @@ impl PipelineManager{
     ///Creates a pipeline Manager without any pipeline, they have to be loaded from a config.
     pub fn new(
         device: Arc<vulkano::device::Device>,
-        passes: RenderPasses,
+        passes: Arc<Mutex<RenderPasses>>,
     ) -> Self
     {
         PipelineManager{
@@ -117,7 +117,7 @@ impl PipelineManager{
         };
 
         let (pass, shader_set) = (config.render_pass.clone(), config.shader_set.clone());
-        let (ren_pass, subpass_id) = self.passes.conf_to_pass(pass);
+        let (ren_pass, subpass_id) = self.get_passes().conf_to_pass(pass);
 
         let pipe = pipeline::Pipeline::new(
             self.device.clone(),
@@ -159,7 +159,7 @@ impl PipelineManager{
 
 
         let (pass, shader_set) = (needed_configuration.render_pass.clone(), needed_configuration.shader_set.clone());
-        let (render_pass, subpass_id) = self.passes.conf_to_pass(pass);
+        let (render_pass, subpass_id) = self.get_passes().conf_to_pass(pass);
         //now build the new pipeline and put it in an arc for cloning
         let new_pipe = Arc::new(pipeline::Pipeline::new(
             self.device.clone(),
@@ -283,5 +283,10 @@ impl PipelineManager{
 
         //Return it
         pipe_name
+    }
+
+    ///Returns the locked passes struct of this manager.
+    pub fn get_passes<'a>(&'a self) -> MutexGuard<'a, RenderPasses>{
+        self.passes.lock().expect("Failed to lock renderpasses")
     }
 }

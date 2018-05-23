@@ -18,6 +18,7 @@ use render::light_system;
 use render::render_passes::{RenderPassConf, ObjectPassSubPasses};
 use render::window::Window;
 use render::shadow_system::ShadowSystem;
+use render::forward_system::ForwardSystem;
 
 use core::engine_settings;
 use tools::engine_state_machine::RenderState;
@@ -294,12 +295,14 @@ impl BuildRender for RenderBuilder{
         let uniform_manager = Arc::new(Mutex::new(uniform_manager_tmp));
 
         println!("Starting frame passes", );
-        let passes = render::render_passes::RenderPasses::new(
+        let passes_creation = render::render_passes::RenderPasses::new(
             device.clone(),
             queue.clone(),
             swapchain.format(),
             self.settings.clone(),
         );
+
+        let passes = Arc::new(Mutex::new(passes_creation));
 
         println!("Starting frame system", );
         //now create us a default frame system
@@ -362,7 +365,6 @@ impl BuildRender for RenderBuilder{
         let post_progress = post_progress::PostProgress::new(
             self.settings.clone(),
             post_progress_pipeline,
-            resolve_pipeline,
             blur_pipeline,
             device.clone(),
             queue.clone(),
@@ -380,6 +382,13 @@ impl BuildRender for RenderBuilder{
             device.clone(), self.settings.clone(), pipeline_manager_arc.clone()
         );
 
+        let forward_system = ForwardSystem::new(
+            self.settings.clone(),
+            device.clone(),
+            queue.clone(),
+            resolve_pipeline,
+        );
+
         println!("Finished Render Setup", );
         //Pass everthing to the struct
 
@@ -394,6 +403,7 @@ impl BuildRender for RenderBuilder{
             frame_system,
             passes,
             shadow_system,
+            forward_system,
             light_system,
             post_progress,
 

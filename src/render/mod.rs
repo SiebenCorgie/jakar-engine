@@ -29,7 +29,7 @@ pub mod uniform_manager;
 
 ///Handles the rendering of everything forward rendering related, also emmits the sorted hdr values
 /// of this frame used for bluring.
-//pub mod forward_system;
+pub mod forward_system;
 
 ///Provides some structs and methodes for the postprogressing of a frame
 pub mod post_progress;
@@ -47,55 +47,3 @@ pub mod shader_manager;
 
 ///Handels the rendering of all shadow maps
 pub mod shadow_system;
-
-
-
-
-// A Helper enum to specify which supass id something want, manly used in material creation
-pub enum SubPassType {
-    LightCompute,
-    Shadow,
-    Forward,
-    HdrSorting,
-    Blur,
-    ComputeAverageLumiosity,
-    PostProgress,
-    Finished
-}
-
-impl SubPassType{
-    pub fn get_id(&self) -> u32{
-        match self{
-            //ComputePass
-            &SubPassType::LightCompute => { //is in its own compute queue
-                0
-            },
-            //Shadow pass
-            &SubPassType::Shadow => { //is in its own compute queue
-                0
-            },
-            //MainPass
-            &SubPassType::Forward =>{ //the first pass in the rendering
-                0
-            },
-            &SubPassType::HdrSorting => {
-                1
-            },
-            //Blur pass
-            &SubPassType::Blur => {
-                0
-            },
-            //LumisotyComputePass
-            &SubPassType::ComputeAverageLumiosity => {
-                0
-            },
-            //AssemblePass
-            &SubPassType::PostProgress => { //the second
-                0
-            },
-            &SubPassType::Finished => { //no actual renderpass atm, alter maybe
-                1
-            }
-        }
-    }
-}

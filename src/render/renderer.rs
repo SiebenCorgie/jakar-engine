@@ -10,6 +10,7 @@ use render::post_progress;
 use render::light_system;
 use render::render_passes::RenderPasses;
 use render::shadow_system;
+use render::forward_system::ForwardSystem;
 
 use core::next_tree::{SceneTree, ValueTypeBool, SceneComparer};
 use core::engine_settings;
@@ -102,9 +103,10 @@ pub struct Renderer {
 
     frame_system: frame_system::FrameSystem,
     shadow_system: shadow_system::ShadowSystem,
+    forward_system: ForwardSystem,
     light_system: light_system::LightSystem,
 
-    render_passes: RenderPasses,
+    render_passes: Arc<Mutex<RenderPasses>>,
 
     ///The post progresser
     post_progress: post_progress::PostProgress,
@@ -135,8 +137,9 @@ impl Renderer {
         //the used frame system
         frame_system: frame_system::FrameSystem,
 
-        render_passes: RenderPasses,
+        render_passes: Arc<Mutex<RenderPasses>>,
         shadow_system: shadow_system::ShadowSystem,
+        forward_system: ForwardSystem,
         light_system: light_system::LightSystem,
         post_progress: post_progress::PostProgress,
 
@@ -156,6 +159,7 @@ impl Renderer {
             //static post_progress pass.AcquireError
             frame_system: frame_system,
             shadow_system: shadow_system,
+            forward_system: forward_system,
             render_passes: render_passes,
             light_system: light_system,
             post_progress: post_progress,
@@ -300,52 +304,17 @@ impl Renderer {
         if should_capture{
             time_step = Instant::now();
         }
-        let mesh_comparer = SceneComparer::new()
-        .with_value_type(ValueTypeBool::none().with_mesh())
-        .with_frustum(asset_manager.get_camera().get_frustum_bound())
-        .with_cull_distance(0.1, asset_manager.get_camera().get_view_projection_matrix())
-        .without_transparency();
 
-        let mesh_comp_trans = mesh_comparer.clone()
-        .with_transparency();
-        //now we can actually start the frame
-        //get all opaque meshes
-        let opaque_meshes = asset_manager
-        .get_active_scene()
-        .copy_all_nodes(&Some(mesh_comparer));
-        //get all translucent meshes
-        let translucent_meshes = asset_manager
-        .get_active_scene()
-        .copy_all_nodes(&Some(mesh_comp_trans));
-        //now send the translucent meshes to another thread for ordering
-        let trans_recv = render_helper::order_by_distance(
-            translucent_meshes, asset_manager.get_camera()
-        );
-
-        if should_capture{
-            let time_needed = time_step.elapsed().subsec_nanos();
-            println!("RENDER INFO: ", );
-            println!("\tRE: Nedded {} ms to get all opaque meshes", time_needed as f32 / 1_000_000.0);
-            time_step = Instant::now()
-        }
-
-        //While the cpu is gathering the the translucent meshes based on the distance to the
-        //camera, we start to build the command buffer for the opaque meshes, unordered actually.
-
-
-        //get out selfs the image we want to render to
         //start the frame
-        let mut command_buffer = self.frame_system.new_frame(
-            self.images[image_number].clone()
-        );
+        let mut command_buffer = self.frame_system.new_frame();
 
         //First of all we compute the light clusters
-        //Since we currently have no nice system to track
         let light_buffer_future = self.light_system.update_light_set(
             &mut self.shadow_system, asset_manager
         );
 
-        //we can now join the acquire future and the light_set_future
+        //we can now join the acquire future and the light_set_future representing the moment
+        // were we successfully created the light buffers
         let after_light_future: Box<GpuFuture + Send + Sync> = Box::new(acquire_future.join(light_buffer_future));
 
         if should_capture{
@@ -354,20 +323,19 @@ impl Renderer {
             time_step = Instant::now()
         }
 
-        //now execute the compute shader
+        //now execute the compute shader for generating the lights
         command_buffer = self.light_system.dispatch_compute_shader(
             command_buffer,
         );
+
         if should_capture{
             let time_needed = time_step.elapsed().subsec_nanos();
             println!("\tRE: Nedded {} ms to dispatch compute shader", time_needed as f32 / 1_000_000.0);
             time_step = Instant::now()
         }
 
-        //Now we can end this stage (Pre compute)
-        command_buffer = self.frame_system.next_pass(command_buffer);
 
-        //Its time to render all the shadow maps...
+        //Its time to render all the shadow maps.
         command_buffer = self.shadow_system.render_shadows(
             command_buffer,
             &self.frame_system,
@@ -375,238 +343,27 @@ impl Renderer {
             self.light_system.get_light_store()
         );
 
-        //change to the forward pass
-        command_buffer = self.frame_system.next_pass(command_buffer);
-
+        //Now we render all the forward stuff
+        command_buffer = self.forward_system.do_forward_shading(
+            &self.frame_system,
+            &self.light_system,
+            &self.post_progress,
+            asset_manager,
+            command_buffer
+        );
 
         //Since we fininshed the primary work on the asset manager, change to gpu working state
         self.set_working_gpu();
-
-
-        //now we are in the main render pass in the forward pass, using this to draw all meshes
-        //add all opaque meshes to the command buffer
-        for opaque_mesh in opaque_meshes.iter(){
-            let transform = opaque_mesh.get_attrib().get_matrix();
-
-            if let ContentType::Mesh(ref mesh) = opaque_mesh.get_value(){
-
-                let draw_start = Instant::now();
-
-                let mesh_lck = mesh.lock().expect("failed to lock mesh for drawing!");
-                command_buffer = mesh_lck.draw(
-                    command_buffer,
-                    &self.frame_system,
-                    &self.light_system,
-                    transform,
-                );
-
-                self.debug_info.update_avr_mesh(draw_start.elapsed());
-
-            }else{
-                println!("Mesh was no actual mesh...", );
-                continue;
-            }
-        }
-        if should_capture{
-            let time_needed = time_step.elapsed().subsec_nanos();
-            println!("\tRE: Nedded {} ms to draw all opaque meshes", time_needed as f32 / 1_000_000.0);
-            time_step = Instant::now()
-        }
-
-        //now draw debug data of the meshes if turned on
-        if sould_draw_bounds{
-            //draw all opaque
-            for mesh in opaque_meshes.iter(){
-                command_buffer = render_helper::add_bound_draw(
-                     command_buffer,
-                     self.pipeline_manager.clone(),
-                     mesh,
-                     self.device.clone(),
-                     self.uniform_manager.clone(),
-                     &self.frame_system.get_dynamic_state()
-                 );
-            }
-            if should_capture{
-                let time_needed = time_step.elapsed().subsec_nanos();
-                println!("\tRE: Nedded {} ms to draw all mesh bounds!", time_needed as f32 / 1_000_000.0);
-                time_step = Instant::now()
-            }
-        }
-
-
-        //now try to get the ordered list of translucent meshes and add them as well
-        match trans_recv.recv(){
-            Ok(ord_tr) => {
-
-                for translucent_mesh in ord_tr.iter(){
-                    let transform = translucent_mesh.get_attrib().get_matrix();
-
-                    if let ContentType::Mesh(ref mesh) = translucent_mesh.get_value(){
-                        let mesh_lck = mesh.lock().expect("failed to lock mesh for drawing!");
-                        command_buffer = mesh_lck.draw(
-                            command_buffer,
-                            &self.frame_system,
-                            &self.light_system,
-                            transform,
-                        );
-                    }else{
-                        println!("Mesh was no actual mesh...", );
-                        continue;
-                    }
-                }
-
-                if should_capture{
-                    let time_needed = time_step.elapsed().subsec_nanos();
-                    println!("\tRE: Nedded {} ms to draw all transparent meshes!", time_needed as f32 / 1_000_000.0);
-                    time_step = Instant::now()
-                }
-
-                //now draw debug data of the meshes if turned on
-                if sould_draw_bounds{
-                    //draw the transparent bounds
-                    for mesh in ord_tr.iter(){
-                        command_buffer = render_helper::add_bound_draw(
-                             command_buffer,
-                             self.pipeline_manager.clone(),
-                             mesh,
-                             self.device.clone(),
-                             self.uniform_manager.clone(),
-                             &self.frame_system.get_dynamic_state()
-                         );
-                    }
-
-                    if should_capture{
-                        let time_needed = time_step.elapsed().subsec_nanos();
-                        println!("\tRE: Nedded {} ms to draw all transparent mesh bounds!", time_needed as f32 / 1_000_000.0);
-                        time_step = Instant::now()
-                    }
-                    //also draw the light bounds
-                    let all_point_lights = asset_manager.get_active_scene().copy_all_nodes(
-                        &Some(SceneComparer::new().with_value_type(
-                            ValueTypeBool::none().with_point_light()
-                        )));
-
-                    for light in all_point_lights.iter(){
-                        command_buffer = render_helper::add_bound_draw(
-                             command_buffer,
-                             self.pipeline_manager.clone(),
-                             light,
-                             self.device.clone(),
-                             self.uniform_manager.clone(),
-                             &self.frame_system.get_dynamic_state()
-                         );
-                    }
-
-                    let all_spot_lights = asset_manager.get_active_scene().copy_all_nodes(
-                        &Some(SceneComparer::new().with_value_type(
-                            ValueTypeBool::none().with_spot_light()
-                        )));
-
-                    for light in all_spot_lights.iter(){
-                        command_buffer = render_helper::add_bound_draw(
-                             command_buffer,
-                             self.pipeline_manager.clone(),
-                             light,
-                             self.device.clone(),
-                             self.uniform_manager.clone(),
-                             &self.frame_system.get_dynamic_state()
-                         );
-                    }
-                    if should_capture{
-                        let time_needed = time_step.elapsed().subsec_nanos();
-                        println!("\tRE: Nedded {} ms to draw light bounds!", time_needed as f32 / 1_000_000.0);
-                        time_step = Instant::now()
-                    }
-                }
-
-            },
-            Err(er) => {
-                println!("Something went wrong while ordering the translucent meshes: {}", er);
-            }
-        }
-
-
 
         if should_capture{
             println!("\tRE: Finished adding meshes", );
         }
 
-
-        //finished the forward pass, change to the postprogressing pass
-        command_buffer = self.frame_system.next_pass(command_buffer);
-
-        if should_capture{
-            println!("\tRE: Changed to subpass", );
-        }
-
-        //Sort HDR's
-        command_buffer = self.post_progress.sort_hdr(
-            command_buffer,
-            &self.frame_system
-        );
-
-        if should_capture{
-            let time_needed = time_step.elapsed().subsec_nanos();
-            println!("\tRE: Nedded {} ms to sort hdr!", time_needed as f32 / 1_000_000.0);
-            time_step = Instant::now()
-        }
-
-        //Performe next pass
-        command_buffer = self.frame_system.next_pass(command_buffer);
-
-        //Do BlurH
-        command_buffer = self.post_progress.execute_blur(
+        //Do all post progressing and finally write the whole frame to the swapchain image
+        command_buffer = self.post_progress.do_post_progress(
             command_buffer,
             &self.frame_system,
-        );
-
-        //Change to BlurV
-        command_buffer = self.frame_system.next_pass(command_buffer);
-        //Do BlurV
-        command_buffer = self.post_progress.execute_blur(
-            command_buffer,
-            &self.frame_system,
-        );
-
-        if should_capture{
-            let time_needed = time_step.elapsed().subsec_nanos();
-            println!("\tRE: Nedded {} ms to blur!", time_needed as f32 / 1_000_000.0);
-            time_step = Instant::now()
-        }
-
-        //Change to compute average lumiosity stage
-        command_buffer = self.frame_system.next_pass(command_buffer);
-        //Compute the lumiosity
-        //We only do the compute thing if we really wanna use the compute shader
-        let use_auto_exposure = {
-            self.engine_settings
-            .lock()
-            .expect("failed to lock settings")
-            .get_render_settings()
-            .get_exposure().use_auto_exposure
-        };
-
-
-        if use_auto_exposure{
-            command_buffer = self.post_progress.compute_lumiosity(
-                command_buffer,
-                &self.frame_system,
-            );
-        }
-
-        if should_capture{
-            let time_needed = time_step.elapsed().subsec_nanos();
-            println!("\tRE: Nedded {} ms to do auto exposure!", time_needed as f32 / 1_000_000.0);
-            time_step = Instant::now()
-        }
-
-        //Change to assamble stage
-        command_buffer = self.frame_system.next_pass(command_buffer);
-
-        //perform the post progressing
-        command_buffer = self.post_progress.assemble_image(
-            command_buffer,
-            &self.frame_system
+            self.images[image_number].clone()
         );
 
 
@@ -616,27 +373,12 @@ impl Renderer {
             time_step = Instant::now()
         }
 
-        if should_capture{
-            println!("\tRE: Added postprogress thingy", );
-        }
 
 
-        //now finish the frame
-        command_buffer = self.frame_system.next_pass(command_buffer);
-        //And retrieve the ended command buffer
-        let finished_command_buffer = {
-            match self.frame_system.finish_frame(command_buffer){
-                Ok(cb) => cb,
-                Err(er) =>{
-                    println!("{}", er);
-                    return;// this_frame;
-                }
-            }
-        };
 
-        if should_capture{
-            println!("\tRE: Ending frame", );
-        }
+
+        //thanks firewater
+        let real_cb = command_buffer.build().expect("failed to build command buffer");
 
         if should_capture{
             let time_needed = time_step.elapsed().subsec_nanos();
@@ -644,14 +386,9 @@ impl Renderer {
             time_step = Instant::now()
         }
 
-        //thanks firewater
-        let real_cb = finished_command_buffer.build().expect("failed to build command buffer");
-
         //now we submitt the frame, this will add the command buffer to the command queue
         //we then tell the gpu/cpu to present the new image and signal the fence for this frame as well as flush all
         //the operations
-
-
 
         let mut this_frame =
         match self.last_frame_end{
@@ -705,7 +442,6 @@ impl Renderer {
 
         //update the debug info with this frame
         self.debug_info.update();
-
         //Box::new(after_frame)
         //now overwrite the current future
         //self.last_frame_end = Some(this_frame)
@@ -742,7 +478,7 @@ impl Renderer {
     }
 
     ///Returns the available renderpasses
-    pub fn get_render_passes(&self) -> RenderPasses{
+    pub fn get_render_passes(&self) -> Arc<Mutex<RenderPasses>>{
         self.render_passes.clone()
     }
 

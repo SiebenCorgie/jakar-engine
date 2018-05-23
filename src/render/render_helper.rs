@@ -17,6 +17,7 @@ use std::collections::BTreeMap;
 use cgmath::*;
 use vulkano;
 use vulkano::descriptor::descriptor_set::PersistentDescriptorSet;
+use vulkano::command_buffer::AutoCommandBufferBuilder;
 
 ///Returns a thread handle which, at some point returns a ordered vector of the provided
 /// `meshes` based on their distance to the `camera` (the furthest away is the first mesh, the neares is the last).
@@ -70,119 +71,110 @@ pub fn order_by_distance(
 
 ///Function used to draw a line of bounds
 pub fn add_bound_draw(
-    command_buffer: frame_system::FrameStage,
+    command_buffer: AutoCommandBufferBuilder,
     pipeline_manager: Arc<Mutex<pipeline_manager::PipelineManager>>,
     object_node: &node::Node<content::ContentType, jobs::SceneJobs, attributes::NodeAttributes>,
     device: Arc<vulkano::device::Device>,
     uniform_manager: Arc<Mutex<uniform_manager::UniformManager>>,
     dynamic_state: &vulkano::command_buffer::DynamicState,
-) -> frame_system::FrameStage{
+) -> AutoCommandBufferBuilder{
 
-    //get the current command buffer stage id
-    let id = command_buffer.get_id();
+    //Create a vertex buffer for the bound
+    let mut pipeline_needed = pipeline_builder::PipelineConfig::default();
+    //Setup the wireframe shader and the topology type
+    pipeline_needed.topology_type = vulkano::pipeline::input_assembly::PrimitiveTopology::LineList;
+    pipeline_needed.shader_set = "Wireframe".to_string();
+    pipeline_needed.render_pass = RenderPassConf::ObjectPass(ObjectPassSubPasses::ForwardRenderingPass);
 
-    match command_buffer{
-        frame_system::FrameStage::Forward(cb) => {
+    let mut pipeline_lck = pipeline_manager.lock().expect("failed to lock pipeline manager");
+    let pipeline = pipeline_lck.get_pipeline_by_config(pipeline_needed);
+    //now we get out self the points of the bound and create a vertex buffer form it
 
-            //Create a vertex buffer for the bound
-            let mut pipeline_needed = pipeline_builder::PipelineConfig::default();
-            //Setup the wireframe shader and the topology type
-            pipeline_needed.topology_type = vulkano::pipeline::input_assembly::PrimitiveTopology::LineList;
-            pipeline_needed.shader_set = "Wireframe".to_string();
-            pipeline_needed.render_pass = RenderPassConf::ObjectPass(ObjectPassSubPasses::ForwardRenderingPass);
+    let mut min = object_node.get_attrib().get_value_bound().min; //already in worldspace
+    let mut max = object_node.get_attrib().get_value_bound().max; //already in worldspace
+    //Now we transform them to match the object scale and location
+    let value_vertices = create_vertex_buffer_for_bound(min, max, [1.0, 1.0, 0.0, 1.0]);
+    let node_vertices = create_vertex_buffer_for_bound(
+        object_node.get_attrib().bound.min, object_node.get_attrib().bound.max,
+        [0.0, 1.0, 1.0, 1.0]
+    );
 
-            let mut pipeline_lck = pipeline_manager.lock().expect("failed to lock pipeline manager");
-            let pipeline = pipeline_lck.get_pipeline_by_config(pipeline_needed);
-            //now we get out self the points of the bound and create a vertex buffer form it
+    let indices: Vec<u32> = vec![
+        0,1, //lower quad
+        1,2,
+        2,3,
+        3,0,
+        0,5,//columns
+        1,6,
+        2,7,
+        3,4,
+        5,6,//upper quad
+        6,7,
+        7,4,
+        4,5
+    ];
 
-            let mut min = object_node.get_attrib().get_value_bound().min; //already in worldspace
-            let mut max = object_node.get_attrib().get_value_bound().max; //already in worldspace
-            //Now we transform them to match the object scale and location
-            let value_vertices = create_vertex_buffer_for_bound(min, max, [1.0, 1.0, 0.0, 1.0]);
-            let node_vertices = create_vertex_buffer_for_bound(
-                object_node.get_attrib().bound.min, object_node.get_attrib().bound.max,
-                [0.0, 1.0, 1.0, 1.0]
-            );
+    //Now make an indice buffer
+    let index_buffer = vulkano::buffer::cpu_access::CpuAccessibleBuffer
+        ::from_iter(device.clone(), vulkano::buffer::BufferUsage::all(), indices.iter().cloned())
+        .expect("failed to create index buffer 02");
 
-            let indices: Vec<u32> = vec![
-                0,1, //lower quad
-                1,2,
-                2,3,
-                3,0,
-                0,5,//columns
-                1,6,
-                2,7,
-                3,4,
-                5,6,//upper quad
-                6,7,
-                7,4,
-                4,5
-            ];
+    //and an vertex buffer
+    let value_vertex_buffer = vulkano::buffer::cpu_access::CpuAccessibleBuffer
+                                ::from_iter(
+                                    device.clone(),
+                                    vulkano::buffer::BufferUsage::all(),
+                                    value_vertices.iter().cloned())
+                                .expect("failed to create buffer");
 
-            //Now make an indice buffer
-            let index_buffer = vulkano::buffer::cpu_access::CpuAccessibleBuffer
-                ::from_iter(device.clone(), vulkano::buffer::BufferUsage::all(), indices.iter().cloned())
-                .expect("failed to create index buffer 02");
+    //and an vertex buffer
+    let node_vertex_buffer = vulkano::buffer::cpu_access::CpuAccessibleBuffer
+                                ::from_iter(
+                                    device.clone(),
+                                    vulkano::buffer::BufferUsage::all(),
+                                    node_vertices.iter().cloned())
+                                .expect("failed to create buffer");
 
-            //and an vertex buffer
-            let value_vertex_buffer = vulkano::buffer::cpu_access::CpuAccessibleBuffer
-                                        ::from_iter(
-                                            device.clone(),
-                                            vulkano::buffer::BufferUsage::all(),
-                                            value_vertices.iter().cloned())
-                                        .expect("failed to create buffer");
+    //We also have to create a descriptor set for the MVP stuff
+    let mvp_data = (uniform_manager.lock().expect("failed to lock uniform manager"))
+    .get_subbuffer_data(Matrix4::identity()); //We transformed the points our selfs
+                                                              //Thats why we use no model matrix
+    //now create the set for the value
+    let attachments_ds_value = PersistentDescriptorSet::start(pipeline.get_pipeline_ref(), 0)
+        .add_buffer(mvp_data.clone())
+        .expect("failed to add depth image")
+        .build()
+        .expect("failed to build postprogress cb");
 
-            //and an vertex buffer
-            let node_vertex_buffer = vulkano::buffer::cpu_access::CpuAccessibleBuffer
-                                        ::from_iter(
-                                            device.clone(),
-                                            vulkano::buffer::BufferUsage::all(),
-                                            node_vertices.iter().cloned())
-                                        .expect("failed to create buffer");
+    //now create the set for the node
+    let attachments_ds_node = PersistentDescriptorSet::start(pipeline.get_pipeline_ref(), 0)
+        .add_buffer(mvp_data)
+        .expect("failed to add depth image")
+        .build()
+        .expect("failed to build postprogress cb");
 
-            //We also have to create a descriptor set for the MVP stuff
-            let mvp_data = (uniform_manager.lock().expect("failed to lock uniform manager"))
-            .get_subbuffer_data(Matrix4::identity()); //We transformed the points our selfs
-                                                                      //Thats why we use no model matrix
-            //now create the set for the value
-            let attachments_ds_value = PersistentDescriptorSet::start(pipeline.get_pipeline_ref(), 0)
-                .add_buffer(mvp_data.clone())
-                .expect("failed to add depth image")
-                .build()
-                .expect("failed to build postprogress cb");
+    //draw the value bound
+    let mut new_cb = command_buffer.draw_indexed(
+        pipeline.get_pipeline_ref(),
+        dynamic_state.clone(),
+        vec![value_vertex_buffer],
+        index_buffer.clone(),
+        attachments_ds_value,  //now descriptor sets for now
+        () //also no constants
+    ).expect("failed to draw bounds!");
 
-            //now create the set for the node
-            let attachments_ds_node = PersistentDescriptorSet::start(pipeline.get_pipeline_ref(), 0)
-                .add_buffer(mvp_data)
-                .expect("failed to add depth image")
-                .build()
-                .expect("failed to build postprogress cb");
-
-            //draw the value bound
-            let mut new_cb = cb.draw_indexed(
-                pipeline.get_pipeline_ref(),
-                dynamic_state.clone(),
-                vec![value_vertex_buffer],
-                index_buffer.clone(),
-                attachments_ds_value,  //now descriptor sets for now
-                () //also no constants
-            ).expect("failed to draw bounds!");
-
-            //draw the node bound
-            new_cb = new_cb.draw_indexed(
-                pipeline.get_pipeline_ref(),
-                dynamic_state.clone(),
-                vec![node_vertex_buffer],
-                index_buffer,
-                attachments_ds_node,  //now descriptor sets for now
-                () //also no constants
-            ).expect("failed to draw bounds!");
+    //draw the node bound
+    new_cb = new_cb.draw_indexed(
+        pipeline.get_pipeline_ref(),
+        dynamic_state.clone(),
+        vec![node_vertex_buffer],
+        index_buffer,
+        attachments_ds_node,  //now descriptor sets for now
+        () //also no constants
+    ).expect("failed to draw bounds!");
 
 
-            frame_system::FrameStage::Forward(new_cb)
-        },
-        _ => { command_buffer }
-    }
+    new_cb
 }
 
 ///A helper function to create the vertex_buffer for a bound
