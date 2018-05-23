@@ -34,6 +34,7 @@ impl Pipeline{
         device: Arc<vulkano::device::Device>,
         pipeline_configuration: PipelineConfig,
         render_pass: Arc<RenderPassAbstract + Send + Sync>,
+        subpass_id: u32,
         shader_set: Arc<shader_manager::ToPipeline>,
     )
         -> Self
@@ -292,6 +293,7 @@ impl Pipeline{
             blending_pipeline.take().expect("failed to take final confgured pipeline"),
             &pipeline_configuration,
             render_pass,
+            subpass_id,
             device
         );
 

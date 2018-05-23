@@ -15,7 +15,7 @@ use render::frame_system;
 use render::pipeline_builder;
 use render::post_progress;
 use render::light_system;
-use render::render_passes::RenderPassConf;
+use render::render_passes::{RenderPassConf, ObjectPassSubPasses};
 use render::window::Window;
 use render::shadow_system::ShadowSystem;
 
@@ -329,7 +329,6 @@ impl BuildRender for RenderBuilder{
         .expect("failed to lock new pipeline manager")
         .get_pipeline_by_config(
             pipeline_builder::PipelineConfig::default()
-                .with_subpass_id(super::SubPassType::PostProgress.get_id())
                 .with_shader("PpExposure".to_string())
                 .with_render_pass(RenderPassConf::AssemblePass)
                 .with_depth_and_stencil_settings(
@@ -341,9 +340,8 @@ impl BuildRender for RenderBuilder{
         .expect("failed to lock new pipeline manager")
         .get_pipeline_by_config(
             pipeline_builder::PipelineConfig::default()
-                .with_subpass_id(super::SubPassType::HdrSorting.get_id())
                 .with_shader("PpResolveHdr".to_string())
-                .with_render_pass(RenderPassConf::ObjectPass)
+                .with_render_pass(RenderPassConf::ObjectPass(ObjectPassSubPasses::HdrSortingPass))
                 .with_depth_and_stencil_settings(
                     pipeline_builder::DepthStencilConfig::NoDepthNoStencil
                 ),
@@ -353,7 +351,6 @@ impl BuildRender for RenderBuilder{
         .expect("failed to lock new pipeline manager")
         .get_pipeline_by_config(
             pipeline_builder::PipelineConfig::default()
-                .with_subpass_id(super::SubPassType::Blur.get_id())
                 .with_shader("PpBlur".to_string())
                 .with_render_pass(RenderPassConf::BlurPass)
                 .with_depth_and_stencil_settings(

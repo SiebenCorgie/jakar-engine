@@ -660,15 +660,25 @@ impl RenderPasses{
         );
     }
 
-    pub fn conf_to_pass(&self, conf: RenderPassConf) -> Arc<RenderPassAbstract + Send + Sync>{
+    ///Returns the render pass and its subpass id for this configuratiuon
+    pub fn conf_to_pass(&self, conf: RenderPassConf) -> (Arc<RenderPassAbstract + Send + Sync>, u32){
         match conf{
-            RenderPassConf::ShadowPass => self.shadow_pass.render_pass.clone(),
-            RenderPassConf::ObjectPass => self.object_pass.render_pass.clone(),
-            RenderPassConf::BlurPass => self.blur_pass.render_pass.clone(),
-            RenderPassConf::AssemblePass => self.assemble.render_pass.clone(),
+            RenderPassConf::ShadowPass => (self.shadow_pass.render_pass.clone(), 0),
+            RenderPassConf::ObjectPass(subpass) => match subpass{
+                ObjectPassSubPasses::ForwardRenderingPass => (self.object_pass.render_pass.clone(), 0),
+                ObjectPassSubPasses::HdrSortingPass => (self.object_pass.render_pass.clone(), 1),
+            },
+            RenderPassConf::BlurPass => (self.blur_pass.render_pass.clone(), 0),
+            RenderPassConf::AssemblePass =>(self.assemble.render_pass.clone(), 0),
         }
     }
+}
 
+///Collection of all subpasses in the object pass
+#[derive(PartialEq, Clone)]
+pub enum ObjectPassSubPasses {
+    ForwardRenderingPass,
+    HdrSortingPass,
 }
 
 ///Enum listing all the render passes availabe. They need to be known since we build pipelines against them
@@ -677,7 +687,7 @@ impl RenderPasses{
 pub enum RenderPassConf{
     ///Currently renders everything, from the objects to the post progress.
     ShadowPass,
-    ObjectPass,
+    ObjectPass(ObjectPassSubPasses),
     BlurPass,
     AssemblePass,
 }

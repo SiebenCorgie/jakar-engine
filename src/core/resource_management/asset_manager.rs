@@ -30,6 +30,7 @@ use render;
 
 use render::uniform_manager;
 use render::pipeline_manager;
+use render::render_passes::{RenderPassConf, ObjectPassSubPasses};
 use render::shader::shader_inputs::default_data;
 
 use input::keymap::KeyMap;
@@ -447,7 +448,7 @@ impl AssetManager {
             //Assume that we want a material for the object pass
             let config = render::pipeline_builder::PipelineConfig::default()
             .with_shader("Pbr".to_string())
-            .with_render_pass(render::render_passes::RenderPassConf::ObjectPass);
+            .with_render_pass(RenderPassConf::ObjectPass(ObjectPassSubPasses::ForwardRenderingPass));
             pipe_lck.get_pipeline_by_config(config)
         };
 

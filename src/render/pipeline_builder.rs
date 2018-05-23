@@ -2,7 +2,7 @@ use vulkano::pipeline;
 use vulkano::pipeline::blend::AttachmentBlend;
 use vulkano::pipeline::blend::LogicOp;
 use vulkano::pipeline::input_assembly::PrimitiveTopology;
-use render::render_passes::RenderPassConf;
+use render::render_passes::{RenderPassConf, ObjectPassSubPasses};
 
 ///Collects all possible vertex buffer types
 pub enum VertexBufferType {
@@ -154,11 +154,6 @@ pub struct PipelineConfig {
 
     //Sets the render pass / subpass to use
     pub render_pass: RenderPassConf,
-
-    ///Sets the Id of the sub pass in its render pass to use. If you have only one pass (the main pass),
-    /// use the `id: 0`.
-    pub sub_pass_id: u32,
-
 }
 
 impl PipelineConfig{
@@ -189,8 +184,7 @@ impl PipelineConfig{
             blending_operation: BlendTypes::BlendPassThrough,
             disabled_logic_op: false,
             blending_constant: Some([0.0; 4]),
-            render_pass: RenderPassConf::ObjectPass,
-            sub_pass_id: 0,
+            render_pass: RenderPassConf::ObjectPass(ObjectPassSubPasses::ForwardRenderingPass),
         }
     }
 
@@ -298,15 +292,6 @@ impl PipelineConfig{
         self
     }
 
-    ///Sets the subpass for this pipeline.
-    #[inline]
-    pub fn with_subpass_id(mut self, new: u32) -> Self{
-        self.sub_pass_id = new;
-        self
-    }
-
-
-
 
     ///Compares self to another config, returns true if they are the same and false if not
     pub fn compare(&self, other_conf: &PipelineConfig) -> bool{
@@ -347,9 +332,6 @@ impl PipelineConfig{
         }
         //TODO make more robust
         if self.render_pass != other_conf.render_pass{
-            return false;
-        }
-        if self.sub_pass_id != other_conf.sub_pass_id{
             return false;
         }
 

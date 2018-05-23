@@ -7,6 +7,7 @@ use render::frame_system;
 use render::pipeline_manager;
 use render::pipeline_builder;
 use render::uniform_manager;
+use render::render_passes::{RenderPassConf, ObjectPassSubPasses};
 
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -88,7 +89,7 @@ pub fn add_bound_draw(
             //Setup the wireframe shader and the topology type
             pipeline_needed.topology_type = vulkano::pipeline::input_assembly::PrimitiveTopology::LineList;
             pipeline_needed.shader_set = "Wireframe".to_string();
-            pipeline_needed.sub_pass_id = id as u32;
+            pipeline_needed.render_pass = RenderPassConf::ObjectPass(ObjectPassSubPasses::ForwardRenderingPass);
 
             let mut pipeline_lck = pipeline_manager.lock().expect("failed to lock pipeline manager");
             let pipeline = pipeline_lck.get_pipeline_by_config(pipeline_needed);

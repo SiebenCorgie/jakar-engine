@@ -3,7 +3,9 @@ use std::collections::BTreeMap;
 use core::resources::material;
 use render::uniform_manager;
 use render::pipeline_manager;
+use render::render_passes::{RenderPassConf, ObjectPassSubPasses};
 use core::resources::texture::Texture;
+
 use vulkano;
 use render;
 
@@ -46,7 +48,7 @@ impl MaterialManager {
             let mut pipe_lock = pipeline_manager.lock().expect("failed to lock pipe man");
             let config = render::pipeline_builder::PipelineConfig::default()
             .with_shader("Pbr".to_string())
-            .with_render_pass(render::render_passes::RenderPassConf::ObjectPass);
+            .with_render_pass(RenderPassConf::ObjectPass(ObjectPassSubPasses::ForwardRenderingPass));
             pipe_lock.get_pipeline_by_config(config)
         };
 

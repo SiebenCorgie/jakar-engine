@@ -55,6 +55,7 @@ impl ToPipeline for SetWireframe{
         builder: GraphicsPipelineBuilder<BufferlessDefinition, EEPD, (), EEPD, (), EEPD, (), EEPD, (), EEPD, (), ()>,
         pipeline_settings: &PipelineConfig,
         render_pass: Arc<RenderPassAbstract + Send + Sync>,
+        subpass_id: u32,
         device: Arc<Device>,
     ) -> (Arc<GraphicsPipelineAbstract + Send + Sync>, Vec<DescriptorSetFamiliy>){
         println!("Building pipeline based on Wireframe shader and vertex ...", );
@@ -63,7 +64,7 @@ impl ToPipeline for SetWireframe{
             builder
             .render_pass(
                 vulkano::framebuffer::Subpass::from(
-                    render_pass, pipeline_settings.sub_pass_id
+                    render_pass, subpass_id
                 ).expect("failed to set renderpass for Wireframe shader")
             )
             .vertex_input(SingleBufferDefinition::<Vertex>::new())

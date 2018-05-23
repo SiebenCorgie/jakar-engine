@@ -117,11 +117,13 @@ impl PipelineManager{
         };
 
         let (pass, shader_set) = (config.render_pass.clone(), config.shader_set.clone());
+        let (ren_pass, subpass_id) = self.passes.conf_to_pass(pass);
 
         let pipe = pipeline::Pipeline::new(
             self.device.clone(),
             config,
-            self.passes.conf_to_pass(pass),
+            ren_pass,
+            subpass_id,
             self.shader_manager.get_shader_set(shader_set)
             .expect("failed to get correct shader set for pipeline... set a right one!")
         );
@@ -157,11 +159,13 @@ impl PipelineManager{
 
 
         let (pass, shader_set) = (needed_configuration.render_pass.clone(), needed_configuration.shader_set.clone());
+        let (render_pass, subpass_id) = self.passes.conf_to_pass(pass);
         //now build the new pipeline and put it in an arc for cloning
         let new_pipe = Arc::new(pipeline::Pipeline::new(
             self.device.clone(),
             needed_configuration,
-            self.passes.conf_to_pass(pass),
+            render_pass,
+            subpass_id,
             self.shader_manager.get_shader_set(shader_set)
             .expect("failed to get shader set for pipeline.. that shoudn't not happen")
         ));
@@ -179,7 +183,6 @@ impl PipelineManager{
     pub fn get_pipeline_by_requirements(
         &mut self,
         requirements: PipelineRequirements,
-        needed_subpass_id: u32
     ) -> Arc<pipeline::Pipeline> {
 
         //cycle thorugh the pipeline and match the types of the requirements with the pipeline
@@ -195,10 +198,8 @@ impl PipelineManager{
             };
 
             if current_self_req.compare(&requirements){
-                if pipe.pipeline_config.sub_pass_id == needed_subpass_id{
-                    println!("Found correct pipeline based on the requirements", );
-                    return pipe.clone();
-                }
+                println!("Found correct pipeline based on the requirements", );
+                return pipe.clone();
             }
         }
 

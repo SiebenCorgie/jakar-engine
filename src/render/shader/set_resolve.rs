@@ -58,6 +58,7 @@ impl ToPipeline for ResolveSet{
         builder: GraphicsPipelineBuilder<BufferlessDefinition, EEPD, (), EEPD, (), EEPD, (), EEPD, (), EEPD, (), ()>,
         pipeline_settings: &PipelineConfig,
         render_pass: Arc<RenderPassAbstract + Send + Sync>,
+        subpass_id: u32,
         device: Arc<Device>,
     ) -> (Arc<GraphicsPipelineAbstract + Send + Sync>, Vec<DescriptorSetFamiliy>){
         println!("Building pipeline based on Resolve shader and vertex ...", );
@@ -66,7 +67,7 @@ impl ToPipeline for ResolveSet{
             builder
             .render_pass(
                 vulkano::framebuffer::Subpass::from(
-                    render_pass, pipeline_settings.sub_pass_id
+                    render_pass, subpass_id
                 ).expect("failed to set renderpass for PostProgress shader")
             )
             .vertex_input(SingleBufferDefinition::<PostProgressVertex>::new())

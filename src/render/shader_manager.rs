@@ -76,6 +76,7 @@ pub trait ToPipeline {
         builder: GraphicsPipelineBuilder<BufferlessDefinition, EEPD, (), EEPD, (), EEPD, (), EEPD, (), EEPD, (), ()>,
         pipeline_settings: &PipelineConfig,
         render_pass: Arc<RenderPassAbstract + Send + Sync>,
+        subpass_id: u32,
         device: Arc<Device>,
     ) -> (Arc<GraphicsPipelineAbstract + Send + Sync>, Vec<DescriptorSetFamiliy>);
 }

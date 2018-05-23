@@ -62,7 +62,6 @@ impl ShadowSystem{
             .expect("failed to lock pipeline manager for shadow pipeline creation");
 
             let mut config = pipeline_builder::PipelineConfig::default()
-                .with_subpass_id(super::SubPassType::Shadow.get_id())
                 .with_shader("Shadow".to_string())
                 .with_render_pass(RenderPassConf::ShadowPass)
                 .with_depth_and_stencil_settings(
