@@ -328,7 +328,8 @@ impl ShadowSystem{
                     SceneComparer::new()
                     .with_frustum(view_frustum)
                     .with_value_type(ValueTypeBool::none().with_mesh())
-                    .with_cull_distance(cover_bias, cascade_mvp)
+                    //also pull in the culling info
+                    .with_cull_distance(cover_bias[idx], cascade_mvp)
                 ));
 
                 //println!("cas {} copy_time: {}ms", idx, as_ms(cascade_start_time.elapsed()));

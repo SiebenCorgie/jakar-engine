@@ -30,7 +30,7 @@ fn main() {
         8, //pcf samples
         4096, //lightmap resolution
         0.95, //cascade lambda
-        0.25, //occupy bias
+        [0.25, 0.2, 0.1, 0.1], //occupy bias
         1500.0) //poisson spread
     );
 

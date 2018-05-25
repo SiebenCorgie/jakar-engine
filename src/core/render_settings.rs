@@ -99,8 +99,8 @@ pub struct DirectionalLightSettings {
     /// Controlles at which point cascades are split in the logarithmic function.
     cascade_lambda: f32,
     ///Controles how many percent on the shadowmap a mesh must occupy to be actually rendered.
-    /// for high settings 0.1 is a good value.
-    occupy_bias: f32,
+    /// for high settings 0.1 is a good value. You can controll each cascade.
+    occupy_bias: [f32; 4],
     /// Describes how much the different samples are "spread" over the uv. A high numerb means less
     /// noise, but also harder shadows and therefor better visible pixels.
     poisson_spread: f32
@@ -108,7 +108,7 @@ pub struct DirectionalLightSettings {
 
 impl DirectionalLightSettings{
     ///Creates a custom set of settings
-    pub fn new(pcf_samples: u32, resolution: u32, cascade_lambda: f32, occupy_bias: f32, poisson_spread: f32) -> Self{
+    pub fn new(pcf_samples: u32, resolution: u32, cascade_lambda: f32, occupy_bias: [f32; 4], poisson_spread: f32) -> Self{
         DirectionalLightSettings{
             pcf_samples: pcf_samples,
             shadow_map_resolution: resolution,
@@ -131,11 +131,11 @@ impl DirectionalLightSettings{
             shadow_map_resolution: 1024,
             num_cascades: 4,
             cascade_lambda: 0.95,
-            occupy_bias: 0.1,
+            occupy_bias: [0.1; 4],
             poisson_spread: 800.0,
         }
     }
-    /// Always returns 4 four now.
+    /// Always returns 4 for now.
     pub fn get_num_cascades(&self) -> u32{
         self.num_cascades
     }
@@ -165,11 +165,11 @@ impl DirectionalLightSettings{
     }
     ///Controles how many percent on the shadowmap a mesh must occupy to be actually rendered.
     /// for high settings 0.1 is a good value.
-    pub fn set_occupy_bias(&mut self, new: f32){
+    pub fn set_occupy_bias(&mut self, new: [f32; 4]){
         self.occupy_bias = new;
     }
 
-    pub fn get_occupy_bias(&self) -> f32{
+    pub fn get_occupy_bias(&self) -> [f32; 4]{
         self.occupy_bias
     }
 
