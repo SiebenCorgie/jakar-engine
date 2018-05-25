@@ -76,7 +76,7 @@ pub struct LightSystem {
     cluster_buffer: Arc<DeviceLocalBuffer<light_cull_shader::ty::ClusterBuffer>>,
 
     //Descriptor pool to build the descriptorset faster
-    descriptor_pool: FixedSizeDescriptorSetsPool<Arc<ComputePipelineAbstract + Send + Sync>>,
+    compute_descriptor_pool: FixedSizeDescriptorSetsPool<Arc<ComputePipelineAbstract + Send + Sync>>,
     //Stores the nodes and shader infos we got from the shadow_system
     light_store: LightStore,
 
@@ -155,7 +155,7 @@ impl LightSystem{
         )
         .expect("failed to create compute pipeline"));
 
-        let descriptor_pool = FixedSizeDescriptorSetsPool::new(compute_pipeline.clone(), 0);
+        let compute_descriptor_pool = FixedSizeDescriptorSetsPool::new(compute_pipeline.clone(), 0);
 
         let shadow_map_sampler = Sampler::new(
             device.clone(),
@@ -191,7 +191,7 @@ impl LightSystem{
             queue: queue,
 
             cluster_buffer: persistent_cluster_buffer,
-            descriptor_pool: descriptor_pool,
+            compute_descriptor_pool: compute_descriptor_pool,
 
             light_store: LightStore::new(),
 
@@ -309,7 +309,7 @@ impl LightSystem{
         command_buffer: AutoCommandBufferBuilder,
     ) -> AutoCommandBufferBuilder{
         //adds the light buffers (all lights and indice buffer)
-        let set_01 = self.descriptor_pool.next()
+        let set_01 = self.compute_descriptor_pool.next()
             .add_buffer(self.cluster_buffer.clone())
             .expect("failed to add index buffer")
             //lights and counter
@@ -361,7 +361,8 @@ impl LightSystem{
     /// - Binding 3 = struct which describes how many actual lights where send
     /// - Binding 4 = The texture with all directional shadows.
     pub fn get_light_descriptorset(
-        &self, binding_id: u32,
+        &self,
+        binding_id: u32,
         pipeline: Arc<vulkano::pipeline::GraphicsPipelineAbstract + Send + Sync>,
         frame_system: &frame_system::FrameSystem,
     ) -> Arc<DescriptorSet + Send + Sync>{

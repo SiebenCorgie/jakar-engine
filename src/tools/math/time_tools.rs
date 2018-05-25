@@ -7,5 +7,9 @@ pub fn dur_as_f32(duration: Duration) -> f32{
     let nanos_frac = nanos as f32 / 1_000_000_000.0;
 
     secs as f32 + nanos_frac
+}
 
+pub fn as_ms(duration: Duration) -> f32{
+    let time = dur_as_f32(duration);
+    time * 1000.0
 }

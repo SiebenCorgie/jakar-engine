@@ -21,6 +21,9 @@ use vulkano::command_buffer::AutoCommandBufferBuilder;
 
 use std::sync::{Arc, Mutex};
 
+///A module handling the generation of the final bloom image
+pub mod bloom;
+
 
 ///Should be used in screenspace
 #[derive(Clone,Copy)]
@@ -47,11 +50,13 @@ pub struct PostProgress{
     engine_settings: Arc<Mutex<engine_settings::EngineSettings>>,
     //device: Arc<vulkano::device::Device>,
 
+    //Handles bloom
+    bloom_system: bloom::Bloom,
+
     pipeline: Arc<pipeline::Pipeline>,
 
     //Used for the average compute pass
     average_pipe: Arc<vulkano::pipeline::ComputePipelineAbstract + Send + Sync>,
-    blur_pipe: Arc<pipeline::Pipeline>,
 
 
     screen_vertex_buffer: Arc<vulkano::buffer::BufferAccess + Send + Sync>,
@@ -61,7 +66,6 @@ pub struct PostProgress{
 
     screen_sampler: Arc<Sampler>,
     hdr_settings_pool: vulkano::buffer::cpu_pool::CpuBufferPool<default_pstprg_fragment::ty::hdr_settings>,
-    blur_settings_pool: vulkano::buffer::cpu_pool::CpuBufferPool<blur::ty::blur_settings>,
     exposure_settings_pool: vulkano::buffer::cpu_pool::CpuBufferPool<average_lumiosity_compute_shader::ty::ExposureSettings>,
 }
 
@@ -96,9 +100,7 @@ impl PostProgress{
             device.clone(), vulkano::buffer::BufferUsage::all()
         );
 
-        let blur_pool = CpuBufferPool::<blur::ty::blur_settings>::new(
-            device.clone(), vulkano::buffer::BufferUsage::all()
-        );
+
 
         //The compute stuff...
         let compute_shader = Arc::new(average_lumiosity_compute_shader::Shader::load(device.clone())
@@ -134,12 +136,18 @@ impl PostProgress{
         ).expect("failed to create screen sampler");
 
         PostProgress{
-            engine_settings: engine_settings,
+            engine_settings: engine_settings.clone(),
             //device: device,
+
+            bloom_system: bloom::Bloom::new(
+                engine_settings,
+                device,
+                blur_pipe,
+                screen_sampler.clone()
+            ),
 
             pipeline: post_progress_pipeline,
             average_pipe: average_pipe,
-            blur_pipe: blur_pipe,
 
             screen_vertex_buffer: sample_vertex_buffer,
             average_buffer: average_buffer,
@@ -147,7 +155,6 @@ impl PostProgress{
 
             screen_sampler: screen_sampler,
             hdr_settings_pool: hdr_settings_pool,
-            blur_settings_pool: blur_pool,
             exposure_settings_pool: exp_set_pool,
         }
     }
@@ -201,9 +208,10 @@ impl PostProgress{
         target_image: I
     ) -> AutoCommandBufferBuilder where I: ImageAccess + ImageViewAccess + Clone + Send + Sync + 'static{
         //First blur images
-        let mut new_command_buffer = self.execute_blur(
+        let mut new_command_buffer = self.bloom_system.execute_blur(
             command_buffer,
-            frame_system
+            frame_system,
+            self.screen_vertex_buffer.clone()
         );
         //After bluring its time to downscale our image to one pixel to be able
         //to read it back in a compute shader and get the average value.
@@ -214,92 +222,7 @@ impl PostProgress{
         new_command_buffer
     }
 
-    fn execute_blur(&self,
-        command_buffer: AutoCommandBufferBuilder,
-        frame_system: &FrameSystem,
-    ) -> AutoCommandBufferBuilder{
-        //Change to blur_h pass
-        let blur_h_fb = frame_system.get_passes().blur_pass.get_fb_blur_h();
-        let clearings_h = vec![
-            [0.0, 0.0, 0.0, 0.0].into()
-        ];
-        let mut next_cb = command_buffer.begin_render_pass(
-            blur_h_fb, false, clearings_h
-        ).expect("failed to start blur_h pass");
-        //now blur
-        next_cb = self.blur(true, next_cb, frame_system);
 
-
-        //now end this pass and change to the blur_v pass
-        next_cb = next_cb.end_render_pass().expect("failed to end blur_h pass");
-
-        let blur_v_fb = frame_system.get_passes().blur_pass.get_fb_blur_v();
-        let clearings_v = vec![
-            [0.0, 0.0, 0.0, 0.0].into()
-        ];
-        next_cb = next_cb.begin_render_pass(
-            blur_v_fb, false, clearings_v
-        ).expect("failed to start blur_v pass");
-        //now blur
-        next_cb = self.blur(false, next_cb, frame_system);
-        //finally change into neutral mode again and return
-        next_cb = next_cb.end_render_pass().expect("failed to end blur_v renderpass");
-
-        next_cb
-    }
-
-    ///Adds a command to blur an image either horizontal or vertical
-    fn blur(
-        &self,
-        is_horizontal: bool,
-        command_buffer: AutoCommandBufferBuilder,
-        frame_system: &FrameSystem,
-    )-> AutoCommandBufferBuilder{
-        let blur_settings = {
-            self.engine_settings.lock().expect("failed to get settings").get_render_settings().get_bloom()
-        };
-
-        let blur_int = {
-            if is_horizontal{
-                1
-            }else{
-                0
-            }
-        };
-
-        let blur_settings = blur::ty::blur_settings{
-            horizontal: blur_int,
-            scale: blur_settings.scale,
-            strength: blur_settings.strength,
-        };
-
-        let blur_settings = self.blur_settings_pool.next(blur_settings).expect("failed to allocate blur settings");
-
-        let attachments_ds = PersistentDescriptorSet::start(self.blur_pipe.get_pipeline_ref(), 0) //at binding 0
-            .add_sampled_image(
-                if is_horizontal{
-                    frame_system.get_passes().object_pass.get_images().hdr_fragments.clone()
-                }else{
-                    frame_system.get_passes().blur_pass.get_images().after_blur_h.clone()
-                },
-                self.screen_sampler.clone()
-            )
-            .expect("failed to add blur image")
-            .add_buffer(blur_settings)
-            .expect("failed to add blur settings")
-            .build()
-            .expect("failed to build postprogress cb");
-
-        let new_command_buffer = command_buffer.draw(
-            self.blur_pipe.get_pipeline_ref(),
-            frame_system.get_dynamic_state().clone(),
-            vec![self.screen_vertex_buffer.clone()],
-            attachments_ds,
-            ()
-        ).expect("failed to add draw call for the blur plane");
-
-        new_command_buffer
-    }
 
     ///Takes the hdr_image computes the average lumiosity and stores it in its buffer. The information is used
     /// in the assamble stage to set the exposure setting.

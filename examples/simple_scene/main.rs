@@ -26,8 +26,13 @@ use std::time::{Instant, Duration};
 extern crate winit;
 
 fn main() {
-
-    let light_settings = LightSettings::new(DirectionalLightSettings::new(8, 4096, 0.95, 0.05, 1500.0));
+    let light_settings = LightSettings::new(DirectionalLightSettings::new(
+        8, //pcf samples
+        4096, //lightmap resolution
+        0.95, //cascade lambda
+        0.25, //occupy bias
+        1500.0) //poisson spread
+    );
 
     let graphics_settings = core::render_settings::RenderSettings::default()
     .with_msaa_factor(8)
@@ -50,8 +55,8 @@ fn main() {
     .with_cursor_visibility(winit::MouseCursor::NoneCursor)
     .with_render_settings(graphics_settings)
     .with_camera_settings(core::engine_settings::CameraSettings{
-        far_plane: 500.0,
-        near_plane: 0.1,
+        far_plane: 200.0,
+        near_plane: 0.15,
     })
     ;
 

@@ -8,6 +8,7 @@ use render::light_system;
 use render::frame_system::FrameSystem;
 
 use vulkano::descriptor::descriptor_set::PersistentDescriptorSet;
+use vulkano::descriptor::descriptor_set::FixedSizeDescriptorSetsPool;
 use vulkano::descriptor::descriptor_set::DescriptorSet;
 use vulkano::pipeline::GraphicsPipelineAbstract;
 use vulkano;
@@ -480,6 +481,8 @@ impl MaterialBuilder{
             .build().expect("failed to build first descriptor 03")
         );
 
+        let set_01_pool = FixedSizeDescriptorSetsPool::new(pipeline_ref.clone(), 0);
+
         //Now create the new material
         Material{
             name: String::from(name),
@@ -499,7 +502,7 @@ impl MaterialBuilder{
 
             uniform_manager: uniform_manager,
 
-            set_01: set_01,
+            set_01_pool: set_01_pool,
 
             set_02: set_02,
 
@@ -555,7 +558,7 @@ pub struct Material {
     uniform_manager: Arc<Mutex<uniform_manager::UniformManager>>,
 
     //The set for the u_world information
-    set_01: Arc<DescriptorSet + Send + Sync>,
+    set_01_pool: FixedSizeDescriptorSetsPool<Arc<GraphicsPipelineAbstract + Send + Sync>>,
 
     //A persistent material set which only needs to be alter if a texture changes
     set_02: Arc<DescriptorSet + Send + Sync>,
@@ -693,25 +696,6 @@ impl Material {
         //if needed, update the static sets
     }
 
-
-    ///Recreates set_01 based on the current unfiorm_manager information (mvp matrix)
-    pub fn recreate_set_01(&mut self, transform_matrix: Matrix4<f32>){
-        let pipeline_ref = self.pipeline.get_pipeline_ref();
-
-        //println!("STATUS: MATERIAL: Trying to lock uniform manager", );
-        let mut uniform_manager_lck = self.uniform_manager.lock().expect("Failed to lock unfiorm_mng");
-        //println!("STATUS: MATERIAL: Generation new set_01", );
-        let new_set = Arc::new(PersistentDescriptorSet::start(
-                pipeline_ref.clone(), 0
-            )
-            .add_buffer(uniform_manager_lck.get_subbuffer_data(transform_matrix)).expect("Failed to create descriptor set")
-            .build().expect("failed to build descriptor 01")
-        );
-        //println!("STATUS: MATERIAL: Returning new set to self", );
-        //return the new set
-        self.set_01 = new_set;
-    }
-
     ///Returns a subbuffer from the `usage_info_pool` to be used when adding a buffer to a set
     fn get_usage_info_subbuffer(&self) ->
      vulkano::buffer::cpu_pool::CpuBufferPoolSubbuffer<pbr_texture_info::ty::TextureUsageInfo,
@@ -744,8 +728,16 @@ impl Material {
     ///global view and projection matrix
     #[inline]
     pub fn get_set_01(&mut self, transform_matrix: Matrix4<f32>) -> Arc<DescriptorSet + Send + Sync>{
-        self.recreate_set_01(transform_matrix);
-        self.set_01.clone()
+        //println!("STATUS: MATERIAL: Trying to lock uniform manager", );
+        let mut uniform_manager_lck = self.uniform_manager.lock().expect("Failed to lock unfiorm_mng");
+        //println!("STATUS: MATERIAL: Generation new set_01", );
+        let new_set = self.set_01_pool.next()
+            .add_buffer(uniform_manager_lck.get_subbuffer_data(transform_matrix))
+            .expect("Failed to create descriptor set")
+            .build()
+            .expect("failed to build descriptor 01");
+
+        Arc::new(new_set)
     }
 
 

@@ -17,7 +17,7 @@ use core::engine_settings;
 //use core::simple_scene_system::node_helper;
 use core::next_tree::content::ContentType;
 use tools::engine_state_machine::RenderState;
-
+use tools::math::time_tools::*;
 
 use winit;
 use vulkano;
@@ -36,11 +36,12 @@ use std::mem;
 
 
 ///manages some some debug information
-struct RenderDebug {
+pub struct RenderDebug {
     last_sec_start: Instant,
     current_counter: u32,
     avg_mesh_render_time: Duration,
-    first_mesh_time: bool,
+
+    mesh_capture_start: Instant,
 }
 
 impl RenderDebug{
@@ -49,12 +50,12 @@ impl RenderDebug{
             last_sec_start: Instant::now(),
             current_counter: 0,
             avg_mesh_render_time: Duration::from_secs(0),
-            first_mesh_time: true,
+            mesh_capture_start: Instant::now(),
         }
     }
     pub fn update(&mut self){
         if self.last_sec_start.elapsed().as_secs() > 0{
-            println!("FPS: {}", self.current_counter);
+            println!("FPS: {} \t avg mesh timing: {}", self.current_counter, as_ms(self.avg_mesh_render_time));
             self.last_sec_start = Instant::now();
             self.current_counter = 1;
         }else{
@@ -62,15 +63,15 @@ impl RenderDebug{
         }
     }
 
-    pub fn update_avr_mesh(&mut self, dur: Duration){
-        if self.first_mesh_time{
-            self.avg_mesh_render_time = dur;
-            self.first_mesh_time = false;
-            return;
-        }
-
+    pub fn end_mesh_capture(&mut self){
+        let dur = self.mesh_capture_start.elapsed();
         self.avg_mesh_render_time += dur;
         self.avg_mesh_render_time = self.avg_mesh_render_time.checked_div(2).expect("Failed to calc time!");
+    }
+
+    //starts the capture of a mesh rendering time, gets reset when update_avr_mesh is called
+    pub fn start_mesh_capture(&mut self){
+        self.mesh_capture_start = Instant::now();
     }
 
     pub fn print_stat(&self){
@@ -343,21 +344,30 @@ impl Renderer {
             self.light_system.get_light_store()
         );
 
+        if should_capture{
+            let time_needed = time_step.elapsed().subsec_nanos();
+            println!("\tRE: Nedded {} ms to update render shadows!", time_needed as f32 / 1_000_000.0);
+            time_step = Instant::now()
+        }
+
         //Now we render all the forward stuff
         command_buffer = self.forward_system.do_forward_shading(
             &self.frame_system,
             &self.light_system,
             &self.post_progress,
             asset_manager,
-            command_buffer
+            command_buffer,
+            &mut self.debug_info
         );
+
+        if should_capture{
+            let time_needed = time_step.elapsed().subsec_nanos();
+            println!("\tRE: Nedded {} ms to do forward shading!", time_needed as f32 / 1_000_000.0);
+            time_step = Instant::now()
+        }
 
         //Since we fininshed the primary work on the asset manager, change to gpu working state
         self.set_working_gpu();
-
-        if should_capture{
-            println!("\tRE: Finished adding meshes", );
-        }
 
         //Do all post progressing and finally write the whole frame to the swapchain image
         command_buffer = self.post_progress.do_post_progress(
@@ -372,10 +382,6 @@ impl Renderer {
             println!("\tRE: Nedded {} ms to do final postprogress!", time_needed as f32 / 1_000_000.0);
             time_step = Instant::now()
         }
-
-
-
-
 
         //thanks firewater
         let real_cb = command_buffer.build().expect("failed to build command buffer");

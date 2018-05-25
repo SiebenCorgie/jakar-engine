@@ -9,16 +9,9 @@ use core::resource_management::asset_manager::AssetManager;
 use core::next_tree::{SceneTree, ValueTypeBool, SceneComparer};
 use core::next_tree::content::ContentType;
 use core::resources::camera::Camera;
+use render::renderer::RenderDebug;
 
-use vulkano::image::traits::ImageViewAccess;
-use vulkano::image::traits::ImageAccess;
-use vulkano::image::attachment::AttachmentImage;
 use vulkano::command_buffer::AutoCommandBufferBuilder;
-use vulkano::framebuffer::FramebufferAbstract;
-use vulkano::format::Format;
-use vulkano::image::ImageUsage;
-use vulkano::image::StorageImage;
-use vulkano::image::Dimensions;
 use vulkano::descriptor::descriptor_set::PersistentDescriptorSet;
 use vulkano;
 
@@ -69,7 +62,14 @@ impl ForwardSystem{
         post_progress: &PostProgress,
         asset_manager: &mut AssetManager,
         command_buffer: AutoCommandBufferBuilder,
+        debug: &mut RenderDebug,
     ) -> AutoCommandBufferBuilder{
+
+        let should_debug = {
+            let set_lck = self.engine_settings.lock().expect("failed to lock settings");
+            set_lck.capture_frame
+        };
+
 
         let mesh_comparer = SceneComparer::new()
         .with_value_type(ValueTypeBool::none().with_mesh())
@@ -121,6 +121,11 @@ impl ForwardSystem{
             if let ContentType::Mesh(ref mesh) = opaque_mesh.get_value(){
 
 
+
+                if should_debug{
+                    debug.start_mesh_capture();
+                }
+
                 let mesh_lck = mesh.lock().expect("failed to lock mesh for drawing!");
                 new_cb = mesh_lck.draw(
                     new_cb,
@@ -129,6 +134,9 @@ impl ForwardSystem{
                     transform,
                 );
 
+                if should_debug{
+                    debug.end_mesh_capture();
+                }
 
             }else{
                 println!("Mesh was no actual mesh...", );

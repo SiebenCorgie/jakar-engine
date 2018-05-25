@@ -5,6 +5,7 @@ use vulkano::pipeline::GraphicsPipelineAbstract;
 use vulkano::command_buffer::AutoCommandBufferBuilder;
 
 use std::sync::{Arc, Mutex};
+use std::time::{Instant, Duration};
 
 use collision::Frustum;
 use cgmath::*;
@@ -24,6 +25,7 @@ use render::render_passes::RenderPassConf;
 use render::shader::shaders::shadow_fragment::ty::MaskedInfo;
 use render::shader::shader_inputs::default_data::ty::LightData;
 use tools::node_tools;
+use tools::math::time_tools::*;
 
 use core::next_tree::content::ContentType;
 use core::next_tree::attributes::NodeAttributes;
@@ -258,12 +260,18 @@ impl ShadowSystem{
         let mut new_cb = command_buffer.begin_render_pass(shadow_fb, false, clearing_values)
             .expect("failed to start shadow renderpass for the forward system");
         //Render forward shadows
-        let mut new_cb = self.render_directional_light_map(
+
+        //let mut start_shadows = Instant::now();
+
+        new_cb = self.render_directional_light_map(
             new_cb,
             light_store,
             asset_manager,
             frame_system
         );
+
+        //println!("Time for dirctional_shadows: {}sec {}ms", dur_as_f32(start_shadows.elapsed()), as_ms(start_shadows.elapsed()));
+        //start_shadows = Instant::now();
 
         //Now end directional shadow pass
         new_cb = new_cb.end_render_pass().expect("failed to end directional light shadow pass");
@@ -295,7 +303,6 @@ impl ShadowSystem{
         for &mut (ref mut _light_node, ref light_info) in light_store.directional_lights.iter_mut(){
             //Get the mvp matrix of the current light from the used matrixes in the
             //light buffer
-            //TODO check if thats the right indice
             let light_mvps = {
                 let mut ret_vec = Vec::new();
                 for idx in 0..4{
@@ -311,6 +318,9 @@ impl ShadowSystem{
             };
             //no cycle through the light cascades and render to the correct region on the image
             for (idx, cascade_mvp) in light_mvps.into_iter().enumerate(){
+
+                //let cascade_start_time = Instant::now();
+
                 let view_frustum = Frustum::from_matrix4(cascade_mvp).expect("failed to create ortho frustum");
 
                 let meshes_in_light_frustum = scene
@@ -320,6 +330,8 @@ impl ShadowSystem{
                     .with_value_type(ValueTypeBool::none().with_mesh())
                     .with_cull_distance(cover_bias, cascade_mvp)
                 ));
+
+                //println!("cas {} copy_time: {}ms", idx, as_ms(cascade_start_time.elapsed()));
 
                 //find the current region in the directional light map to render to
                 let origin = [
@@ -344,6 +356,8 @@ impl ShadowSystem{
                     scissors: None,
                 };
 
+                //let render_start_time = Instant::now();
+                //let mesh_count = meshes_in_light_frustum.len();
                 //After setting each element, render the different shadow mapps
                 for node in meshes_in_light_frustum.into_iter(){
                     new_cb = self.render_depth_mesh(
@@ -353,6 +367,8 @@ impl ShadowSystem{
                         dynamic_state.clone()
                     );
                 }
+                //println!("cas {} time for rendering {} meshes in {}ms", idx, mesh_count, as_ms(render_start_time.elapsed()));
+                //println!("Time for cascade {}: {}s {}ms \n", idx, dur_as_f32(cascade_start_time.elapsed()), as_ms(cascade_start_time.elapsed()));
             }
         }
         new_cb
