@@ -1,0 +1,65 @@
+#version 450
+layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+
+///Blures the pixel at the location of this invocation ID, then writes out the change
+
+//Image to be blured
+layout(set = 0, binding = 0) uniform sampler2D img_one;
+//Possible image which can be added on top of the current one.
+layout(set = 0, binding = 1) uniform sampler2D img_two;
+
+//The inputs for the hdr -> ldr pass
+layout(set = 0, binding = 2) uniform blur_settings{
+  int is_horizontal;
+  int add_second;
+}u_blur_settings;
+//target image for the blured
+layout(set = 0, binding = 3) uniform writeonly image2D target_image;
+
+
+void main(){
+    float weight[5];
+    weight[0] = 0.227027;
+    weight[1] = 0.1945946;
+    weight[2] = 0.1216216;
+    weight[3] = 0.054054;
+    weight[4] = 0.016216;
+
+    //Find the uvs of this workgroupe
+    ivec2 pixel_coord = ivec2(gl_WorkGroupID.xy);
+    vec2 texel_size = 1.0 / textureSize(img_one, 0); // gets size of single texel
+    vec2 uv_loc = texel_size * pixel_coord; //Find uv location
+    //middle fragment
+    vec4 result = texture(img_one, uv_loc) * weight[0];
+
+    //Now blur
+    if(u_blur_settings.is_horizontal == 1)
+    {
+        for(int i = 1; i < 5; ++i)
+        {
+            result += texture(img_one, uv_loc + vec2(texel_size.x * i, 0.0)) * weight[i];
+            result += texture(img_one, uv_loc - vec2(texel_size.x * i, 0.0)) * weight[i];
+        }
+    }
+    else
+    {
+        for(int i = 1; i < 5; ++i)
+        {
+            result += texture(img_one, uv_loc + vec2(0.0, texel_size.y * i)) * weight[i];
+            result += texture(img_one, uv_loc - vec2(0.0, texel_size.y * i)) * weight[i];
+        }
+    }
+
+    if (u_blur_settings.add_second == 1){
+      result += texture(img_two, uv_loc);
+      //TODO might have to lower tho
+    }
+
+    //Sync the shader
+    barrier();
+
+    //Now write out the result
+    imageStore(target_image, pixel_coord, result);
+
+
+}

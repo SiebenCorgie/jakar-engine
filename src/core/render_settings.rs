@@ -40,12 +40,15 @@ pub struct DebugSettings {
 pub struct BloomSettings {
     ///more levels means nicer bloom but worse performance1
     pub levels: u32,
+    ///Describes what size the initial blur image should be scaled down.
+    pub initial_scale_down: u32,
 }
 
 impl BloomSettings{
-    pub fn new(levels: u32) -> Self{
+    pub fn new(levels: u32, scale_down: u32) -> Self{
         BloomSettings{
-            levels
+            levels,
+            initial_scale_down: scale_down
         }
     }
 }
@@ -291,9 +294,10 @@ impl RenderSettings{
                 0.2, 4.0, 0.002, 0.003, 1.0, true
             ),
             light_settings: LightSettings::default(),
-            
+
             bloom: BloomSettings{
                 levels: 8,
+                initial_scale_down: 4, //nice performance and look
             },
 
             debug_settings: DebugSettings{
@@ -471,16 +475,17 @@ impl RenderSettings{
     }
 
     ///Sets the current bloom settings. Don't overdo it or your rendered image will look like a Michael Bay movie.
+    ///Also for performance, try to increase the initial scale down
     #[inline]
-    pub fn with_bloom(mut self, levels: u32) -> Self{
-        self.bloom = BloomSettings::new(levels);
+    pub fn with_bloom(mut self, levels: u32, initial_scale_down: u32) -> Self{
+        self.bloom = BloomSettings::new(levels, initial_scale_down);
         self
     }
 
     ///Sets the current bloom settings. Don't overdo it or your rendered image will look like a Michael Bay movie.
     #[inline]
-    pub fn set_bloom(&mut self, levels: u32){
-        self.bloom = BloomSettings::new(levels);
+    pub fn set_bloom(&mut self, levels: u32, initial_scale_down: u32){
+        self.bloom = BloomSettings::new(levels, initial_scale_down);
     }
 
     ///Returns the current bloom settings. They might change per frame.

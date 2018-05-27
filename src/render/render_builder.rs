@@ -416,6 +416,7 @@ impl RenderBuilder {
             sample_rate_shading: true,
             logic_op: true, //needed for custom blending
             depth_clamp: true, //needed for correct shadow mapping
+            shader_storage_image_write_without_format: true, //needed for the blur shader
             .. vulkano::instance::Features::none()
         };
         RenderBuilder{

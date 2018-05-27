@@ -239,7 +239,7 @@ pub fn load_gltf_material(
     //if we have a emmision map and and/or a factor we'll also crank that up too max 100
     let mut max_factor = 1.0;
     if emissive.is_some() || mat.emissive_factor()[0] > 0.0 || mat.emissive_factor()[1] > 0.0 || mat.emissive_factor()[2] > 0.0{
-        max_factor = 100.0;
+        max_factor = 10.0;
     }
 
     let texture_factors = {

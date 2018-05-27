@@ -385,13 +385,14 @@ impl PostProgress{
         //now ready to do all the shading
 
         //TO find the ldr image we analyse the debug settings
-        let ldr_level_image = {
+        let (ldr_level_image, bloom_level) = {
             let debug_level = {
                 self.engine_settings.lock().expect("failed to lock settings")
                 .get_render_settings().get_debug_settings().ldr_debug_view_level
             };
 
             let image_count = frame_system.get_passes().blur_pass.get_images().scaled_ldr_images.len() - 1;
+            let bloom_count = frame_system.get_passes().blur_pass.get_images().bloom.len() - 1;
 
             let level = {
                 if debug_level > image_count as u32{
@@ -400,8 +401,18 @@ impl PostProgress{
                     debug_level
                 }
             };
+
+            let bloom_level = {
+                if debug_level > bloom_count as u32{
+                    bloom_count as u32
+                }else{
+                    debug_level
+                }
+            };
             //now we can savely return the n-th image
-            frame_system.get_passes().blur_pass.get_images().scaled_ldr_images[level as usize].clone()
+            let ldr_img = frame_system.get_passes().blur_pass.get_images().scaled_ldr_images[level as usize].clone();
+            let bloom_img = frame_system.get_passes().blur_pass.get_images().bloom[bloom_level as usize].after_h_img.clone();
+            (ldr_img, bloom_img)
         };
 
         //create the descriptor set for the current image
@@ -409,6 +420,7 @@ impl PostProgress{
         let forward_depth = frame_system.get_passes().object_pass.get_images().forward_hdr_depth.clone();
         let blur = frame_system.get_passes().blur_pass.get_images().get_final_bloom_img();
         //let blur = frame_system.get_passes().blur_pass.get_images().bloom[0].after_h_img.clone();
+        //let blur = bloom_level;
         let dir_shadow = frame_system.get_passes().shadow_pass.get_images().directional_shadows.clone();
 
         let attachments_ds = PersistentDescriptorSet::start(self.pipeline.get_pipeline_ref(), 0) //at binding 0

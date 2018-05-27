@@ -41,7 +41,8 @@ fn main() {
         0.2, 4.0, 0.005, 0.003, 0.5, true
     ))
     .with_anisotropical_filtering(16)
-    .with_light_settings(light_settings);
+    .with_light_settings(light_settings)
+    .with_bloom(8, 4);
 
     let settings = core::engine_settings::EngineSettings::default()
     .with_dimensions(1600, 900)
