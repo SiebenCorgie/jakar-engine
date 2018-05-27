@@ -107,6 +107,8 @@ void main()
   //Add the blur to the image
   vec3 hdrColor = texture(color_input, inter_coord).rgb;
   vec3 bloomColor = texture(hdr_fragments, inter_coord).rgb;
+
+
   hdrColor += bloomColor; // additive blending
 
   float exposure;

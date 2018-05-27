@@ -328,16 +328,7 @@ impl BuildRender for RenderBuilder{
         // a currently static set of shader
         //TODO make shader dynamic
         println!("Getting post progress pipeline", );
-        let post_progress_pipeline = pipeline_manager_arc.lock()
-        .expect("failed to lock new pipeline manager")
-        .get_pipeline_by_config(
-            pipeline_builder::PipelineConfig::default()
-                .with_shader("PpExposure".to_string())
-                .with_render_pass(RenderPassConf::AssemblePass)
-                .with_depth_and_stencil_settings(
-                    pipeline_builder::DepthStencilConfig::NoDepthNoStencil
-                ),
-        );
+
 
         let resolve_pipeline = pipeline_manager_arc.lock()
         .expect("failed to lock new pipeline manager")
@@ -350,25 +341,12 @@ impl BuildRender for RenderBuilder{
                 ),
         );
 
-        let blur_pipeline = pipeline_manager_arc.lock()
-        .expect("failed to lock new pipeline manager")
-        .get_pipeline_by_config(
-            pipeline_builder::PipelineConfig::default()
-                .with_shader("PpBlur".to_string())
-                .with_render_pass(RenderPassConf::BlurPass)
-                .with_depth_and_stencil_settings(
-                    pipeline_builder::DepthStencilConfig::NoDepthNoStencil
-                ),
-        );
-
         println!("Starting post progress framework", );
         let post_progress = post_progress::PostProgress::new(
             self.settings.clone(),
-            post_progress_pipeline,
-            blur_pipeline,
             device.clone(),
             queue.clone(),
-            //&passes,
+            pipeline_manager_arc.clone()
         );
 
         println!("Creating light culling system", );

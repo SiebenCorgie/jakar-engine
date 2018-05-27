@@ -38,17 +38,13 @@ pub struct DebugSettings {
 ///BloomSettings.
 #[derive(Clone)]
 pub struct BloomSettings {
-    pub strength: f32,
-    pub scale: f32,
     ///more levels means nicer bloom but worse performance1
     pub levels: u32,
 }
 
 impl BloomSettings{
-    pub fn new(scale: f32, strength: f32, levels: u32) -> Self{
+    pub fn new(levels: u32) -> Self{
         BloomSettings{
-            strength,
-            scale,
             levels
         }
     }
@@ -295,11 +291,9 @@ impl RenderSettings{
                 0.2, 4.0, 0.002, 0.003, 1.0, true
             ),
             light_settings: LightSettings::default(),
-
+            
             bloom: BloomSettings{
-                strength: 1.5,
-                scale: 1.0,
-                levels: 4,
+                levels: 8,
             },
 
             debug_settings: DebugSettings{
@@ -478,15 +472,15 @@ impl RenderSettings{
 
     ///Sets the current bloom settings. Don't overdo it or your rendered image will look like a Michael Bay movie.
     #[inline]
-    pub fn with_bloom(mut self, scale: f32, strength: f32, levels: u32) -> Self{
-        self.bloom = BloomSettings::new(scale, strength, levels);
+    pub fn with_bloom(mut self, levels: u32) -> Self{
+        self.bloom = BloomSettings::new(levels);
         self
     }
 
     ///Sets the current bloom settings. Don't overdo it or your rendered image will look like a Michael Bay movie.
     #[inline]
-    pub fn set_bloom(&mut self, scale: f32, strength: f32, levels: u32){
-        self.bloom = BloomSettings::new(scale, strength, levels);
+    pub fn set_bloom(&mut self, levels: u32){
+        self.bloom = BloomSettings::new(levels);
     }
 
     ///Returns the current bloom settings. They might change per frame.

@@ -268,7 +268,6 @@ impl Renderer {
         &mut self,
         asset_manager: &mut asset_manager::AssetManager,
     ){
-
         //Show the other system that we are working
         self.set_working_cpu();
 
@@ -289,7 +288,8 @@ impl Renderer {
                 },
                 Err(e) => {
                     println!("Could not get next swapchain image: {}", e);
-                    //early return to restart the frame
+                    //early return to restart the frame, fake gpu working
+                    self.set_working_gpu();
                     return;
                 }
             }

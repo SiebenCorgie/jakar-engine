@@ -1,7 +1,9 @@
 
 use render::shader::shaders::default_pstprg_fragment;
-use render::shader::shaders::blur;
 use render::pipeline;
+use render::pipeline_manager;
+use render::pipeline_builder;
+use render::render_passes::RenderPassConf;
 use render::frame_system::FrameSystem;
 use core::engine_settings;
 
@@ -74,11 +76,9 @@ impl PostProgress{
     ///Create the postprogressing chain
     pub fn new(
         engine_settings: Arc<Mutex<engine_settings::EngineSettings>>,
-        post_progress_pipeline: Arc<pipeline::Pipeline>,
-        blur_pipe: Arc<pipeline::Pipeline>,
         device: Arc<vulkano::device::Device>,
         queue: Arc<vulkano::device::Queue>,
-        //passes: &render_passes::RenderPasses,
+        pipeline_manager: Arc<Mutex<pipeline_manager::PipelineManager>>
     ) -> Self{
         //generate a vertex buffer
         let mut vertices: Vec<PostProgressVertex> = Vec::new();
@@ -91,6 +91,19 @@ impl PostProgress{
         vertices.push(PostProgressVertex::new([1.0, -1.0], [1.0, 0.0]));
         vertices.push(PostProgressVertex::new([1.0; 2], [1.0; 2]));
 
+        //Create the assemble pipeline
+        let post_progress_pipeline = pipeline_manager.lock()
+        .expect("failed to lock new pipeline manager")
+        .get_pipeline_by_config(
+            pipeline_builder::PipelineConfig::default()
+                .with_shader("PpExposure".to_string())
+                .with_render_pass(RenderPassConf::AssemblePass)
+                .with_depth_and_stencil_settings(
+                    pipeline_builder::DepthStencilConfig::NoDepthNoStencil
+                ),
+        );
+
+
         let sample_vertex_buffer = vulkano::buffer::cpu_access::CpuAccessibleBuffer
                                     ::from_iter(device.clone(), vulkano::buffer::BufferUsage::all(), vertices.iter().cloned())
                                     .expect("failed to create buffer");
@@ -99,7 +112,6 @@ impl PostProgress{
         let hdr_settings_pool = CpuBufferPool::<default_pstprg_fragment::ty::hdr_settings>::new(
             device.clone(), vulkano::buffer::BufferUsage::all()
         );
-
 
 
         //The compute stuff...
@@ -142,8 +154,7 @@ impl PostProgress{
             bloom_system: bloom::Bloom::new(
                 engine_settings,
                 device,
-                blur_pipe,
-                screen_sampler.clone()
+                pipeline_manager.clone()
             ),
 
             pipeline: post_progress_pipeline,
@@ -211,6 +222,7 @@ impl PostProgress{
         let mut new_command_buffer = self.bloom_system.execute_blur(
             command_buffer,
             frame_system,
+            self.screen_sampler.clone(),
             self.screen_vertex_buffer.clone()
         );
         //After bluring its time to downscale our image to one pixel to be able
@@ -395,7 +407,8 @@ impl PostProgress{
         //create the descriptor set for the current image
         let ldr_frag = frame_system.get_passes().object_pass.get_images().ldr_fragments.clone();
         let forward_depth = frame_system.get_passes().object_pass.get_images().forward_hdr_depth.clone();
-        let blur = frame_system.get_passes().blur_pass.get_images().after_blur_v.clone();
+        let blur = frame_system.get_passes().blur_pass.get_images().get_final_bloom_img();
+        //let blur = frame_system.get_passes().blur_pass.get_images().bloom[0].after_h_img.clone();
         let dir_shadow = frame_system.get_passes().shadow_pass.get_images().directional_shadows.clone();
 
         let attachments_ds = PersistentDescriptorSet::start(self.pipeline.get_pipeline_ref(), 0) //at binding 0

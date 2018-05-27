@@ -15,6 +15,9 @@ use vulkano;
 use core::engine_settings::EngineSettings;
 use render::render_passes::post_images::PostImages;
 
+
+
+
 ///Is able to blur fragments based on settings supplied with the first descriptor set
 #[derive(Clone)]
 pub struct BlurPass {
@@ -88,22 +91,49 @@ impl BlurPass {
         );
     }
 
-    ///Returns the framebuffer for writing the the horizontal blured images
-    pub fn get_fb_blur_h(&self) -> Arc<FramebufferAbstract + Send + Sync>{
+    ///Returns the framebuffer for writing the the horizontal blured images for the level at idx.
+    /// Returns the last / samlest level if the idx is too big.
+    pub fn get_fb_blur_h(&self, idx: usize) -> Arc<FramebufferAbstract + Send + Sync>{
+
+        if self.images.bloom.is_empty(){
+            panic!("The bloom images are empty, that should not happen");
+        }
+
+        let mut index = idx;
+        if index > self.images.bloom.len() - 1{
+            index = self.images.bloom.len() - 1;
+        }
+
+        let after_h_image = self.images.bloom[index].after_h_img.clone();
+
         Arc::new(
             vulkano::framebuffer::Framebuffer::start(self.render_pass.clone())
             //Only writes to after h
-            .add(self.images.after_blur_h.clone()).expect("failed to add after_blur_h image")
+            .add(after_h_image)
+            .expect("failed to add after_blur_h image")
             .build()
             .expect("failed to build main framebuffer!")
         )
     }
 
-    pub fn get_fb_blur_v(&self) -> Arc<FramebufferAbstract + Send + Sync> {
+    pub fn get_fb_to_final(&self, idx: usize) -> Arc<FramebufferAbstract + Send + Sync> {
+
+        if self.images.bloom.is_empty(){
+            panic!("The bloom images are empty, that should not happen");
+        }
+
+        let mut index = idx;
+        if index > self.images.bloom.len() - 1{
+            index = self.images.bloom.len() - 1;
+        }
+
+        let final_image = self.images.bloom[index].final_image.clone();
+
         Arc::new(
             vulkano::framebuffer::Framebuffer::start(self.render_pass.clone())
             //Only writes to after v
-            .add(self.images.after_blur_v.clone()).expect("failed to add after_blur_v image")
+            .add(final_image)
+            .expect("failed to add final blured image")
             .build()
             .expect("failed to build main framebuffer!")
         )

@@ -1,4 +1,4 @@
 #[derive(VulkanoShader)]
 #[ty = "fragment"]
-#[path = "data/shader/blur.frag"]
+#[path = "data/shader/blur_addition.frag"]
 struct Dummy;

@@ -15,11 +15,71 @@ use vulkano;
 use core::engine_settings::EngineSettings;
 
 
+//Helper struct which collects the images needed for a single blur stage
+#[derive(Clone)]
+pub struct BlurStage {
+    ///The source image which gets blured, inital color comes from a resize operation
+    pub input_image: Arc<StorageImage<Format>>,
+    ///After bluring the horizontal
+    pub after_h_img: Arc<AttachmentImage<Format>>,
+    ///After also bluring vertical and possibly adding a image from another stage
+    pub final_image: Arc<AttachmentImage<Format>>
+}
+
+impl BlurStage{
+    pub fn new(
+        settings: Arc<Mutex<EngineSettings>>,
+        device: Arc<vulkano::device::Device>,
+        queue: Arc<vulkano::device::Queue>,
+        hdr_msaa_format: Format,
+        dimensions: [u32; 2]
+    ) -> Self{
+
+        let dims = Dimensions::Dim2d{
+            width: dimensions[0],
+            height: dimensions[1],
+        };
+
+        let transfer_usage = ImageUsage{
+            transfer_destination: true,
+            transfer_source: true,
+            color_attachment: true,
+            sampled: true,
+            storage: true,
+            ..ImageUsage::none()
+        };
+
+        let input_image = StorageImage::with_usage(
+            device.clone(),
+            dims,
+            hdr_msaa_format,
+            transfer_usage,
+            vec![queue.family()].into_iter()
+        ).expect("failed to creat input image for blur stage");
+
+        let after_h_img = AttachmentImage::sampled_input_attachment(
+            device.clone(),
+            dimensions,
+            hdr_msaa_format
+        ).expect("failed to create after_h image for blur stage!");
+
+        let final_image = AttachmentImage::sampled_input_attachment(
+            device.clone(),
+            dimensions,
+            hdr_msaa_format
+        ).expect("failed to create final image for blur stage!");
+
+        BlurStage{
+            input_image: input_image,
+            after_h_img: after_h_img,
+            final_image: final_image,
+        }
+    }
+}
 
 ///Collects the two PostImages
 pub struct PostImages {
-    pub after_blur_h: Arc<ImageViewAccess  + Send + Sync>,
-    pub after_blur_v: Arc<ImageViewAccess  + Send + Sync>,
+    pub bloom: Vec<BlurStage>,
     pub scaled_ldr_images: Vec<Arc<StorageImage<Format>>>,
 }
 
@@ -31,35 +91,66 @@ impl PostImages{
         queue: Arc<vulkano::device::Queue>,
     ) -> Self{
 
-        let current_dimensions = {
-            settings
+        let (current_dimensions, mut bloom_level) = {
+            let set_lck = settings
             .lock()
-            .expect("failed to lock settings for frame creation")
-            .get_dimensions()
+            .expect("failed to lock settings for frame creation");
+
+            let dur_dim = set_lck
+            .get_dimensions();
+
+            let bloom_lvl = set_lck.get_render_settings().get_bloom().levels;
+            (dur_dim, bloom_lvl)
         };
 
-        //We need two sampled images
-        let after_blur_h = AttachmentImage::sampled_input_attachment(device.clone(),
-        current_dimensions,
-        hdr_msaa_format).expect("failed to create after_blur_h buffer!");
+        //Always do at least one bloom level if activated
+        if bloom_level <= 0{
+            bloom_level = 1;
+        }
 
-        let after_blur_v = AttachmentImage::sampled_input_attachment(device.clone(),
-        current_dimensions,
-        hdr_msaa_format).expect("failed to create after_blur_v buffer!");
+        //For the bloom we want to scale the hdr_frags only image some levels down, blur each of them,
+        // and add them back together.
+        let mut blur_level_dim = [current_dimensions[0] / 2, current_dimensions[1] / 2];
+        let mut bloom_images = Vec::new();
+
+        //Create new image for each level
+        for idx in  0..bloom_level{
+            //Thoose will eb created in a loop as well
+            let blur_image = BlurStage::new(
+                settings.clone(),
+                device.clone(),
+                queue.clone(),
+                hdr_msaa_format,
+                blur_level_dim
+            );
+            //Store
+            bloom_images.push(blur_image);
+            //Update the dims and exit if too small
+            blur_level_dim = [blur_level_dim[0] / 2, blur_level_dim[1] / 2];
+
+            if blur_level_dim[0] < 1 || blur_level_dim[1] < 1 {
+                //Dims too small, break
+                break;
+            }
+        }
+
+        println!("Created {:?} blur images", blur_level_dim);
+
+
+        //Now generate the targets for the average lumiosity pass.
 
         let transfer_usage = ImageUsage{
             transfer_destination: true,
             transfer_source: true,
             color_attachment: true,
             sampled: true,
+            storage: true,
             ..ImageUsage::none()
         };
-
         //For several PostProgress Stuff we might need scaled images of the original image
         // we do this by storing several layers of scaled images in this vec.
         //The first one in half size comapred to the original, the last one is a 1x1 texture
         let mut scaled_ldr_images = Vec::new();
-
         let mut new_dimension_image = current_dimensions;
         //Always use the dimension, create image, then scale down
         'reduction_loop: loop {
@@ -101,9 +192,12 @@ impl PostImages{
 
 
         PostImages{
-            after_blur_h: after_blur_h,
-            after_blur_v: after_blur_v,
+            bloom: bloom_images,
             scaled_ldr_images: scaled_ldr_images,
         }
+    }
+    ///Returns the final bloom image
+    pub fn get_final_bloom_img(&self) -> Arc<AttachmentImage<Format>>{
+        self.bloom[0].final_image.clone()
     }
 }

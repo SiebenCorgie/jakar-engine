@@ -49,10 +49,10 @@ fn main() {
     .in_release_mode()
     .with_max_input_polling_speed(200)
     .with_fullscreen_mode(false)
-    //.with_cursor_state(winit::CursorState::Normal)
-    .with_cursor_state(winit::CursorState::Grab)
-    //.with_cursor_visibility(winit::MouseCursor::Default)
-    .with_cursor_visibility(winit::MouseCursor::NoneCursor)
+    .with_cursor_state(winit::CursorState::Normal)
+    //.with_cursor_state(winit::CursorState::Grab)
+    .with_cursor_visibility(winit::MouseCursor::Default)
+    //.with_cursor_visibility(winit::MouseCursor::NoneCursor)
     .with_render_settings(graphics_settings)
     .with_camera_settings(core::engine_settings::CameraSettings{
         far_plane: 200.0,

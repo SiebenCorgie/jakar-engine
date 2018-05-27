@@ -22,7 +22,7 @@ pub struct ObjectPassImages {
     //Holds the raw multisampled hdr colors
     pub forward_hdr_image: Arc<ImageViewAccess + Send + Sync>,
     //Adter sorting the hdr fragments (used for bluring)
-    pub hdr_fragments: Arc<ImageViewAccess + Send + Sync>,
+    pub hdr_fragments: Arc<AttachmentImage<Format>>,
     //The ldr fragments
     //pub ldr_fragments: Arc<ImageViewAccess + Send + Sync>,
     pub ldr_fragments: Arc<AttachmentImage<Format>>,
@@ -65,14 +65,18 @@ impl ObjectPassImages{
             device.clone(), current_dimensions, msaa_factor, msaa_depth_format)
             .expect("failed to create forward_hdr_depth buffer!");
 
-        let hdr_fragments = AttachmentImage::sampled_input_attachment(device.clone(),
-        current_dimensions,
-        hdr_msaa_format).expect("failed to create hdr_fragments buffer!");
+        //Use custom usage parameter since both are at some time used for a bliting operation
+        let hdr_fragments = AttachmentImage::with_usage(device.clone(),
+            current_dimensions,
+            hdr_msaa_format,
+            transfer_usage.clone()
+        ).expect("failed to create hdr_fragments buffer!");
 
-        //Uses a custom usage parameter becuase it is later blir to a 1pixel texture for adaptive eye corretction
         let ldr_fragments = AttachmentImage::with_usage(device.clone(),
-        current_dimensions,
-        hdr_msaa_format, transfer_usage.clone()).expect("failed to create ldr_fragments buffer!");
+            current_dimensions,
+            hdr_msaa_format,
+            transfer_usage.clone()
+        ).expect("failed to create ldr_fragments buffer!");
 
         ObjectPassImages{
             forward_hdr_depth: forward_hdr_depth,
