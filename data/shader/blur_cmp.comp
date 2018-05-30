@@ -12,10 +12,15 @@ layout(set = 0, binding = 1) uniform sampler2D img_two;
 layout(set = 0, binding = 2) uniform blur_settings{
   int is_horizontal;
   int add_second;
+  float blur_size;
 }u_blur_settings;
 //target image for the blured
 layout(set = 0, binding = 3) uniform writeonly image2D target_image;
 
+const float blur_kernel[11] = float[] (
+  0.055037,0.072806,0.090506,0.105726,0.116061,0.119726,0.116061,0.105726,
+  0.090506,0.072806,0.055037
+);
 
 void main(){
     float weight[5];
@@ -29,30 +34,35 @@ void main(){
     ivec2 pixel_coord = ivec2(gl_WorkGroupID.xy);
     vec2 texel_size = 1.0 / textureSize(img_one, 0); // gets size of single texel
     vec2 uv_loc = texel_size * pixel_coord; //Find uv location
+
     //middle fragment
-    vec4 result = texture(img_one, uv_loc) * weight[0];
+    vec4 curren_pixel = texture(img_one, uv_loc);
+    vec4 result = curren_pixel * blur_kernel[0];
+    //Compute a value which describes how wide we blur based on settings and intensity
+    float pixel_intentsity = dot(curren_pixel.xyz, vec3(0.2126, 0.7152, 0.0722));
+    vec2 blur_texel = texel_size * u_blur_settings.blur_size;// * pixel_intentsity;
 
     //Now blur
     if(u_blur_settings.is_horizontal == 1)
     {
-        for(int i = 1; i < 5; ++i)
+        for(int i = 1; i < 11; ++i)
         {
-            result += texture(img_one, uv_loc + vec2(texel_size.x * i, 0.0)) * weight[i];
-            result += texture(img_one, uv_loc - vec2(texel_size.x * i, 0.0)) * weight[i];
+            result += texture(img_one, uv_loc + vec2(blur_texel.x * i, 0.0)) * blur_kernel[i];
+            result += texture(img_one, uv_loc - vec2(blur_texel.x * i, 0.0)) * blur_kernel[i];
         }
     }
     else
     {
-        for(int i = 1; i < 5; ++i)
+        for(int i = 1; i < 11; ++i)
         {
-            result += texture(img_one, uv_loc + vec2(0.0, texel_size.y * i)) * weight[i];
-            result += texture(img_one, uv_loc - vec2(0.0, texel_size.y * i)) * weight[i];
+            result += texture(img_one, uv_loc + vec2(0.0, blur_texel.y * i)) * blur_kernel[i];
+            result += texture(img_one, uv_loc - vec2(0.0, blur_texel.y * i)) * blur_kernel[i];
         }
     }
 
     if (u_blur_settings.add_second == 1){
-      result += texture(img_two, uv_loc);
-      //TODO might have to lower tho
+      result = mix(result,texture(img_two, uv_loc), 0.5);
+      result = clamp(result, 0.0,1.0);
     }
 
     //Sync the shader

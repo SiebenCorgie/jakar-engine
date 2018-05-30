@@ -113,7 +113,7 @@ impl Bloom{
         let mut new_cb = self.resize_to(
             command_buffer,
             frame_system,
-            source,
+            source.clone(),
             target
         );
 
@@ -204,8 +204,16 @@ impl Bloom{
         //image
         let num_blur_levels = frame_system
         .get_passes().blur_pass.get_images().bloom.len();
+        //Find the first blur level. We usually don't want to blur the nearly full hd texture first
+        let initial_blur_level = {
+            self.engine_settings
+            .lock().expect("failed to lock settings")
+            .get_render_settings().get_bloom().first_bloom_level as usize
+        };
+
+
         let mut is_first_img = true;
-        for idx in (0..num_blur_levels).rev(){
+        for idx in (initial_blur_level..num_blur_levels).rev(){
 
             let target_stack = frame_system.get_passes()
             .blur_pass.get_images().bloom[idx].clone();
@@ -244,10 +252,18 @@ impl Bloom{
         target_stack: BlurStage,
         previouse_stack: Option<BlurStage>,
     )-> AutoCommandBufferBuilder{
+
+        let blur_size = {
+            self.engine_settings
+            .lock().expect("failed to lock settings.")
+            .get_render_settings().get_bloom().size
+        };
+
         //Construct the new shader descriptor
         let settings_hori = blur_cmp_shader::ty::blur_settings{
             is_horizontal: 1,
-            add_second: 0
+            add_second: 0,
+            blur_size: blur_size
         };
 
         let horizontal_pass_data = self.blur_settings_pool
@@ -292,7 +308,8 @@ impl Bloom{
 
         let settings_vert = blur_cmp_shader::ty::blur_settings{
             is_horizontal: 0,
-            add_second: add_second_int
+            add_second: add_second_int,
+            blur_size: blur_size,
         };
 
         let vertical_pass_data = self.blur_settings_pool

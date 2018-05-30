@@ -5,6 +5,7 @@ use vulkano::instance::Instance;
 
 use std::sync::{Arc, Mutex};
 
+use jakar_threadpool::*;
 
 use render;
 use render::renderer::Renderer;
@@ -367,6 +368,8 @@ impl BuildRender for RenderBuilder{
             resolve_pipeline,
         );
 
+        let thread_pool = ThreadPool::new_hardware_optimal("RenderThreadPool".to_string());
+
         println!("Finished Render Setup", );
         //Pass everthing to the struct
 
@@ -388,6 +391,7 @@ impl BuildRender for RenderBuilder{
             false,
             self.settings,
             uniform_manager,
+            thread_pool,
             Arc::new(Mutex::new(RenderState::Idle)),
         );
         Ok(renderer)

@@ -6,6 +6,7 @@ use collision;
 use render::frame_system::{FrameSystem};
 use render::light_system::LightSystem;
 use render::render_traits::ForwardRenderAble;
+use render::renderer::RenderDebug;
 
 use vulkano::buffer::ImmutableBuffer;
 use vulkano::device::Device;
@@ -17,6 +18,7 @@ use vulkano::command_buffer::AutoCommandBufferBuilder;
 use core::ReturnBoundInfo;
 use core::resources::material;
 
+use tools::callbacks::*;
 
 
 ///Defines the information a Vertex should have
@@ -246,6 +248,62 @@ impl Mesh {
         self.index_buffer.clone()
     }
 
+    pub fn get_draw_call(&self,
+        frame_system: &FrameSystem,
+        light_system: &LightSystem,
+        transform: Matrix4<f32>,
+        debug: &mut RenderDebug,
+    ) -> Box<FnCbBox + Send + 'static>{
+
+
+        let material_locked = self.get_material();
+        let mut material = material_locked
+        .lock()
+        .expect("failed to lock mesh for command buffer generation");
+
+        let pipeline = material.get_vulkano_pipeline();
+
+        debug.start_set_gen();
+        let set_01 = {
+            //aquirre the tranform matrix and generate the new set_01
+            material.get_set_01(transform)
+        };
+
+        let set_02 = {
+            material.get_set_02()
+        };
+
+        let set_03 = {
+            material.get_set_03()
+        };
+
+        let set_04 = {
+            material.get_set_04(&light_system, &frame_system)
+        };
+
+        let dyn_state = frame_system.get_dynamic_state().clone();
+        let vertex_buf = self.get_vertex_buffer().expect("Failed to get vertex_buf");
+        let index_buf = self.get_index_buffer().expect("Found no index buffer, should not happen");
+
+        debug.end_mesh_set();
+        debug.start_draw_cmd();
+        let call= |x: AutoCommandBufferBuilder|{
+            let cb = x.draw_indexed(
+                pipeline,
+                dyn_state,
+                vertex_buf, //vertex buffer (static usually)
+                index_buf, //index buffer
+                (set_01, set_02, set_03, set_04), //descriptor sets (currently static)
+                ()
+            )
+            .expect("Failed to draw mesh in command buffer!");
+
+            cb
+        };
+        debug.end_draw_cmd();
+        Box::new(call)
+    }
+
     ///Renders this mesh if the supplied framestage is in the froward stage
     pub fn draw(
         &self,
@@ -253,6 +311,7 @@ impl Mesh {
         frame_system: &FrameSystem,
         light_system: &LightSystem,
         transform: Matrix4<f32>,
+        debug: &mut RenderDebug,
     ) -> AutoCommandBufferBuilder{
         //Before doing anything, we check if that mesh is active, if not we just pass
         if self.vertex_buffer.is_none(){
@@ -265,6 +324,8 @@ impl Mesh {
         .expect("failed to lock mesh for command buffer generation");
 
         let pipeline = material.get_vulkano_pipeline();
+
+        debug.start_set_gen();
 
         let set_01 = {
             //aquirre the tranform matrix and generate the new set_01
@@ -283,6 +344,9 @@ impl Mesh {
             material.get_set_04(&light_system, &frame_system)
         };
 
+        debug.end_mesh_set();
+        debug.start_draw_cmd();
+
         //extend the current command buffer by this mesh
         let new_cb = command_buffer.draw_indexed(
             pipeline,
@@ -293,6 +357,8 @@ impl Mesh {
             ()
         )
         .expect("Failed to draw mesh in command buffer!");
+
+        debug.end_draw_cmd();
 
         new_cb
     }

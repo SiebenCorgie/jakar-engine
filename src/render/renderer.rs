@@ -19,6 +19,8 @@ use core::next_tree::content::ContentType;
 use tools::engine_state_machine::RenderState;
 use tools::math::time_tools::*;
 
+use jakar_threadpool::*;
+
 use winit;
 use vulkano;
 use vulkano::swapchain::SwapchainCreationError;
@@ -39,9 +41,16 @@ use std::mem;
 pub struct RenderDebug {
     last_sec_start: Instant,
     current_counter: u32,
-    avg_mesh_render_time: Duration,
+    avg_mesh_render_time: f32,
+    avg_set_time: f32,
+    avg_draw_command_time: f32,
+    avg_node_getting: f32,
+    last_draw_calls: u32,
 
     mesh_capture_start: Instant,
+    mesh_set_cap_start: Instant,
+    mesh_draw_start: Instant,
+    mesh_node_getting: Instant,
 }
 
 impl RenderDebug{
@@ -49,13 +58,20 @@ impl RenderDebug{
         RenderDebug{
             last_sec_start: Instant::now(),
             current_counter: 0,
-            avg_mesh_render_time: Duration::from_secs(0),
+            avg_mesh_render_time: 1.0 / 1_000.0,
+            avg_set_time: 1.0 / 1_000.0,
+            avg_draw_command_time: 1.0 / 1_000.0,
+            avg_node_getting: 1.0 / 1_000.0,
+            last_draw_calls: 0,
             mesh_capture_start: Instant::now(),
+            mesh_set_cap_start: Instant::now(),
+            mesh_draw_start: Instant::now(),
+            mesh_node_getting: Instant::now(),
         }
     }
     pub fn update(&mut self){
         if self.last_sec_start.elapsed().as_secs() > 0{
-            println!("FPS: {} \t avg mesh timing: {}", self.current_counter, as_ms(self.avg_mesh_render_time));
+            println!("FPS: {} \t avg mesh timing: {}ms", self.current_counter, self.avg_mesh_render_time * 1000.0);
             self.last_sec_start = Instant::now();
             self.current_counter = 1;
         }else{
@@ -63,10 +79,14 @@ impl RenderDebug{
         }
     }
 
+    pub fn set_draw_calls(&mut self, draw_calls: u32){
+        self.last_draw_calls = draw_calls;
+    }
+
     pub fn end_mesh_capture(&mut self){
         let dur = self.mesh_capture_start.elapsed();
-        self.avg_mesh_render_time += dur;
-        self.avg_mesh_render_time = self.avg_mesh_render_time.checked_div(2).expect("Failed to calc time!");
+        self.avg_mesh_render_time += dur_as_f32(dur);
+        self.avg_mesh_render_time /= 2.0;
     }
 
     //starts the capture of a mesh rendering time, gets reset when update_avr_mesh is called
@@ -74,8 +94,44 @@ impl RenderDebug{
         self.mesh_capture_start = Instant::now();
     }
 
+    pub fn start_set_gen(&mut self){
+        self.mesh_set_cap_start = Instant::now();
+    }
+
+    pub fn end_mesh_set(&mut self){
+        let dur = self.mesh_set_cap_start.elapsed();
+        self.avg_set_time += dur_as_f32(dur);
+        self.avg_set_time /= 2.0;
+    }
+
+    pub fn start_draw_cmd(&mut self){
+        self.mesh_draw_start = Instant::now();
+    }
+
+    pub fn end_draw_cmd(&mut self){
+        let dur = self.mesh_draw_start.elapsed();
+        self.avg_draw_command_time += dur_as_f32(dur);
+        self.avg_draw_command_time /= 2.0;
+    }
+    pub fn start_node_getting(&mut self){
+        self.mesh_node_getting = Instant::now();
+    }
+
+    pub fn end_node_getting(&mut self){
+        let dur = self.mesh_node_getting.elapsed();
+        self.avg_node_getting += dur_as_f32(dur);
+        self.avg_node_getting /= 2.0;
+    }
+
     pub fn print_stat(&self){
-        println!("Average mesh draw time: {:?}", self.avg_mesh_render_time);
+        println!("RenderStats=================", );
+        println!("Average mesh draw time: {}ms", self.avg_mesh_render_time * 1000.0);
+        println!("Average mesh desc-set time: {}ms", self.avg_set_time * 1000.0);
+        println!("Average mesh draw command time: {}ms", self.avg_draw_command_time * 1000.0);
+        println!("Average node getting time: {}ms", self.avg_node_getting * 1000.0);
+        println!("-----At: {} draw calls ---", self.last_draw_calls);
+        println!("============================", );
+
     }
 }
 
@@ -106,9 +162,7 @@ pub struct Renderer {
     shadow_system: shadow_system::ShadowSystem,
     forward_system: ForwardSystem,
     light_system: light_system::LightSystem,
-
     render_passes: Arc<Mutex<RenderPasses>>,
-
     ///The post progresser
     post_progress: post_progress::PostProgress,
 
@@ -120,6 +174,9 @@ pub struct Renderer {
 
     state: Arc<Mutex<RenderState>>,
     last_frame_end: Option<Arc<FenceSignalFuture<PresentFuture<CommandBufferExecFuture<Box<vulkano::sync::GpuFuture + Send + Sync>, AutoCommandBuffer>, winit::Window>>>>,
+
+    ///A Threadpool used for all rendering operation threading like draw_call batching
+    render_thread_pool: ThreadPool,
 
     debug_info: RenderDebug,
 }
@@ -147,6 +204,9 @@ impl Renderer {
         recreate_swapchain: bool,
         engine_settings: Arc<Mutex<engine_settings::EngineSettings>>,
         uniform_manager: Arc<Mutex<uniform_manager::UniformManager>>,
+
+        render_thread_pool: ThreadPool,
+
         state: Arc<Mutex<RenderState>>,
     ) -> Renderer{
         Renderer{
@@ -170,6 +230,9 @@ impl Renderer {
             uniform_manager: uniform_manager,
             state: state,
             last_frame_end: None,
+
+            render_thread_pool,
+
             debug_info: RenderDebug::new(),
         }
     }
@@ -357,6 +420,7 @@ impl Renderer {
             &self.post_progress,
             asset_manager,
             command_buffer,
+            &mut self.render_thread_pool,
             &mut self.debug_info
         );
 

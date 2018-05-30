@@ -295,10 +295,17 @@ impl ShadowSystem{
         //declare a new cb object which will be updated per draw call
         let mut new_cb = command_buffer;
         //Find the current percentage a mesh must cover to be used
-        let cover_bias = {
+        let (cover_bias, should_capture) = {
             let set_lck = self.engine_settings.lock().expect("failed to lock settings");
-            set_lck.get_render_settings().get_light_settings().directional_settings.get_occupy_bias()
+            let bias = set_lck.get_render_settings()
+            .get_light_settings().directional_settings.get_occupy_bias();
+
+            let should = set_lck.capture_frame;
+            (bias, should)
         };
+
+        let mut draw_counter = 0;
+
         //Now for each light and its cascade, render the light
         for &mut (ref mut _light_node, ref light_info) in light_store.directional_lights.iter_mut(){
             //Get the mvp matrix of the current light from the used matrixes in the
@@ -367,10 +374,16 @@ impl ShadowSystem{
                         cascade_mvp.clone(),
                         dynamic_state.clone()
                     );
+
+                    draw_counter += 1;
+
                 }
                 //println!("cas {} time for rendering {} meshes in {}ms", idx, mesh_count, as_ms(render_start_time.elapsed()));
                 //println!("Time for cascade {}: {}s {}ms \n", idx, dur_as_f32(cascade_start_time.elapsed()), as_ms(cascade_start_time.elapsed()));
             }
+        }
+        if should_capture{
+            println!("\t RE: {} Shadow draw calls", draw_counter);
         }
         new_cb
     }

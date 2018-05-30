@@ -107,7 +107,7 @@ impl PostImages{
         queue: Arc<vulkano::device::Queue>,
     ) -> Self{
 
-        let (current_dimensions, mut bloom_level, initial_scale_down) = {
+        let (current_dimensions, mut bloom_level) = {
             let set_lck = settings
             .lock()
             .expect("failed to lock settings for frame creation");
@@ -117,9 +117,8 @@ impl PostImages{
 
             let bloom_lvl = set_lck.get_render_settings().get_bloom().levels;
 
-            let scale_down = set_lck.get_render_settings().get_bloom().initial_scale_down;
 
-            (dur_dim, bloom_lvl, scale_down)
+            (dur_dim, bloom_lvl)
         };
 
         //Always do at least one bloom level if activated
@@ -130,8 +129,8 @@ impl PostImages{
         //For the bloom we want to scale the hdr_frags only image some levels down, blur each of them,
         // and add them back together.
         let mut blur_level_dim = [
-            current_dimensions[0] / initial_scale_down,
-            current_dimensions[1] / initial_scale_down
+            current_dimensions[0] / 2,
+            current_dimensions[1] / 2
         ];
         let mut bloom_images = Vec::new();
 
@@ -217,9 +216,5 @@ impl PostImages{
             bloom: bloom_images,
             scaled_ldr_images: scaled_ldr_images,
         }
-    }
-    ///Returns the final bloom image
-    pub fn get_final_bloom_img(&self) -> Arc<StorageImage<Format>>{
-        self.bloom[0].final_image.clone()
     }
 }

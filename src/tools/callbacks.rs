@@ -1,40 +1,24 @@
-use core::next_tree::attributes::NodeAttributes;
+use vulkano::command_buffer::AutoCommandBufferBuilder;
 
 
-/*
-///To create a new callback do something like this:
-///```
-/// let call = CallbackContainer::new(|x: f32|{
-///     println!("Got a callback after {}sec", x);
-///});
-/// ```
-impl<T> CallbackContainer<T>{
-    pub fn new(new: T) ->Self{
-        CallbackContainer{
-            callback: new,
-        }
+///A Handy trait to call functions of a boxed `FnOnce`
+pub trait FnBox {
+    fn call_box(self: Box<Self>);
+}
+
+impl<F: FnOnce()> FnBox for F {
+    fn call_box(self: Box<F>) {
+        (*self)()
     }
 }
 
-///Can execute a closure of the type FnMut(f32).
-pub trait DeltaCallback {
-    fn execute(&mut self, delta: f32);
+///A Handy trait to call a `FnOnce(AutoCommandBufferBuilder) -> AutoCommandBufferBuilder`
+pub trait FnCbBox {
+    fn call_box(self: Box<Self>, command_buffer: AutoCommandBufferBuilder) -> AutoCommandBufferBuilder;
 }
 
-impl<T: FnMut(f32)> DeltaCallback for CallbackContainer<T>{
-    fn execute(&mut self, delta: f32){
-        (self.callback)(delta);
+impl<F: FnOnce(AutoCommandBufferBuilder) -> AutoCommandBufferBuilder> FnCbBox for F {
+    fn call_box(self: Box<F>, command_buffer: AutoCommandBufferBuilder) -> AutoCommandBufferBuilder {
+        (*self)(command_buffer)
     }
 }
-
-///Same as `DeltaCallback` but supplies the nodes attributes as a mutable reference to the closure.
-pub trait DeltaCallbackNode {
-    fn execute(&mut self, delta: f32, attributes: &mut NodeAttributes);
-}
-
-impl<T: FnMut(f32, &mut NodeAttributes)> DeltaCallbackNode for CallbackContainer<T>{
-    fn execute(&mut self, delta: f32, attributes: &mut NodeAttributes){
-        (self.callback)(delta, attributes);
-    }
-}
-*/

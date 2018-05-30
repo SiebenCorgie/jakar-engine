@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 use vulkano::framebuffer::RenderPassAbstract;
 use vulkano::device::Device;
-
+use vulkano::image::StorageImage;
 use vulkano::format::Format;
 
 use vulkano;
@@ -129,6 +129,17 @@ impl RenderPasses{
             RenderPassConf::BlurPass => (self.blur_pass.render_pass.clone(), 0),
             RenderPassConf::AssemblePass =>(self.assemble.render_pass.clone(), 0),
         }
+    }
+
+    ///Returns the final blur image. *This could be not the first image in the bloom stack!*
+    pub fn get_final_bloom_img(&self) -> Arc<StorageImage<Format>>{
+        let biggest_blured_image = {
+            self.settings
+            .lock().expect("failed to lock settings")
+            .get_render_settings().get_bloom().first_bloom_level as usize
+        };
+        self.blur_pass.get_images()
+        .bloom[biggest_blured_image].final_image.clone()
     }
 }
 

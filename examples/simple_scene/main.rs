@@ -30,7 +30,7 @@ fn main() {
         8, //pcf samples
         4096, //lightmap resolution
         0.95, //cascade lambda
-        [0.25, 0.2, 0.1, 0.1], //occupy bias
+        [0.5, 0.5, 0.4, 0.1], //occupy bias
         1500.0) //poisson spread
     );
 
@@ -42,7 +42,12 @@ fn main() {
     ))
     .with_anisotropical_filtering(16)
     .with_light_settings(light_settings)
-    .with_bloom(8, 4);
+    .with_bloom(
+        3, //levles
+        1, //initial blured level
+        0.5, //size
+        0.01, //brightness
+    );
 
     let settings = core::engine_settings::EngineSettings::default()
     .with_dimensions(1600, 900)
@@ -50,10 +55,10 @@ fn main() {
     .in_release_mode()
     .with_max_input_polling_speed(200)
     .with_fullscreen_mode(false)
-    .with_cursor_state(winit::CursorState::Normal)
-    //.with_cursor_state(winit::CursorState::Grab)
-    .with_cursor_visibility(winit::MouseCursor::Default)
-    //.with_cursor_visibility(winit::MouseCursor::NoneCursor)
+    //.with_cursor_state(winit::CursorState::Normal)
+    .with_cursor_state(winit::CursorState::Grab)
+    //.with_cursor_visibility(winit::MouseCursor::Default)
+    .with_cursor_visibility(winit::MouseCursor::NoneCursor)
     .with_render_settings(graphics_settings)
     .with_camera_settings(core::engine_settings::CameraSettings{
         far_plane: 200.0,
@@ -72,9 +77,9 @@ fn main() {
     };
 
 
-    engine.get_asset_manager().import_gltf("TestScene", "examples/simple_scene/TestScenes/Cube_Plane.gltf");
-    //engine.get_asset_manager().import_gltf("Arrow", "examples/simple_scene/TestScenes/Arrow.gltf");
-    //engine.get_asset_manager().import_gltf("TestScene", "examples/simple_scene/Sponza/Sponza.gltf");
+    //engine.get_asset_manager().import_gltf("TestScene", "examples/simple_scene/TestScenes/Cube_Plane.gltf");
+    //engine.get_asset_manager().import_gltf("TestScene", "examples/simple_scene/Gate/Gate.gltf");
+    engine.get_asset_manager().import_gltf("TestScene", "examples/simple_scene/Sponza/Sponza.gltf");
     //engine.get_asset_manager().import_gltf("TestScene", "examples/simple_scene/Helmet/Helmet.gltf");
 
 
@@ -87,9 +92,9 @@ fn main() {
     //SUN========================================================================
     //add a matrix of lights
 
-    let mut matrix_size = 0;
+    let mut matrix_size = 10;
     matrix_size = matrix_size - (matrix_size / 2);
-    let spacing = 3.0;
+    let spacing = 2.0;
 
     for x in -(matrix_size)..matrix_size{
         for y in -(matrix_size)..matrix_size{
@@ -121,50 +126,16 @@ fn main() {
                             )
                         )
                     );
-                    /*
-                    let mut scale_up = true;
 
-                    //also rotate randomly
-                    scene.set_tick(
-                        move |x:f32, arg: &mut JakarNode|{
-                            let add_vec = Vector3::new(
-                                2.0 * x,
-                                1.0, //3.0 * x,
-                                1.0 //2.0 * x
-                            );
-
-                            arg.add_job(jobs::SceneJobs::RotateAroundPoint(
-                                add_vec, Vector3::new(0.0,0.0,0.0))
-                            );
-
-                            let current_intensity = arg.value.as_point_light().unwrap().get_intensity().clone();
-
-                            if current_intensity > 10.0{
-                                scale_up = false;
-                            }
-                            if current_intensity < 1.0{
-                                scale_up = true;
-                            }
-
-                            if scale_up{
-                                let mut val = arg.value.as_point_light().unwrap().get_intensity();
-                                *val += 5.0 * x;
-                            }else{
-                                let mut val = arg.value.as_point_light().unwrap().get_intensity();
-                                *val -= 5.0 * x;
-                            }
-                        }
-                    );
-                    */
                 }
                 None => {println!("Could not find Light", );}, //get on with it
             }
         }
     }
-
+/*
     //Now add a sun
     let mut sun = light::LightDirectional::new("Sunny");
-    sun.set_intensity(100.0);
+    sun.set_intensity(200.0);
     sun.set_color(Vector3::new(1.0, 0.85, 0.9));
     let sun_node = light_tree.add_at_root(content::ContentType::DirectionalLight(sun), None).expect("fail");
     //Now rotate it a bit on x
@@ -176,7 +147,7 @@ fn main() {
         None => {println!("Could not find sun", );}
     }
 
-
+*/
     light_tree.update();
     engine.get_asset_manager().get_active_scene().join_at_root(&light_tree);
     println!("LightreeJoined!", );
@@ -286,12 +257,14 @@ fn main() {
         //Set the debug settings
         if engine.get_current_keymap().b{
             engine.get_engine_settings_unlocked().get_render_settings_mut()
-            .get_debug_settings_mut().draw_bounds = true;
+            .get_bloom_mut().brightness += 0.001;
+            println!("Changed stuff", );
         }
         //Set the debug settings
         if engine.get_current_keymap().n{
             engine.get_engine_settings_unlocked().get_render_settings_mut()
-            .get_debug_settings_mut().draw_bounds = false;
+            .get_bloom_mut().brightness -= 0.001;
+            println!("Changed stuff", );
         }
 
         if engine.get_current_keymap().t_1{

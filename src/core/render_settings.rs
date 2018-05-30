@@ -41,14 +41,20 @@ pub struct BloomSettings {
     ///more levels means nicer bloom but worse performance1
     pub levels: u32,
     ///Describes what size the initial blur image should be scaled down.
-    pub initial_scale_down: u32,
+    pub first_bloom_level: u32,
+    ///How big the bloom should be. This value should mostly be below 1.0.
+    pub size: f32,
+    ///How bright the added blure samples are. 1.0 is realy bright. *The values should be between 1.0 and 0.0*
+    pub brightness: f32
 }
 
 impl BloomSettings{
-    pub fn new(levels: u32, scale_down: u32) -> Self{
+    pub fn new(levels: u32, scale_down: u32, size: f32, brightness: f32) -> Self{
         BloomSettings{
             levels,
-            initial_scale_down: scale_down
+            first_bloom_level: scale_down,
+            size,
+            brightness
         }
     }
 }
@@ -297,7 +303,9 @@ impl RenderSettings{
 
             bloom: BloomSettings{
                 levels: 8,
-                initial_scale_down: 4, //nice performance and look
+                first_bloom_level: 4, //nice performance and look
+                size: 0.05,
+                brightness: 1.0,
             },
 
             debug_settings: DebugSettings{
@@ -477,21 +485,53 @@ impl RenderSettings{
     ///Sets the current bloom settings. Don't overdo it or your rendered image will look like a Michael Bay movie.
     ///Also for performance, try to increase the initial scale down
     #[inline]
-    pub fn with_bloom(mut self, levels: u32, initial_scale_down: u32) -> Self{
-        self.bloom = BloomSettings::new(levels, initial_scale_down);
+    pub fn with_bloom(mut self, levels: u32, first_bloom_level: u32, size: f32, brightness: f32) -> Self{
+        let mut using_first_level = first_bloom_level;
+        if first_bloom_level >= levels{
+            using_first_level = levels - 1;
+        }
+
+        let mut used_brightness = brightness;
+        if brightness > 1.0{
+            used_brightness = 1.0;
+        }
+        if brightness < 0.0 {
+            used_brightness = 0.0
+        }
+
+
+        self.bloom = BloomSettings::new(levels, using_first_level, size, used_brightness);
         self
     }
 
     ///Sets the current bloom settings. Don't overdo it or your rendered image will look like a Michael Bay movie.
     #[inline]
-    pub fn set_bloom(&mut self, levels: u32, initial_scale_down: u32){
-        self.bloom = BloomSettings::new(levels, initial_scale_down);
+    pub fn set_bloom(&mut self, levels: u32, first_bloom_level: u32, size: f32, brightness: f32){
+        let mut using_first_level = first_bloom_level;
+        if first_bloom_level >= levels{
+            using_first_level = levels - 1;
+        }
+
+        let mut used_brightness = brightness;
+        if brightness > 1.0{
+            used_brightness = 1.0;
+        }
+        if brightness < 0.0 {
+            used_brightness = 0.0
+        }
+        self.bloom = BloomSettings::new(levels, using_first_level, size, used_brightness);
     }
 
     ///Returns the current bloom settings. They might change per frame.
     #[inline]
-    pub fn get_bloom(&self,) -> BloomSettings{
+    pub fn get_bloom(&self) -> BloomSettings{
         self.bloom.clone()
+    }
+
+    ///Returns the current bloom settings. They might change per frame.
+    #[inline]
+    pub fn get_bloom_mut(&mut self) -> &mut BloomSettings{
+        &mut self.bloom
     }
 
 }

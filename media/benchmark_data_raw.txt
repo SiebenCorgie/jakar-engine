@@ -57,3 +57,8 @@ MultiThreading
 ==============================================
 10x10 point-lights + sun "Cube_Plane" map: 4ms CPU, 5ms GPU
 10x10 point-lights + sun "Sponza" map: 25ms CPU, 9ms GPU
+
+DrawCallTime
+==============================================
+Before closure MultiThreading:
+6.494352
