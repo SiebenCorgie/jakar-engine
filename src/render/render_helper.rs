@@ -3,7 +3,6 @@ use core::resources::camera;
 use core::resources::camera::Camera;
 use jakar_tree::*;
 use core::next_tree::*;
-use render::frame_system;
 use render::pipeline_manager;
 use render::pipeline_builder;
 use render::uniform_manager;
@@ -90,8 +89,8 @@ pub fn add_bound_draw(
     let pipeline = pipeline_lck.get_pipeline_by_config(pipeline_needed);
     //now we get out self the points of the bound and create a vertex buffer form it
 
-    let mut min = object_node.get_attrib().get_value_bound().min; //already in worldspace
-    let mut max = object_node.get_attrib().get_value_bound().max; //already in worldspace
+    let min = object_node.get_attrib().get_value_bound().min; //already in worldspace
+    let max = object_node.get_attrib().get_value_bound().max; //already in worldspace
     //Now we transform them to match the object scale and location
     let value_vertices = create_vertex_buffer_for_bound(min, max, [1.0, 1.0, 0.0, 1.0]);
     let node_vertices = create_vertex_buffer_for_bound(

@@ -10,6 +10,7 @@ use core::engine_settings;
 use vulkano;
 use vulkano::descriptor::descriptor_set::PersistentDescriptorSet;
 use vulkano::buffer::cpu_pool::CpuBufferPool;
+use vulkano::buffer::immutable::ImmutableBuffer;
 use vulkano::sampler::Sampler;
 use vulkano::descriptor::descriptor_set::FixedSizeDescriptorSetsPool;
 use vulkano::buffer::DeviceLocalBuffer;
@@ -104,9 +105,11 @@ impl PostProgress{
         );
 
 
-        let sample_vertex_buffer = vulkano::buffer::cpu_access::CpuAccessibleBuffer
-                                    ::from_iter(device.clone(), vulkano::buffer::BufferUsage::all(), vertices.iter().cloned())
+        let (sample_vertex_buffer, buffer_future) = ImmutableBuffer
+                                    ::from_iter(vertices.iter().cloned(), vulkano::buffer::BufferUsage::all(), queue.clone())
                                     .expect("failed to create buffer");
+        //drop the future to wait for the upload.
+        drop(buffer_future);
 
         //we also have to maintain a buffer pool for the settings which can potentually change
         let hdr_settings_pool = CpuBufferPool::<default_pstprg_fragment::ty::hdr_settings>::new(
@@ -154,7 +157,6 @@ impl PostProgress{
             bloom_system: bloom::Bloom::new(
                 engine_settings,
                 device,
-                pipeline_manager.clone()
             ),
 
             pipeline: post_progress_pipeline,
@@ -223,7 +225,6 @@ impl PostProgress{
             command_buffer,
             frame_system,
             self.screen_sampler.clone(),
-            self.screen_vertex_buffer.clone()
         );
         //After bluring its time to downscale our image to one pixel to be able
         //to read it back in a compute shader and get the average value.
@@ -243,13 +244,13 @@ impl PostProgress{
         frame_system: &FrameSystem,
     ) -> AutoCommandBufferBuilder{
         //The walking source image, first one is the current ldr image.
-        let local_source_image_attachemtn = frame_system.get_passes().object_pass.get_images().ldr_fragments.clone();
-        let mut local_source_image = frame_system.get_passes().blur_pass.get_images().scaled_ldr_images[0].clone();
+        let local_source_image_attachemtn = frame_system.get_passes().gbuffer.diffuse_ambient.clone();
+        let mut local_source_image = frame_system.get_passes().gbuffer.scaled_ldr[0].clone();
 
         let mut local_cb = command_buffer;
 
         //First of all we create all "mipmaps" of the currently rendered frame
-        for (index, image) in frame_system.get_passes().blur_pass.get_images().scaled_ldr_images.iter().enumerate(){
+        for (index, image) in frame_system.get_passes().gbuffer.scaled_ldr.iter().enumerate(){
             //Get the extend of the source (the firstone comes from the attachment)
             let sourc_dim = {
                 if index == 0{
@@ -322,7 +323,7 @@ impl PostProgress{
 
         //Since we blittet all images, we take the last one (assuming that it is 1x1)
         // and push it to the calculation on the gpu
-        let one_pix_image = frame_system.get_passes().blur_pass.get_images().scaled_ldr_images.iter().last().expect("failed to get last average image").clone();
+        let one_pix_image = frame_system.get_passes().gbuffer.scaled_ldr.iter().last().expect("failed to get last average image").clone();
 
 
         let exposure_settings = {
@@ -391,7 +392,7 @@ impl PostProgress{
                 .get_render_settings().get_debug_settings().ldr_debug_view_level
             };
 
-            let image_count = frame_system.get_passes().blur_pass.get_images().scaled_ldr_images.len() - 1;
+            let image_count = frame_system.get_passes().gbuffer.scaled_ldr.len() - 1;
 
             let level = {
                 if debug_level > image_count as u32{
@@ -401,16 +402,16 @@ impl PostProgress{
                 }
             };
             //now we can savely return the n-th image
-            let ldr_img = frame_system.get_passes().blur_pass.get_images().scaled_ldr_images[level as usize].clone();
+            let ldr_img = frame_system.get_passes().gbuffer.scaled_ldr[level as usize].clone();
             ldr_img
         };
 
         //create the descriptor set for the current image
-        let ldr_frag = frame_system.get_passes().object_pass.get_images().ldr_fragments.clone();
-        let forward_depth = frame_system.get_passes().object_pass.get_images().forward_hdr_depth.clone();
+        let ldr_frag = frame_system.get_passes().gbuffer.diffuse_ambient.clone();
+        let forward_depth = frame_system.get_passes().gbuffer.forward_depth.clone();
         let blur = frame_system.get_passes().get_final_bloom_img();
         //let blur = frame_system.get_passes().blur_pass.get_images().bloom[0].after_h_img.clone();
-        let dir_shadow = frame_system.get_passes().shadow_pass.get_images().directional_shadows.clone();
+        let dir_shadow = frame_system.get_passes().gbuffer.directional_shadow_map.clone();
 
         let attachments_ds = PersistentDescriptorSet::start(self.pipeline.get_pipeline_ref(), 0) //at binding 0
             .add_sampled_image(

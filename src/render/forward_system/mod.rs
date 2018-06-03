@@ -1,18 +1,16 @@
 use core::engine_settings;
-use render;
 use render::render_helper;
 use render::frame_system::FrameSystem;
 use render::light_system::LightSystem;
 use render::post_progress::PostProgress;
 use render::pipeline;
 use core::resource_management::asset_manager::AssetManager;
-use core::next_tree::{SceneTree, ValueTypeBool, SceneComparer,JakarNode};
+use core::next_tree::{SceneTree, ValueTypeBool, SceneComparer};
 use core::next_tree::content::ContentType;
 use core::resources::camera::Camera;
 use render::renderer::RenderDebug;
 use render::shader::shaders::hdr_resolve;
 
-use tools::callbacks::*;
 
 
 use vulkano::command_buffer::AutoCommandBufferBuilder;
@@ -22,7 +20,6 @@ use vulkano::pipeline::GraphicsPipelineAbstract;
 use vulkano;
 
 use std::sync::{Arc, Mutex};
-use std::sync::mpsc::*;
 
 use jakar_threadpool::*;
 
@@ -30,11 +27,6 @@ use jakar_threadpool::*;
 ///Collects all thingy which are needed to render all objects in the forward pass
 pub struct ForwardSystem {
     engine_settings:  Arc<Mutex<engine_settings::EngineSettings>>,
-
-    //a copy of the device
-    device: Arc<vulkano::device::Device>,
-    //a copy of the queue
-    queue: Arc<vulkano::device::Queue>,
 
     sort_buffer_pool: CpuBufferPool<hdr_resolve::ty::hdr_settings>,
     sort_desc_pool: FixedSizeDescriptorSetsPool<Arc<GraphicsPipelineAbstract + Send + Sync>>,
@@ -50,7 +42,6 @@ impl ForwardSystem{
     pub fn new(
         engine_settings:  Arc<Mutex<engine_settings::EngineSettings>>,
         device: Arc<vulkano::device::Device>,
-        queue: Arc<vulkano::device::Queue>,
         resolve_pipe: Arc<pipeline::Pipeline>,
     ) -> Self{
 
@@ -61,8 +52,6 @@ impl ForwardSystem{
 
         ForwardSystem{
             engine_settings,
-            device,
-            queue,
             resolve_pipe,
             sort_buffer_pool,
             sort_desc_pool
@@ -110,7 +99,7 @@ impl ForwardSystem{
 
         //Go into the forward shading stage
         //first get the framebuffer for the forward pass
-        let forward_frame_buffer = frame_system.get_passes().object_pass.get_framebuffer();
+        let forward_frame_buffer = frame_system.get_passes().get_forward_framebuff();
 
         //For successfull clearing we generate a vector for all images.
         let clearing_values = vec![
@@ -290,7 +279,7 @@ impl ForwardSystem{
         .expect("Failed to get sorting settings");
 
         let sorting_attachment = self.sort_desc_pool.next()
-        .add_image(frame_system.get_passes().object_pass.get_images().forward_hdr_image.clone())
+        .add_image(frame_system.get_passes().gbuffer.forward_diffuse.clone())
         .expect("failed to add hdr_image to sorting pass descriptor set")
         .add_buffer(settings_buffer)
         .expect("failed to add hdr image settings buffer to post progress attachment")

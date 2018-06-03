@@ -1,9 +1,6 @@
-use render::uniform_manager;
 use render::frame_system;
 use render::shadow_system::ShadowSystem;
 use core::resource_management::asset_manager::AssetManager;
-use core::next_tree::{SceneComparer, SaveUnwrap, SceneTree, ValueTypeBool};
-use core::resources::camera::Camera;
 use core::next_tree::content::ContentType;
 use core::next_tree::jobs::SceneJobs;
 use core::next_tree::attributes::NodeAttributes;
@@ -25,11 +22,10 @@ use vulkano::descriptor::descriptor_set::FixedSizeDescriptorSetsPool;
 use vulkano::buffer::immutable::ImmutableBuffer;
 use vulkano::buffer::BufferUsage;
 use vulkano::sync::GpuFuture;
-use vulkano::sync::JoinFuture;
 use vulkano::command_buffer::AutoCommandBufferBuilder;
 use vulkano;
 
-use std::sync::{Arc,Mutex};
+use std::sync::Arc;
 
 type NodeAbstractType = Node<
     ContentType,
@@ -68,8 +64,6 @@ impl LightStore{
 /// because of this optimization it is possible to use around 1000 spot or point lights while still maintaining
 /// over 30fps on a mid range gpu.
 pub struct LightSystem {
-    uniform_manager: Arc<Mutex<uniform_manager::UniformManager>>,
-    device: Arc<vulkano::device::Device>,
     queue: Arc<vulkano::device::Queue>,
 
     //Gets allocated ones and is used to attach the current cluster data to other shaders
@@ -95,7 +89,6 @@ pub struct LightSystem {
 
 impl LightSystem{
     pub fn new(
-        uniform_manager: Arc<Mutex<uniform_manager::UniformManager>>,
         device: Arc<vulkano::device::Device>,
         queue: Arc<vulkano::device::Queue>,
     ) -> Self {
@@ -115,6 +108,7 @@ impl LightSystem{
                     queue.clone()
                 ).expect("Failed to create point light buffer");
                 //Now drop the future (which will execute and then return)
+                drop(future);
                 buffer
             };
 
@@ -125,7 +119,9 @@ impl LightSystem{
                     queue.clone()
                 ).expect("Failed to create spot light buffer");
                 //Now drop the future (which will execute and then return)
+                drop(future);
                 buffer
+
             };
             let d_l = {
                 let (buffer, future) = ImmutableBuffer::from_iter(
@@ -134,6 +130,7 @@ impl LightSystem{
                     queue.clone()
                 ).expect("Failed to create directional light buffer");
                 //Now drop the future (which will execute and then return)
+                drop(future);
                 buffer
             };
 
@@ -186,8 +183,6 @@ impl LightSystem{
 
 
         LightSystem{
-            uniform_manager: uniform_manager,
-            device: device,
             queue: queue,
 
             cluster_buffer: persistent_cluster_buffer,
@@ -215,9 +210,6 @@ impl LightSystem{
         shadow_system: &mut ShadowSystem,
         asset_manager: &mut AssetManager
     )-> Box<GpuFuture + Send + Sync>{
-        use std::time::Instant;
-        let mut start = Instant::now();
-        let start_tracker =  Instant::now();
         //Let the shadow system find the lights we need and set their shadow atlases.
         self.light_store = shadow_system.set_shadow_atlases(
             asset_manager,
@@ -382,7 +374,7 @@ impl LightSystem{
             .expect("Failed to create descriptor set")
             //The shadow textures we have
             .add_sampled_image(
-                frame_system.get_passes().shadow_pass.get_images().directional_shadows.clone(),
+                frame_system.get_passes().gbuffer.directional_shadow_map.clone(),
                 self.shadow_map_sampler.clone()
             )
             .expect("Failed to add shadow map image")

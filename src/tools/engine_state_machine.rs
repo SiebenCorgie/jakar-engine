@@ -1,8 +1,6 @@
 use std::time::{Instant, Duration};
 use std::sync::{Arc, Mutex};
-use jakar_threadpool::ThreadPool;
 
-use core::engine_settings::EngineSettings;
 
 pub enum NextStep {
     ///If a fraem should be rendered
@@ -120,20 +118,11 @@ enum LastStep{
     Physics
 }
 
-///Collects the duration which are needed for the systems to pass till a next iteration can
-/// be started.
-struct DurationCollection {
-    pub render_duration: Duration,
-    pub asset_duration: Duration,
-    //physics_duration: Duration
-}
-
 ///Keeps track of the current state of the sub models. Can be asked "what to do next" which will
 /// return the logical next step in the rendering loop
 pub struct EngineStateMachine{
     render_state: Arc<Mutex<RenderState>>,
     asset_state: Arc<Mutex<AssetUpdateState>>,
-    engine_settings: Arc<Mutex<EngineSettings>>,
     last_step: LastStep,
 }
 
@@ -141,14 +130,11 @@ impl EngineStateMachine{
     pub fn new(
         render_state: Arc<Mutex<RenderState>>,
         asset_state: Arc<Mutex<AssetUpdateState>>,
-        engine_settings: Arc<Mutex<EngineSettings>>,
     ) -> Self{
 
         EngineStateMachine{
             render_state,
             asset_state,
-            engine_settings,
-            //duration_collection,
             last_step: LastStep::Asset,
         }
     }
@@ -192,7 +178,7 @@ impl EngineStateMachine{
                 return NextStep::Render;
             }
         }
-        let mut remaining = Duration::from_secs(0);
+        let remaining = Duration::from_secs(0);
 
         NextStep::Nothing(remaining)
 

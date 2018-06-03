@@ -5,7 +5,6 @@ use vulkano::pipeline::GraphicsPipelineAbstract;
 use vulkano::command_buffer::AutoCommandBufferBuilder;
 
 use std::sync::{Arc, Mutex};
-use std::time::{Instant, Duration};
 
 use collision::Frustum;
 use cgmath::*;
@@ -25,7 +24,6 @@ use render::render_passes::RenderPassConf;
 use render::shader::shaders::shadow_fragment::ty::MaskedInfo;
 use render::shader::shader_inputs::default_data::ty::LightData;
 use tools::node_tools;
-use tools::math::time_tools::*;
 
 use core::next_tree::content::ContentType;
 use core::next_tree::attributes::NodeAttributes;
@@ -252,7 +250,7 @@ impl ShadowSystem{
     ) -> AutoCommandBufferBuilder{
         //First change into the first shadow pass
         //first of all try to get the main frame buffer, if not possible, panic
-        let shadow_fb = frame_system.get_passes().shadow_pass.get_fb_directional();
+        let shadow_fb = frame_system.get_passes().get_framebuff_directional();
         //For successfull clearing we generate a vector for all images.
         let clearing_values = vec![
             1f32.into(), //directional shadows
@@ -319,7 +317,7 @@ impl ShadowSystem{
             };
             //image dimensions
             let img_dim = {
-                let tmp_dim = frame_system.get_passes().shadow_pass.get_images().directional_shadows.dimensions();
+                let tmp_dim = frame_system.get_passes().gbuffer.directional_shadow_map.dimensions();
 
                 [tmp_dim[0] as f32, tmp_dim[1] as f32]
             };

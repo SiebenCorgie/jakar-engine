@@ -1,15 +1,7 @@
 use core::engine_settings;
 use render;
 
-use vulkano::image::traits::ImageViewAccess;
-use vulkano::image::traits::ImageAccess;
-use vulkano::image::attachment::AttachmentImage;
 use vulkano::command_buffer::AutoCommandBufferBuilder;
-use vulkano::framebuffer::FramebufferAbstract;
-use vulkano::format::Format;
-use vulkano::image::ImageUsage;
-use vulkano::image::StorageImage;
-use vulkano::image::Dimensions;
 use vulkano;
 
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -34,14 +26,6 @@ pub struct FrameSystem {
     to have.
     */
     dynamic_state: vulkano::command_buffer::DynamicState,
-
-    //Sometimes holds the newly build main framebuffer, but gets taken out when switching from
-    // pre-depth -> compute -> forward pass
-    object_pass_fb: Option<Arc<FramebufferAbstract + Send + Sync>>,
-    blur_pass_h_fb: Option<Arc<FramebufferAbstract + Send + Sync>>,
-    blur_pass_v_fb: Option<Arc<FramebufferAbstract + Send + Sync>>,
-    assemble_pass_fb: Option<Arc<FramebufferAbstract + Send + Sync>>,
-    shadow_pass_fb: Option<Arc<FramebufferAbstract + Send + Sync>>,
 
     //a copy of the device
     device: Arc<vulkano::device::Device>,
@@ -83,12 +67,6 @@ impl FrameSystem{
 
             engine_settings: settings,
             passes: passes,
-            //Get created when starting a frame for later use
-            object_pass_fb: None,
-            blur_pass_h_fb: None,
-            blur_pass_v_fb: None,
-            assemble_pass_fb: None,
-            shadow_pass_fb: None,
 
             device: device,
             queue: target_queue,

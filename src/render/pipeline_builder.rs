@@ -93,10 +93,10 @@ impl PartialEq for DepthStencilConfig{
                     _ => false,
                 }
             },
-            &DepthStencilConfig::CustomDepthAndStencil(ref ds) => {
+            &DepthStencilConfig::CustomDepthAndStencil(_) => {
                 match other{
-                    &DepthStencilConfig::CustomDepthAndStencil(ref ods) => {
-                        true //TODO comapre the ods and ds
+                    &DepthStencilConfig::CustomDepthAndStencil(_) => {
+                        true //TODO comapre the actual settings
                     },
                     _ => false
                 }

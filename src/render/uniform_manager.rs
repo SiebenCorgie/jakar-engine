@@ -1,14 +1,9 @@
 
 //use render::shader_impls::pbr_fragment;
 use render::shader::shader_inputs::default_data;
-use render::shader::shader_inputs::lights;
-
 
 use vulkano::buffer::cpu_pool::CpuBufferPoolSubbuffer;
 use vulkano::buffer::cpu_pool::CpuBufferPool;
-use vulkano::buffer::BufferUsage;
-use vulkano::buffer::CpuAccessibleBuffer;
-use vulkano::buffer::ImmutableBuffer;
 use vulkano;
 
 use cgmath::*;
@@ -20,8 +15,6 @@ use std::sync::Arc;
 /// Public uniforms are:
 /// - DATA (camera location, model transform, camera perspective, and view matrix)
 pub struct UniformManager {
-
-    device: Arc<vulkano::device::Device>,
     ///Describes the universal world properties (see `render:://`)
     pub u_world: default_data::ty::Data,
     ///First uniform buffer pool block, used for model, view and perspecive matrix nas well as current
@@ -46,24 +39,13 @@ impl UniformManager{
             far: 100.0,
         };
 
-        let light_count_tmp = lights::ty::LightCount{
-            points: 0,
-            directionals: 0,
-            spots: 0,
-        };
-
         //Create some pools to allocate from
         let tmp_uniform_buffer_pool_01 = CpuBufferPool::<default_data::ty::Data>::new(
             device.clone(), vulkano::buffer::BufferUsage::all()
         );
 
-        let tmp_uniform_buffer_pool_05 = CpuBufferPool::<lights::ty::LightCount>::new(
-            device.clone(), vulkano::buffer::BufferUsage::all()
-        );
-
 
         UniformManager{
-            device: device,
             u_world: world,
             ///First uniform buffer pool block, used or model, view and perspecive matrix
             buffer_pool_01_mvp: tmp_uniform_buffer_pool_01,

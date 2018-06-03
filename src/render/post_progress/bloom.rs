@@ -2,24 +2,17 @@ use vulkano;
 use vulkano::command_buffer::AutoCommandBufferBuilder;
 use vulkano::sampler::Sampler;
 use vulkano::descriptor::descriptor_set::FixedSizeDescriptorSetsPool;
-use vulkano::pipeline::GraphicsPipelineAbstract;
 use vulkano::pipeline::ComputePipelineAbstract;
 use vulkano::pipeline::ComputePipeline;
 use vulkano::image::ImageDimensions;
-use vulkano::image::Dimensions;
-use vulkano::image::traits::{ImageAccess, ImageViewAccess};
+use vulkano::image::traits::ImageAccess;
 use vulkano::sampler::Filter;
 use vulkano::buffer::cpu_pool::CpuBufferPool;
-use vulkano::framebuffer::FramebufferAbstract;
 
 use core::engine_settings::EngineSettings;
 use render::frame_system::FrameSystem;
-use render::pipeline;
 use render::pipeline_manager;
-use render::pipeline_builder;
-use render::render_passes::RenderPassConf;
-use render::shader::shaders::blur;
-use render::render_passes::post_images::BlurStage;
+use render::render_passes::gbuffer::BlurStage;
 
 use std::sync::{Arc,Mutex};
 
@@ -29,7 +22,6 @@ pub struct Bloom {
 
     blur_settings_pool: CpuBufferPool<blur_cmp_shader::ty::blur_settings>,
     blur_descset_pool: FixedSizeDescriptorSetsPool<Arc<ComputePipelineAbstract + Send + Sync>>,
-    blur_pipe: Arc<pipeline::Pipeline>,
     blur_comp_pipe: Arc<ComputePipelineAbstract + Send + Sync>,
 }
 
@@ -38,7 +30,6 @@ impl Bloom{
     pub fn new(
         engine_settings: Arc<Mutex<EngineSettings>>,
         device: Arc<vulkano::device::Device>,
-        pipeline_manager: Arc<Mutex<pipeline_manager::PipelineManager>>,
     ) -> Self{
 
         let shader = Arc::new(blur_cmp_shader::Shader::load(device.clone())
@@ -49,18 +40,6 @@ impl Bloom{
         )
         .expect("failed to create compute pipeline"));
 
-
-        let blur_pipe = pipeline_manager.lock()
-        .expect("failed to lock new pipeline manager")
-        .get_pipeline_by_config(
-            pipeline_builder::PipelineConfig::default()
-                .with_shader("PpBlur".to_string())
-                .with_render_pass(RenderPassConf::BlurPass)
-                .with_depth_and_stencil_settings(
-                    pipeline_builder::DepthStencilConfig::NoDepthNoStencil
-                ),
-        );
-
         let blur_descset_pool = FixedSizeDescriptorSetsPool::new(blur_comp_pipe.clone(), 0);
         let blur_settings_pool = CpuBufferPool::uniform_buffer(device.clone());
 
@@ -68,7 +47,6 @@ impl Bloom{
             engine_settings,
             blur_settings_pool,
             blur_descset_pool,
-            blur_pipe,
             blur_comp_pipe
         }
     }
@@ -77,7 +55,6 @@ impl Bloom{
         command_buffer: AutoCommandBufferBuilder,
         frame_system: &FrameSystem,
         sampler: Arc<Sampler>,
-        vertex_buf: Arc<vulkano::buffer::BufferAccess + Send + Sync>,
     ) -> AutoCommandBufferBuilder{
         //Resize unitl we hit the set limit
         let mut new_command_buffer = self.resize(
@@ -89,7 +66,6 @@ impl Bloom{
             new_command_buffer,
             frame_system,
             sampler,
-            vertex_buf
         );
 
         new_command_buffer
@@ -101,18 +77,17 @@ impl Bloom{
     ) -> AutoCommandBufferBuilder{
         //Our first image is the hdr fragments image
         let mut source: Arc<ImageAccess + Send + Sync + 'static> = frame_system
-        .get_passes().object_pass.get_images().hdr_fragments.clone();
+        .get_passes().gbuffer.hdr_fragments.clone();
         //first target is the first image in the row of blur target
         let mut target: Arc<ImageAccess + Send + Sync + 'static> = frame_system
-        .get_passes().blur_pass.get_images().bloom[0].input_image.clone();
+        .get_passes().gbuffer.scaled_hdr[0].input_image.clone();
 
         let num_blur_levels = frame_system
-        .get_passes().blur_pass.get_images().bloom.len();
+        .get_passes().gbuffer.scaled_hdr.len();
 
         //Resize the hdr frags to the first level
         let mut new_cb = self.resize_to(
             command_buffer,
-            frame_system,
             source.clone(),
             target
         );
@@ -121,14 +96,13 @@ impl Bloom{
         for idx in 1..num_blur_levels{
             //Set new source and target
             source = frame_system
-            .get_passes().blur_pass.get_images().bloom[idx - 1].input_image.clone();
+            .get_passes().gbuffer.scaled_hdr[idx - 1].input_image.clone();
             //first target is the first image in the row of blur target
             target = frame_system
-            .get_passes().blur_pass.get_images().bloom[idx].input_image.clone();
+            .get_passes().gbuffer.scaled_hdr[idx].input_image.clone();
 
             new_cb = self.resize_to(
                 new_cb,
-                frame_system,
                 source,
                 target
             );
@@ -141,7 +115,6 @@ impl Bloom{
     fn resize_to(
         &self,
         command_buffer: AutoCommandBufferBuilder,
-        frame_system: &FrameSystem,
         source: Arc<ImageAccess + Send + Sync + 'static>,
         target: Arc<ImageAccess + Send + Sync + 'static>
     ) -> AutoCommandBufferBuilder{
@@ -195,7 +168,6 @@ impl Bloom{
         command_buffer: AutoCommandBufferBuilder,
         frame_system: &FrameSystem,
         sampler: Arc<Sampler>,
-        vertex_buf: Arc<vulkano::buffer::BufferAccess + Send + Sync>,
     ) -> AutoCommandBufferBuilder{
 
         let mut local_cb = command_buffer;
@@ -203,7 +175,7 @@ impl Bloom{
         //Blur each level, this time we start with the last and add them up until we reached the last
         //image
         let num_blur_levels = frame_system
-        .get_passes().blur_pass.get_images().bloom.len();
+        .get_passes().gbuffer.scaled_hdr.len();
         //Find the first blur level. We usually don't want to blur the nearly full hd texture first
         let initial_blur_level = {
             self.engine_settings
@@ -216,13 +188,13 @@ impl Bloom{
         for idx in (initial_blur_level..num_blur_levels).rev(){
 
             let target_stack = frame_system.get_passes()
-            .blur_pass.get_images().bloom[idx].clone();
+            .gbuffer.scaled_hdr[idx].clone();
             //We only want to add a previouse stack if we are not the lowest image
             let mut previouse_stack = None;
             if !is_first_img{
                 previouse_stack = Some(
                     frame_system.get_passes()
-                    .blur_pass.get_images().bloom[idx + 1].clone()
+                    .gbuffer.scaled_hdr[idx + 1].clone()
                 );
             }else{
                 is_first_img = false;
@@ -230,9 +202,7 @@ impl Bloom{
 
             local_cb = self.blur_comp(
                 local_cb,
-                frame_system,
                 sampler.clone(),
-                vertex_buf.clone(),
                 target_stack,
                 previouse_stack,
             );
@@ -246,9 +216,7 @@ impl Bloom{
     fn blur_comp(
         &mut self,
         command_buffer: AutoCommandBufferBuilder,
-        frame_system: &FrameSystem,
         sampler: Arc<Sampler>,
-        vertex_buf: Arc<vulkano::buffer::BufferAccess + Send + Sync>,
         target_stack: BlurStage,
         previouse_stack: Option<BlurStage>,
     )-> AutoCommandBufferBuilder{

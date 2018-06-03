@@ -4,7 +4,6 @@ use core::resource_management::asset_manager;
 use core::resources::camera::Camera;
 use render::window;
 use render::window::Window;
-use render::render_helper;
 use render::frame_system;
 use render::post_progress;
 use render::light_system;
@@ -12,10 +11,8 @@ use render::render_passes::RenderPasses;
 use render::shadow_system;
 use render::forward_system::ForwardSystem;
 
-use core::next_tree::{SceneTree, ValueTypeBool, SceneComparer};
 use core::engine_settings;
 //use core::simple_scene_system::node_helper;
-use core::next_tree::content::ContentType;
 use tools::engine_state_machine::RenderState;
 use tools::math::time_tools::*;
 
@@ -33,7 +30,7 @@ use vulkano::command_buffer::CommandBufferExecFuture;
 use vulkano::command_buffer::AutoCommandBuffer;
 
 use std::sync::{Arc,Mutex};
-use std::time::{Instant, Duration};
+use std::time::Instant;
 use std::mem;
 
 
@@ -335,14 +332,14 @@ impl Renderer {
         self.set_working_cpu();
 
         //First of all we get info if we should debug anything, if so this bool will be true
-        let (should_capture, mut time_step, start_time, sould_draw_bounds) = {
-            let (cap_bool, should_draw_bounds) = {
+        let (should_capture, mut time_step, start_time) = {
+            let cap_bool = {
                 let mut lck_set = self.engine_settings.lock().expect("failed to lock settings");
-                (lck_set.capture_frame, lck_set.get_render_settings().get_debug_settings().draw_bounds)
+                lck_set.capture_frame
             };
             let time_step = Instant::now();
             let start_time = Instant::now();
-            (cap_bool, time_step, start_time, should_draw_bounds)
+            (cap_bool, time_step, start_time)
         };
         let (image_number, acquire_future) = {
             match self.check_swapchain(){
@@ -494,7 +491,7 @@ impl Renderer {
             this_frame.wait(None).expect("failed to wait for graphics to debug");
             let time_needed = time_step.elapsed().subsec_nanos();
             println!("\tRE: Nedded {} ms to wait for gpu!", time_needed as f32 / 1_000_000.0);
-            time_step = Instant::now()
+            //NOTE time_step = Instant::now()
         }
 
         //now we overwrite the internal "last_frame_end" with the finish future of this frame

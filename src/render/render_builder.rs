@@ -352,7 +352,6 @@ impl BuildRender for RenderBuilder{
 
         println!("Creating light culling system", );
         let light_system = light_system::LightSystem::new(
-            uniform_manager.clone(),
             device.clone(),
             queue.clone()
         );
@@ -364,7 +363,6 @@ impl BuildRender for RenderBuilder{
         let forward_system = ForwardSystem::new(
             self.settings.clone(),
             device.clone(),
-            queue.clone(),
             resolve_pipeline,
         );
 

@@ -1,6 +1,5 @@
 
 use winit;
-use vulkano_win;
 use vulkano_win::VkSurfaceBuild;
 use vulkano::swapchain::Surface;
 use vulkano;

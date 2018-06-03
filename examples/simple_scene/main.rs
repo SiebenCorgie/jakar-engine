@@ -30,7 +30,7 @@ fn main() {
         8, //pcf samples
         4096, //lightmap resolution
         0.95, //cascade lambda
-        [0.5, 0.5, 0.4, 0.1], //occupy bias
+        [0.1, 0.1, 0.1, 0.1], //occupy bias
         1500.0) //poisson spread
     );
 
@@ -43,8 +43,8 @@ fn main() {
     .with_anisotropical_filtering(16)
     .with_light_settings(light_settings)
     .with_bloom(
-        3, //levles
-        1, //initial blured level
+        8, //levles
+        2, //initial blured level
         0.5, //size
         0.01, //brightness
     );
@@ -61,8 +61,8 @@ fn main() {
     .with_cursor_visibility(winit::MouseCursor::NoneCursor)
     .with_render_settings(graphics_settings)
     .with_camera_settings(core::engine_settings::CameraSettings{
-        far_plane: 200.0,
-        near_plane: 0.15,
+        far_plane: 1000.0,
+        near_plane: 0.2,
     })
     ;
 
@@ -77,9 +77,9 @@ fn main() {
     };
 
 
-    //engine.get_asset_manager().import_gltf("TestScene", "examples/simple_scene/TestScenes/Cube_Plane.gltf");
+    engine.get_asset_manager().import_gltf("TestScene", "examples/simple_scene/TestScenes/Cube_Plane.gltf");
     //engine.get_asset_manager().import_gltf("TestScene", "examples/simple_scene/Gate/Gate.gltf");
-    engine.get_asset_manager().import_gltf("TestScene", "examples/simple_scene/Sponza/Sponza.gltf");
+    //engine.get_asset_manager().import_gltf("TestScene", "examples/simple_scene/Sponza/Sponza.gltf");
     //engine.get_asset_manager().import_gltf("TestScene", "examples/simple_scene/Helmet/Helmet.gltf");
 
 
@@ -92,7 +92,7 @@ fn main() {
     //SUN========================================================================
     //add a matrix of lights
 
-    let mut matrix_size = 10;
+    let mut matrix_size = 0;
     matrix_size = matrix_size - (matrix_size / 2);
     let spacing = 2.0;
 
@@ -132,7 +132,7 @@ fn main() {
             }
         }
     }
-/*
+
     //Now add a sun
     let mut sun = light::LightDirectional::new("Sunny");
     sun.set_intensity(200.0);
@@ -147,7 +147,7 @@ fn main() {
         None => {println!("Could not find sun", );}
     }
 
-*/
+
     light_tree.update();
     engine.get_asset_manager().get_active_scene().join_at_root(&light_tree);
     println!("LightreeJoined!", );

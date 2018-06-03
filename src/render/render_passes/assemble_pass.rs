@@ -1,18 +1,13 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use vulkano::framebuffer::RenderPassAbstract;
 use vulkano::device::Device;
 use vulkano::image::traits::ImageViewAccess;
 use vulkano::image::traits::ImageAccess;
-use vulkano::image::attachment::AttachmentImage;
-use vulkano::command_buffer::AutoCommandBufferBuilder;
 use vulkano::framebuffer::FramebufferAbstract;
 use vulkano::format::Format;
-use vulkano::image::ImageUsage;
-use vulkano::image::StorageImage;
-use vulkano::image::Dimensions;
+
 use vulkano;
 
-use core::engine_settings::EngineSettings;
 
 ///Takes currently:
 /// - LDR Fragments

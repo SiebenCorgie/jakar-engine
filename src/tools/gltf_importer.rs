@@ -8,7 +8,6 @@ use core;
 use core::ReturnBoundInfo;
 use render::pipeline_builder;
 use render::pipeline_manager;
-use render;
 use render::render_passes::{RenderPassConf, ObjectPassSubPasses};
 
 use vulkano;
@@ -17,7 +16,6 @@ use cgmath::*;
 
 use gltf;
 use gltf_importer;
-use gltf_utils;
 
 use std::path::Path;
 use std::sync::{Arc, Mutex};

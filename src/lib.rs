@@ -38,9 +38,6 @@ use tools::engine_state_machine::NextStep;
 ///processing
 pub mod input;
 
-use tools::engine_state_machine::{AssetUpdateState, RenderState};
-
-
 use std::time::{Instant, Duration};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::thread::*;
@@ -252,7 +249,6 @@ impl JakarEngine {
             asset_lck.get_asset_manager_state()
         };
 
-        let settings = self.engine_settings.clone();
 
         let engine_state_ref = self.engine_status.clone();
         let thread_pool_ref = self.thread_pool.clone();
@@ -267,7 +263,6 @@ impl JakarEngine {
             let mut state_machine = tools::engine_state_machine::EngineStateMachine::new(
                 render_state,
                 asset_state,
-                settings
             );
 
             'main_loop: loop{
@@ -324,7 +319,7 @@ impl JakarEngine {
                         //println!("Doing Physics", );
                         //TODO IMPLEMENT PHYSICS
                     },
-                    NextStep::Nothing(remaining) => {
+                    NextStep::Nothing(_) => {
                         //println!("EmptyCycle! {:?}", remaining);
                         //sleep(remaining)
                     }

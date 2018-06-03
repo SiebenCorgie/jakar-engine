@@ -2,14 +2,9 @@ use std::sync::{Arc, Mutex};
 use vulkano::framebuffer::RenderPassAbstract;
 use vulkano::device::Device;
 use vulkano::image::traits::ImageViewAccess;
-use vulkano::image::traits::ImageAccess;
 use vulkano::image::attachment::AttachmentImage;
-use vulkano::command_buffer::AutoCommandBufferBuilder;
-use vulkano::framebuffer::FramebufferAbstract;
 use vulkano::format::Format;
 use vulkano::image::ImageUsage;
-use vulkano::image::StorageImage;
-use vulkano::image::Dimensions;
 use vulkano;
 
 use core::engine_settings::EngineSettings;
@@ -90,13 +85,10 @@ impl ObjectPassImages{
 
 #[derive(Clone)]
 pub struct ObjectPass {
-    pub render_pass: Arc<RenderPassAbstract + Send + Sync>,
-    images: Arc<ObjectPassImages>,
-}
+    pub render_pass: Arc<RenderPassAbstract + Send + Sync>,}
 
 impl ObjectPass{
     pub fn new(
-        settings: Arc<Mutex<EngineSettings>>,
         device: Arc<Device>,
         msaa_factor: u32,
         hdr_msaa_format: Format,
@@ -155,62 +147,8 @@ impl ObjectPass{
 
             ).expect("failed to create main render_pass")
         );
-
-        let images = ObjectPassImages::new(
-            settings,
-            device,
-            msaa_factor,
-            hdr_msaa_format,
-            msaa_depth_format
-        );
         ObjectPass{
-            render_pass: main_renderpass,
-            images: Arc::new(images),
+            render_pass: main_renderpass
         }
     }
-
-    ///Returns the current images of this render_pass
-    pub fn get_images(&self) -> Arc<ObjectPassImages>{
-        self.images.clone()
-    }
-
-    ///Rebuilds the current images
-    pub fn rebuild_images(
-        &mut self,
-        settings: Arc<Mutex<EngineSettings>>,
-        device: Arc<Device>,
-        msaa_factor: u32,
-        hdr_msaa_format: Format,
-        msaa_depth_format: Format
-    ){
-        self.images = Arc::new(
-            ObjectPassImages::new(
-                settings,
-                device,
-                msaa_factor,
-                hdr_msaa_format,
-                msaa_depth_format
-            )
-        );
-    }
-
-    ///Returns a framebuffer which can be used for this renderpass
-    pub fn get_framebuffer(&self) -> Arc<FramebufferAbstract + Send + Sync>{
-        //Create the object pass frame buffer
-        Arc::new(
-            vulkano::framebuffer::Framebuffer::start(self.render_pass.clone())
-            //the msaa image
-            .add(self.images.forward_hdr_image.clone()).expect("failed to add msaa image")
-            //the multi sampled depth image
-            .add(self.images.forward_hdr_depth.clone()).expect("failed to add msaa depth buffer")
-            //The hdr format
-            .add(self.images.hdr_fragments.clone()).expect("failed to add hdr_fragments image")
-            //The color pass
-            .add(self.images.ldr_fragments.clone()).expect("failed to add image to frame buffer!")
-
-            .build()
-            .expect("failed to build main framebuffer!")
-        )
-    }
-
 }

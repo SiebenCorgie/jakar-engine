@@ -1,14 +1,10 @@
 
-use core::resources::camera;
-use core::resources::camera::Camera;
 use jakar_tree::*;
 use core::next_tree::*;
 
 
-use std::sync::{Arc, Mutex};
 use std::thread;
 use std::sync::mpsc;
-use std::collections::BTreeMap;
 
 use cgmath::*;
 
@@ -44,7 +40,7 @@ pub fn order_by_distance(
 
         }
         //sort by distance
-        ordered_meshes.sort_unstable_by(|&(ref da, ref a), &(ref db, ref b)| da.cmp(&db));
+        ordered_meshes.sort_unstable_by(|&(ref da, _), &(ref db, _)| da.cmp(&db));
 
         //Silly ordering end ==================================================================
 
